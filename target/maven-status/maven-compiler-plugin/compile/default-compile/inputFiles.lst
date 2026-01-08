@@ -142,3 +142,4 @@
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/impl/RoleServiceImpl.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/impl/UserDetailsServiceImpl.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/impl/UserServiceImpl.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/util/SecurityUtils.java

@@ -11,6 +11,7 @@ import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
 import com.zuqi.service.OrderService;
+import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -42,9 +43,16 @@ public class OrderServiceImpl implements OrderService {
     private final DistributorRepository distributorRepository;
     private final WarehouseRepository warehouseRepository;
     private final UserRepository userRepository;
+    private final SecurityUtils securityUtils;
 
     @Override
     public Page<OrderResponse> getAllOrders(Pageable pageable) {
+        // SUPER_ADMIN and ADMIN can see all orders
+        UUID distributorId = securityUtils.getDistributorIdForFiltering();
+        if (distributorId != null) {
+            return orderRepository.findByDistributorId(distributorId, pageable)
+                    .map(OrderResponse::fromEntity);
+        }
         return orderRepository.findAll(pageable).map(OrderResponse::fromEntity);
     }
 
@@ -80,8 +88,14 @@ public class OrderServiceImpl implements OrderService {
         LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : null;
         LocalDateTime endDateTime = endDate != null ? endDate.atTime(23, 59, 59) : null;
 
+        // Determine effective distributor ID for filtering
+        UUID effectiveDistributorId = distributorId;
+        if (effectiveDistributorId == null) {
+            effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
+        }
+
         return orderRepository.findByFilters(
-                distributorId,
+                effectiveDistributorId,
                 status,
                 merchantId,
                 salesRepId,
@@ -94,7 +108,13 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public Page<OrderResponse> searchOrders(UUID distributorId, String search, Pageable pageable) {
-        return orderRepository.searchOrders(distributorId, search, pageable)
+        // Determine effective distributor ID for filtering
+        UUID effectiveDistributorId = distributorId;
+        if (effectiveDistributorId == null) {
+            effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
+        }
+
+        return orderRepository.searchOrders(effectiveDistributorId, search, pageable)
                 .map(OrderResponse::fromEntity);
     }
 

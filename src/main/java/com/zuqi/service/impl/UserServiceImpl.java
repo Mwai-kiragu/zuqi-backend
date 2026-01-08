@@ -19,6 +19,7 @@ import com.zuqi.repository.MerchantRepository;
 import com.zuqi.repository.RoleRepository;
 import com.zuqi.repository.UserRepository;
 import com.zuqi.service.UserService;
+import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -42,11 +43,25 @@ public class UserServiceImpl implements UserService {
     private final DistributorRepository distributorRepository;
     private final MerchantRepository merchantRepository;
     private final PasswordEncoder passwordEncoder;
+    private final SecurityUtils securityUtils;
 
     @Override
     @Transactional(readOnly = true)
     public Page<UserResponse> getAllUsers(Pageable pageable) {
         log.info("Fetching all users");
+
+        // SUPER_ADMIN and ADMIN can see all users
+        UUID distributorId = securityUtils.getDistributorIdForFiltering();
+        if (distributorId != null) {
+            List<User> users = userRepository.findByDistributorIdAndActiveTrue(distributorId);
+            int start = (int) pageable.getOffset();
+            int end = Math.min((start + pageable.getPageSize()), users.size());
+            List<UserResponse> responseList = users.subList(start, end).stream()
+                    .map(this::mapToUserResponse)
+                    .toList();
+            return new PageImpl<>(responseList, pageable, users.size());
+        }
+
         Page<User> users = userRepository.findAll(pageable);
         return mapToUserResponsePage(users, pageable);
     }
@@ -72,10 +87,17 @@ public class UserServiceImpl implements UserService {
     public List<UserResponse> getUsersByRole(String role, UUID distributorId) {
         log.info("Fetching users by role: {} for distributor: {}", role, distributorId);
 
+        // Determine effective distributor ID for filtering
+        UUID effectiveDistributorId = distributorId;
+        if (effectiveDistributorId == null) {
+            effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
+        }
+
         List<User> allUsers;
-        if (distributorId != null) {
-            allUsers = userRepository.findByDistributorIdAndActiveTrue(distributorId);
+        if (effectiveDistributorId != null) {
+            allUsers = userRepository.findByDistributorIdAndActiveTrue(effectiveDistributorId);
         } else {
+            // SUPER_ADMIN/ADMIN can see all users
             allUsers = userRepository.findAll();
         }
 
@@ -324,20 +346,29 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public List<String> getAvailableRoles(boolean isAdmin) {
-        if (isAdmin) {
+        // SUPER_ADMIN can create all roles including ADMIN and SUPER_ADMIN
+        if (securityUtils.isSuperAdmin()) {
             return Arrays.stream(RoleName.values())
                     .map(Enum::name)
                     .collect(Collectors.toList());
-        } else {
-            // Non-admin users can only create these roles
-            return Arrays.asList(
-                    RoleName.DISTRIBUTOR_ADMIN.name(),
-                    RoleName.SALES_REP.name(),
-                    RoleName.WAREHOUSE_MANAGER.name(),
-                    RoleName.FINANCE.name(),
-                    RoleName.DRIVER.name()
-            );
         }
+
+        // ADMIN can create all roles except SUPER_ADMIN
+        if (isAdmin) {
+            return Arrays.stream(RoleName.values())
+                    .filter(r -> r != RoleName.SUPER_ADMIN)
+                    .map(Enum::name)
+                    .collect(Collectors.toList());
+        }
+
+        // Non-admin users can only create these roles
+        return Arrays.asList(
+                RoleName.DISTRIBUTOR_ADMIN.name(),
+                RoleName.SALES_REP.name(),
+                RoleName.WAREHOUSE_MANAGER.name(),
+                RoleName.FINANCE.name(),
+                RoleName.DRIVER.name()
+        );
     }
 
     private Page<UserResponse> mapToUserResponsePage(Page<User> users, Pageable pageable) {

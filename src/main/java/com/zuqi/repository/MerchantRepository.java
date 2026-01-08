@@ -106,4 +106,16 @@ public interface MerchantRepository extends JpaRepository<Merchant, UUID>, JpaSp
             "AND m.createdAt >= :startDate")
     long countNewMerchantsFromDate(@Param("distributorId") UUID distributorId,
             @Param("startDate") java.time.LocalDateTime startDate);
+
+    // Global queries for SUPER_ADMIN/ADMIN (no distributor filter)
+    /**
+     * Count all active merchants.
+     */
+    long countByActiveTrue();
+
+    /**
+     * Count new merchants from date across all distributors.
+     */
+    @Query("SELECT COUNT(m) FROM Merchant m WHERE m.active = true AND m.createdAt >= :startDate")
+    long countNewMerchantsFromDateAll(@Param("startDate") java.time.LocalDateTime startDate);
 }

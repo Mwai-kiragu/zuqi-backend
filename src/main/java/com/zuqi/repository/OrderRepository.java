@@ -124,4 +124,23 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
             "GROUP BY CAST(o.createdAt AS LocalDate) ORDER BY CAST(o.createdAt AS LocalDate)")
     List<Object[]> findDailyRevenueData(@Param("distributorId") UUID distributorId,
             @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
+
+    // Global queries for SUPER_ADMIN/ADMIN (no distributor filter)
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.status = :status")
+    long countByStatus(@Param("status") OrderStatus status);
+
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.createdAt >= :startDate")
+    long countOrdersTodayAll(@Param("startDate") LocalDateTime startDate);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o")
+    java.math.BigDecimal sumTotalRevenueAll();
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.createdAt >= :startDate")
+    java.math.BigDecimal sumRevenueFromDateAll(@Param("startDate") LocalDateTime startDate);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount - o.paidAmount), 0) FROM Order o WHERE o.paymentStatus != 'PAID'")
+    java.math.BigDecimal sumOutstandingAmountAll();
+
+    @Query("SELECT o FROM Order o ORDER BY o.createdAt DESC")
+    Page<Order> findRecentOrdersAll(Pageable pageable);
 }

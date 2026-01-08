@@ -13,6 +13,7 @@ import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.ProductCategoryRepository;
 import com.zuqi.repository.ProductRepository;
 import com.zuqi.service.ProductService;
+import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -35,11 +36,20 @@ public class ProductServiceImpl implements ProductService {
     private final ProductRepository productRepository;
     private final ProductCategoryRepository categoryRepository;
     private final DistributorRepository distributorRepository;
+    private final SecurityUtils securityUtils;
 
     @Override
     @Transactional(readOnly = true)
     public Page<ProductResponse> getAllProducts(Pageable pageable) {
         log.debug("Fetching all products");
+
+        // SUPER_ADMIN and ADMIN can see all products
+        UUID distributorId = securityUtils.getDistributorIdForFiltering();
+        if (distributorId != null) {
+            return productRepository.findByDistributorIdAndActiveTrue(distributorId, pageable)
+                    .map(ProductResponse::fromEntity);
+        }
+
         return productRepository.findByActiveTrue(pageable)
                 .map(ProductResponse::fromEntity);
     }
@@ -64,10 +74,19 @@ public class ProductServiceImpl implements ProductService {
     @Transactional(readOnly = true)
     public Page<ProductResponse> searchProducts(String searchTerm, UUID distributorId, Pageable pageable) {
         log.debug("Searching products with term: {}, distributor: {}", searchTerm, distributorId);
-        if (distributorId != null) {
-            return productRepository.searchByDistributor(distributorId, searchTerm, pageable)
+
+        // Determine effective distributor ID for filtering
+        UUID effectiveDistributorId = distributorId;
+        if (effectiveDistributorId == null) {
+            effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
+        }
+
+        if (effectiveDistributorId != null) {
+            return productRepository.searchByDistributor(effectiveDistributorId, searchTerm, pageable)
                     .map(ProductResponse::fromEntity);
         }
+
+        // SUPER_ADMIN/ADMIN can search across all distributors
         return productRepository.searchByNameOrSku(searchTerm, pageable)
                 .map(ProductResponse::fromEntity);
     }
@@ -196,11 +215,20 @@ public class ProductServiceImpl implements ProductService {
     @Transactional(readOnly = true)
     public List<ProductCategoryResponse> getAllCategories(UUID distributorId) {
         log.debug("Fetching product categories for distributor: {}", distributorId);
-        if (distributorId != null) {
-            return categoryRepository.findByDistributorId(distributorId).stream()
+
+        // Determine effective distributor ID for filtering
+        UUID effectiveDistributorId = distributorId;
+        if (effectiveDistributorId == null) {
+            effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
+        }
+
+        if (effectiveDistributorId != null) {
+            return categoryRepository.findByDistributorId(effectiveDistributorId).stream()
                     .map(ProductCategoryResponse::fromEntity)
                     .toList();
         }
+
+        // SUPER_ADMIN/ADMIN can see all categories
         return categoryRepository.findAll().stream()
                 .map(ProductCategoryResponse::fromEntity)
                 .toList();

@@ -11,6 +11,7 @@ import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
 import com.zuqi.service.InventoryService;
+import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -39,6 +40,7 @@ public class InventoryServiceImpl implements InventoryService {
     private final ProductRepository productRepository;
     private final DistributorRepository distributorRepository;
     private final UserRepository userRepository;
+    private final SecurityUtils securityUtils;
 
     // ==================== Stock Operations ====================
 
@@ -138,8 +140,20 @@ public class InventoryServiceImpl implements InventoryService {
 
     @Override
     public Page<StockResponse> getLowStock(UUID distributorId, Pageable pageable) {
-        validateDistributorExists(distributorId);
-        return stockRepository.findLowStockByDistributorId(distributorId, pageable)
+        // Determine effective distributor ID for filtering
+        UUID effectiveDistributorId = distributorId;
+        if (effectiveDistributorId == null) {
+            effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
+        }
+
+        if (effectiveDistributorId != null) {
+            validateDistributorExists(effectiveDistributorId);
+            return stockRepository.findLowStockByDistributorId(effectiveDistributorId, pageable)
+                    .map(this::mapToStockResponse);
+        }
+
+        // SUPER_ADMIN/ADMIN can see all low stock items
+        return stockRepository.findAllLowStock(pageable)
                 .map(this::mapToStockResponse);
     }
 
@@ -147,16 +161,41 @@ public class InventoryServiceImpl implements InventoryService {
 
     @Override
     public List<WarehouseResponse> getWarehousesByDistributor(UUID distributorId) {
-        validateDistributorExists(distributorId);
-        return warehouseRepository.findByDistributorIdAndActiveTrue(distributorId).stream()
+        // Determine effective distributor ID for filtering
+        UUID effectiveDistributorId = distributorId;
+        if (effectiveDistributorId == null) {
+            effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
+        }
+
+        if (effectiveDistributorId != null) {
+            validateDistributorExists(effectiveDistributorId);
+            return warehouseRepository.findByDistributorIdAndActiveTrue(effectiveDistributorId).stream()
+                    .map(this::mapToWarehouseResponse)
+                    .collect(Collectors.toList());
+        }
+
+        // SUPER_ADMIN/ADMIN can see all warehouses
+        return warehouseRepository.findByActiveTrue().stream()
                 .map(this::mapToWarehouseResponse)
                 .collect(Collectors.toList());
     }
 
     @Override
     public Page<WarehouseResponse> getWarehousesByDistributor(UUID distributorId, Pageable pageable) {
-        validateDistributorExists(distributorId);
-        return warehouseRepository.findByDistributorIdAndActiveTrue(distributorId, pageable)
+        // Determine effective distributor ID for filtering
+        UUID effectiveDistributorId = distributorId;
+        if (effectiveDistributorId == null) {
+            effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
+        }
+
+        if (effectiveDistributorId != null) {
+            validateDistributorExists(effectiveDistributorId);
+            return warehouseRepository.findByDistributorIdAndActiveTrue(effectiveDistributorId, pageable)
+                    .map(this::mapToWarehouseResponse);
+        }
+
+        // SUPER_ADMIN/ADMIN can see all warehouses
+        return warehouseRepository.findByActiveTrue(pageable)
                 .map(this::mapToWarehouseResponse);
     }
 

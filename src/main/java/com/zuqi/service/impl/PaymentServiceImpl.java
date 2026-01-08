@@ -11,6 +11,7 @@ import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.repository.*;
 import com.zuqi.service.PaymentService;
+import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -39,9 +40,16 @@ public class PaymentServiceImpl implements PaymentService {
     private final OrderRepository orderRepository;
     private final MerchantRepository merchantRepository;
     private final DistributorRepository distributorRepository;
+    private final SecurityUtils securityUtils;
 
     @Override
     public Page<PaymentResponse> getAllPayments(Pageable pageable) {
+        // SUPER_ADMIN and ADMIN can see all payments
+        UUID distributorId = securityUtils.getDistributorIdForFiltering();
+        if (distributorId != null) {
+            return paymentRepository.findByDistributorId(distributorId, pageable)
+                    .map(PaymentResponse::fromEntity);
+        }
         return paymentRepository.findAll(pageable).map(PaymentResponse::fromEntity);
     }
 
@@ -76,8 +84,14 @@ public class PaymentServiceImpl implements PaymentService {
         LocalDateTime startDateTime = startDate != null ? startDate.atStartOfDay() : null;
         LocalDateTime endDateTime = endDate != null ? endDate.atTime(23, 59, 59) : null;
 
+        // Determine effective distributor ID for filtering
+        UUID effectiveDistributorId = distributorId;
+        if (effectiveDistributorId == null) {
+            effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
+        }
+
         return paymentRepository.findByFilters(
-                distributorId,
+                effectiveDistributorId,
                 status,
                 merchantId,
                 reconciled,
@@ -89,7 +103,13 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public Page<PaymentResponse> searchPayments(UUID distributorId, String search, Pageable pageable) {
-        return paymentRepository.searchPayments(distributorId, search, pageable)
+        // Determine effective distributor ID for filtering
+        UUID effectiveDistributorId = distributorId;
+        if (effectiveDistributorId == null) {
+            effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
+        }
+
+        return paymentRepository.searchPayments(effectiveDistributorId, search, pageable)
                 .map(PaymentResponse::fromEntity);
     }
 

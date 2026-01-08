@@ -106,6 +106,7 @@ com/zuqi/domain/order/OrderStatus.class
 com/zuqi/domain/product/Product$ProductBuilder.class
 com/zuqi/api/dto/merchant/MerchantCategoryResponse$MerchantCategoryResponseBuilder.class
 com/zuqi/service/PaymentService.class
+com/zuqi/util/SecurityUtils.class
 com/zuqi/api/controller/InventoryController.class
 com/zuqi/api/dto/order/OrderItemRequest$OrderItemRequestBuilder.class
 com/zuqi/api/dto/report/SalesReportResponse$DailyData$DailyDataBuilder.class

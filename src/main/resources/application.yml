@@ -67,6 +67,11 @@ jwt:
   access-token-expiration: 900000  # 15 minutes
   refresh-token-expiration: 604800000  # 7 days
 
+# Casbin Authorization Configuration
+casbin:
+  model-path: casbin/model.conf
+  use-database: true  # Use database-backed policies (casbin_rule table)
+
 # Spring AI Configuration
 spring.ai:
   openai:

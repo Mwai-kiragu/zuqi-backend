@@ -116,4 +116,11 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("SELECT COUNT(u) FROM User u JOIN u.roles r WHERE r.name = :roleName " +
             "AND u.distributorId = :distributorId AND u.active = true")
     long countByRoleAndDistributor(@Param("roleName") String roleName, @Param("distributorId") UUID distributorId);
+
+    // Global queries for SUPER_ADMIN/ADMIN (no distributor filter)
+    /**
+     * Count all users by role across all distributors.
+     */
+    @Query("SELECT COUNT(u) FROM User u JOIN u.roles r WHERE r.name = :roleName AND u.active = true")
+    long countByRole(@Param("roleName") String roleName);
 }

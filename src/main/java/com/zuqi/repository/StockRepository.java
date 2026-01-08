@@ -54,6 +54,12 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
     Page<Stock> findLowStockByDistributorId(@Param("distributorId") UUID distributorId, Pageable pageable);
 
     /**
+     * Find all low stock items across all distributors (for SUPER_ADMIN).
+     */
+    @Query("SELECT s FROM Stock s WHERE s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel")
+    Page<Stock> findAllLowStock(Pageable pageable);
+
+    /**
      * Find stock by warehouse and product IDs.
      */
     @Query("SELECT s FROM Stock s WHERE s.warehouse.id = :warehouseId AND s.product.id IN :productIds")
@@ -85,4 +91,17 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
     @Query("SELECT COUNT(s) FROM Stock s WHERE s.warehouse.distributor.id = :distributorId " +
             "AND s.quantity <= 0")
     long countOutOfStockByDistributorId(@Param("distributorId") UUID distributorId);
+
+    // Global queries for SUPER_ADMIN/ADMIN (no distributor filter)
+    /**
+     * Count all low stock items across all distributors.
+     */
+    @Query("SELECT COUNT(s) FROM Stock s WHERE s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel AND s.quantity > 0")
+    long countAllLowStock();
+
+    /**
+     * Count all out of stock items across all distributors.
+     */
+    @Query("SELECT COUNT(s) FROM Stock s WHERE s.quantity <= 0")
+    long countAllOutOfStock();
 }

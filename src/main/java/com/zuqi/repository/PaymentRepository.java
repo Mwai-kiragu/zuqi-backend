@@ -67,4 +67,8 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     @Query(value = "SELECT COALESCE(MAX(CAST(SUBSTRING(payment_number, LENGTH(:prefix) + 1) AS INTEGER)), 0) " +
             "FROM payments WHERE payment_number LIKE :prefix%", nativeQuery = true)
     Integer findMaxPaymentNumberByPrefix(@Param("prefix") String prefix);
+
+    // Global queries for SUPER_ADMIN/ADMIN (no distributor filter)
+    @Query("SELECT COUNT(p) FROM Payment p WHERE p.reconciled = false")
+    long countAllUnreconciledPayments();
 }

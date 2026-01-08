@@ -5,6 +5,11 @@ package com.zuqi.domain.user;
  */
 public enum RoleName {
     /**
+     * Super administrator with full system access across all distributors
+     */
+    SUPER_ADMIN,
+
+    /**
      * System administrator with full access
      */
     ADMIN,

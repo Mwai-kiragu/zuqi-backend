@@ -14,6 +14,7 @@ import com.zuqi.repository.MerchantCategoryRepository;
 import com.zuqi.repository.MerchantRepository;
 import com.zuqi.repository.UserRepository;
 import com.zuqi.service.MerchantService;
+import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -36,11 +37,21 @@ public class MerchantServiceImpl implements MerchantService {
     private final MerchantCategoryRepository categoryRepository;
     private final DistributorRepository distributorRepository;
     private final UserRepository userRepository;
+    private final SecurityUtils securityUtils;
 
     @Override
     @Transactional(readOnly = true)
     public Page<MerchantResponse> getAllMerchants(Pageable pageable) {
         log.debug("Fetching all merchants");
+
+        // SUPER_ADMIN and ADMIN can see all merchants
+        UUID distributorId = securityUtils.getDistributorIdForFiltering();
+        if (distributorId != null) {
+            log.debug("Filtering merchants for distributor: {}", distributorId);
+            return merchantRepository.findByDistributorIdAndActiveTrue(distributorId, pageable)
+                    .map(MerchantResponse::fromEntity);
+        }
+
         return merchantRepository.findByActiveTrue(pageable)
                 .map(MerchantResponse::fromEntity);
     }
@@ -73,10 +84,19 @@ public class MerchantServiceImpl implements MerchantService {
     @Transactional(readOnly = true)
     public Page<MerchantResponse> searchMerchants(String searchTerm, UUID distributorId, Pageable pageable) {
         log.debug("Searching merchants with term: {}, distributor: {}", searchTerm, distributorId);
-        if (distributorId != null) {
-            return merchantRepository.searchByDistributor(distributorId, searchTerm, pageable)
+
+        // Determine effective distributor ID for filtering
+        UUID effectiveDistributorId = distributorId;
+        if (effectiveDistributorId == null) {
+            effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
+        }
+
+        if (effectiveDistributorId != null) {
+            return merchantRepository.searchByDistributor(effectiveDistributorId, searchTerm, pageable)
                     .map(MerchantResponse::fromEntity);
         }
+
+        // SUPER_ADMIN/ADMIN can search across all distributors
         return merchantRepository.searchByBusinessName(searchTerm, pageable)
                 .map(MerchantResponse::fromEntity);
     }
