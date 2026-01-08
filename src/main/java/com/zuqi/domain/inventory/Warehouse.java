@@ -1,0 +1,67 @@
+package com.zuqi.domain.inventory;
+
+import com.zuqi.domain.distributor.Distributor;
+import com.zuqi.domain.user.User;
+import jakarta.persistence.*;
+import lombok.*;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+/**
+ * Warehouse entity representing inventory storage locations.
+ */
+@Entity
+@Table(name = "warehouses", indexes = {
+        @Index(name = "idx_warehouses_distributor", columnList = "distributor_id")
+})
+@EntityListeners(AuditingEntityListener.class)
+@Getter
+@Setter
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class Warehouse {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "distributor_id", nullable = false)
+    private Distributor distributor;
+
+    @Column(nullable = false)
+    private String name;
+
+    private String code;
+
+    @Column(columnDefinition = "TEXT")
+    private String address;
+
+    private String city;
+
+    private BigDecimal latitude;
+
+    private BigDecimal longitude;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "manager_id")
+    private User manager;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean active = true;
+
+    @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
+
+    @LastModifiedDate
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+}
