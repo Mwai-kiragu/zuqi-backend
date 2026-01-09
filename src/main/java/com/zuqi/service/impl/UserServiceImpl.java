@@ -18,6 +18,7 @@ import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.MerchantRepository;
 import com.zuqi.repository.RoleRepository;
 import com.zuqi.repository.UserRepository;
+import com.zuqi.service.EmailService;
 import com.zuqi.service.UserService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +45,7 @@ public class UserServiceImpl implements UserService {
     private final MerchantRepository merchantRepository;
     private final PasswordEncoder passwordEncoder;
     private final SecurityUtils securityUtils;
+    private final EmailService emailService;
 
     @Override
     @Transactional(readOnly = true)
@@ -200,10 +202,11 @@ public class UserServiceImpl implements UserService {
 
         // Generate password if not provided
         String password = request.getPassword();
+        boolean sendWelcomeEmail = false;
         if (password == null || password.isBlank()) {
             password = generateRandomPassword(12);
+            sendWelcomeEmail = true;
             log.info("Generated temporary password for user: {} - Password will be sent via email", request.getEmail());
-            // TODO: Send password to user via email
         }
 
         // Create user
@@ -225,6 +228,11 @@ public class UserServiceImpl implements UserService {
 
         User savedUser = userRepository.save(user);
         log.info("User created successfully with ID: {}", savedUser.getId());
+
+        // Send welcome email with temporary password
+        if (sendWelcomeEmail) {
+            emailService.sendWelcomeEmail(savedUser, password);
+        }
 
         return mapToUserResponse(savedUser);
     }

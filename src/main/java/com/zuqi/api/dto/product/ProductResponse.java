@@ -10,9 +10,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Response DTO for product data.
- */
 @Data
 @Builder
 @NoArgsConstructor
@@ -39,9 +36,6 @@ public class ProductResponse {
     private LocalDateTime deactivatedAt;
     private String deactivatedByName;
 
-    /**
-     * Converts a Product entity to ProductResponse DTO.
-     */
     public static ProductResponse fromEntity(Product product) {
         return ProductResponse.builder()
                 .id(product.getId())

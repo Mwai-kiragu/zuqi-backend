@@ -26,9 +26,6 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * REST controller for product operations.
- */
 @RestController
 @RequestMapping("/v1/products")
 @RequiredArgsConstructor
@@ -37,9 +34,6 @@ public class ProductController {
 
     private final ProductService productService;
 
-    /**
-     * Get all products with pagination and optional filters.
-     */
     @GetMapping
     @Operation(summary = "Get all products", description = "Retrieves products with pagination and optional filters")
     public ResponseEntity<ApiResponse<Page<ProductResponse>>> getAllProducts(
@@ -71,9 +65,6 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success(products));
     }
 
-    /**
-     * Get a product by ID.
-     */
     @GetMapping("/{id}")
     @Operation(summary = "Get product by ID", description = "Retrieves a specific product by ID")
     public ResponseEntity<ApiResponse<ProductResponse>> getProductById(
@@ -82,9 +73,6 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success(product));
     }
 
-    /**
-     * Get a product by SKU.
-     */
     @GetMapping("/sku/{sku}")
     @Operation(summary = "Get product by SKU", description = "Retrieves a product by SKU for a distributor")
     public ResponseEntity<ApiResponse<ProductResponse>> getProductBySku(
@@ -94,9 +82,6 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success(product));
     }
 
-    /**
-     * Create a new product.
-     */
     @PostMapping
     @Operation(summary = "Create product", description = "Creates a new product")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
@@ -108,9 +93,6 @@ public class ProductController {
                 .body(ApiResponse.success("Product created successfully", product));
     }
 
-    /**
-     * Update an existing product.
-     */
     @PutMapping("/{id}")
     @Operation(summary = "Update product", description = "Updates an existing product")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
@@ -121,9 +103,6 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success("Product updated successfully", product));
     }
 
-    /**
-     * Deactivate a product with reason.
-     */
     @DeleteMapping("/{id}")
     @Operation(summary = "Deactivate product", description = "Deactivates a product (soft delete) with reason")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
@@ -135,9 +114,6 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success("Product deactivated successfully"));
     }
 
-    /**
-     * Activate a product.
-     */
     @PostMapping("/{id}/activate")
     @Operation(summary = "Activate product", description = "Reactivates a deactivated product")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
@@ -147,9 +123,6 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success("Product activated successfully"));
     }
 
-    /**
-     * Get all product categories.
-     */
     @GetMapping("/categories")
     @Operation(summary = "Get product categories", description = "Retrieves all product categories")
     public ResponseEntity<ApiResponse<List<ProductCategoryResponse>>> getCategories(
@@ -158,9 +131,6 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success(categories));
     }
 
-    /**
-     * Get a product category by ID.
-     */
     @GetMapping("/categories/{id}")
     @Operation(summary = "Get category by ID", description = "Retrieves a specific product category by ID")
     public ResponseEntity<ApiResponse<ProductCategoryResponse>> getCategoryById(
@@ -169,9 +139,6 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success(category));
     }
 
-    /**
-     * Create a new product category.
-     */
     @PostMapping("/categories")
     @Operation(summary = "Create category", description = "Creates a new product category")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
@@ -183,9 +150,6 @@ public class ProductController {
                 .body(ApiResponse.success("Category created successfully", category));
     }
 
-    /**
-     * Update an existing product category.
-     */
     @PutMapping("/categories/{id}")
     @Operation(summary = "Update category", description = "Updates an existing product category")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
@@ -196,9 +160,6 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success("Category updated successfully", category));
     }
 
-    /**
-     * Deactivate a product category with reason.
-     */
     @DeleteMapping("/categories/{id}")
     @Operation(summary = "Deactivate category", description = "Deactivates a product category (soft delete) with reason")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
@@ -210,9 +171,6 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success("Category deactivated successfully"));
     }
 
-    /**
-     * Activate a product category.
-     */
     @PostMapping("/categories/{id}/activate")
     @Operation(summary = "Activate category", description = "Reactivates a deactivated product category")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")

@@ -11,9 +11,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * StockMovement entity representing inventory transactions.
- */
 @Entity
 @Table(name = "stock_movements", indexes = {
         @Index(name = "idx_stock_movements_warehouse", columnList = "warehouse_id"),

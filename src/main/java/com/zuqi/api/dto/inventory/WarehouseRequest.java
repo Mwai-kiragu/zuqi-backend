@@ -11,9 +11,6 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.util.UUID;
 
-/**
- * Request DTO for creating/updating warehouse.
- */
 @Data
 @Builder
 @NoArgsConstructor

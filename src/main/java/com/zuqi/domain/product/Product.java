@@ -16,9 +16,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Product entity representing items sold by distributors.
- */
 @Entity
 @Table(name = "products", indexes = {
         @Index(name = "idx_products_distributor", columnList = "distributor_id"),

@@ -3,9 +3,6 @@ package com.zuqi.domain.payment;
 import jakarta.persistence.*;
 import lombok.*;
 
-/**
- * Payment method entity.
- */
 @Entity
 @Table(name = "payment_methods")
 @Getter

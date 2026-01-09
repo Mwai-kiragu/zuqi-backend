@@ -12,9 +12,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Warehouse entity representing inventory storage locations.
- */
 @Entity
 @Table(name = "warehouses", indexes = {
         @Index(name = "idx_warehouses_distributor", columnList = "distributor_id")

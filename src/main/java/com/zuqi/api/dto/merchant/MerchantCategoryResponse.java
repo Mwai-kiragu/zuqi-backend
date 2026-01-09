@@ -6,9 +6,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Response DTO for merchant category data.
- */
 @Data
 @Builder
 @NoArgsConstructor
@@ -19,9 +16,6 @@ public class MerchantCategoryResponse {
     private String name;
     private String description;
 
-    /**
-     * Converts a MerchantCategory entity to MerchantCategoryResponse DTO.
-     */
     public static MerchantCategoryResponse fromEntity(MerchantCategory category) {
         return MerchantCategoryResponse.builder()
                 .id(category.getId())

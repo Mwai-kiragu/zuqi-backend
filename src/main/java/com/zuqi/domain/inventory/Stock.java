@@ -10,9 +10,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Stock entity representing inventory levels per warehouse and product.
- */
 @Entity
 @Table(name = "stock", indexes = {
         @Index(name = "idx_stock_warehouse", columnList = "warehouse_id"),
@@ -61,16 +58,10 @@ public class Stock {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    /**
-     * Get available quantity (total - reserved).
-     */
     public BigDecimal getAvailableQuantity() {
         return quantity.subtract(reservedQuantity);
     }
 
-    /**
-     * Check if stock is below reorder level.
-     */
     public boolean isLowStock() {
         if (reorderLevel == null) {
             return false;

@@ -9,9 +9,6 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Order status history entity for tracking status changes.
- */
 @Entity
 @Table(name = "order_status_history", indexes = {
         @Index(name = "idx_order_status_history_order", columnList = "order_id")

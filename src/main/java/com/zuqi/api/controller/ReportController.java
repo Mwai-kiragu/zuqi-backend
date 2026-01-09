@@ -17,9 +17,6 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDate;
 import java.util.UUID;
 
-/**
- * REST controller for report generation.
- */
 @RestController
 @RequestMapping("/v1/reports")
 @RequiredArgsConstructor
@@ -28,9 +25,6 @@ public class ReportController {
 
     private final ReportService reportService;
 
-    /**
-     * Generate sales report.
-     */
     @GetMapping("/sales")
     @Operation(summary = "Generate sales report", description = "Generates a sales report for the specified period")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE')")
@@ -43,9 +37,6 @@ public class ReportController {
         return ResponseEntity.ok(ApiResponse.success(report));
     }
 
-    /**
-     * Generate inventory report.
-     */
     @GetMapping("/inventory")
     @Operation(summary = "Generate inventory report", description = "Generates an inventory status report")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'WAREHOUSE_MANAGER')")
@@ -56,9 +47,6 @@ public class ReportController {
         return ResponseEntity.ok(ApiResponse.success(report));
     }
 
-    /**
-     * Generate payment report.
-     */
     @GetMapping("/payments")
     @Operation(summary = "Generate payment report", description = "Generates a payment/collection report")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE')")

@@ -23,9 +23,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Implementation of DashboardService.
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j

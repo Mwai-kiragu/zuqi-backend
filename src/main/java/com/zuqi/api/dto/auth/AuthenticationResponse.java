@@ -9,9 +9,6 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Response DTO for authentication containing tokens and user info.
- */
 @Data
 @Builder
 @NoArgsConstructor

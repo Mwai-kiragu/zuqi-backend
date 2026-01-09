@@ -3,9 +3,6 @@ package com.zuqi.domain.merchant;
 import jakarta.persistence.*;
 import lombok.*;
 
-/**
- * MerchantCategory entity representing business categories for merchants.
- */
 @Entity
 @Table(name = "merchant_categories")
 @Getter

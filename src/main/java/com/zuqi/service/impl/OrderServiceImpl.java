@@ -10,6 +10,7 @@ import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
+import com.zuqi.service.InvoiceService;
 import com.zuqi.service.OrderService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -26,9 +27,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Implementation of OrderService.
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -44,6 +42,7 @@ public class OrderServiceImpl implements OrderService {
     private final WarehouseRepository warehouseRepository;
     private final UserRepository userRepository;
     private final SecurityUtils securityUtils;
+    private final InvoiceService invoiceService;
 
     @Override
     public Page<OrderResponse> getAllOrders(Pageable pageable) {
@@ -208,6 +207,15 @@ public class OrderServiceImpl implements OrderService {
 
         // Add initial status history
         addStatusHistory(order, OrderStatus.PENDING, "Order created", currentUser);
+
+        // Create and send invoice
+        try {
+            invoiceService.createInvoiceFromOrder(order);
+            log.info("Invoice created for order: {}", order.getOrderNumber());
+        } catch (Exception e) {
+            log.error("Failed to create invoice for order {}: {}", order.getOrderNumber(), e.getMessage());
+            // Don't fail the order creation if invoice creation fails
+        }
 
         log.info("Order created successfully: {}", order.getOrderNumber());
         return OrderResponse.fromEntity(order);

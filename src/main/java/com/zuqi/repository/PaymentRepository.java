@@ -14,9 +14,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/**
- * Repository for Payment entity.
- */
 @Repository
 public interface PaymentRepository extends JpaRepository<Payment, UUID> {
 

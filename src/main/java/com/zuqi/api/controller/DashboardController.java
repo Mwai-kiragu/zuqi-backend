@@ -15,9 +15,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * REST controller for dashboard operations.
- */
 @RestController
 @RequestMapping("/v1/dashboard")
 @RequiredArgsConstructor
@@ -26,9 +23,6 @@ public class DashboardController {
 
     private final DashboardService dashboardService;
 
-    /**
-     * Get dashboard statistics.
-     */
     @GetMapping("/stats")
     @Operation(summary = "Get dashboard stats", description = "Retrieves role-specific dashboard statistics")
     public ResponseEntity<ApiResponse<DashboardStatsResponse>> getStats(
@@ -38,9 +32,6 @@ public class DashboardController {
         return ResponseEntity.ok(ApiResponse.success(stats));
     }
 
-    /**
-     * Get recent orders for dashboard display.
-     */
     @GetMapping("/orders/recent")
     @Operation(summary = "Get recent orders", description = "Retrieves recent orders for dashboard display")
     public ResponseEntity<ApiResponse<List<RecentOrderResponse>>> getRecentOrders(
@@ -51,9 +42,6 @@ public class DashboardController {
         return ResponseEntity.ok(ApiResponse.success(orders));
     }
 
-    /**
-     * Get top merchants by revenue.
-     */
     @GetMapping("/merchants/top")
     @Operation(summary = "Get top merchants", description = "Retrieves top performing merchants by revenue")
     public ResponseEntity<ApiResponse<List<TopMerchantResponse>>> getTopMerchants(
@@ -64,9 +52,6 @@ public class DashboardController {
         return ResponseEntity.ok(ApiResponse.success(merchants));
     }
 
-    /**
-     * Get revenue chart data.
-     */
     @GetMapping("/revenue/chart")
     @Operation(summary = "Get revenue chart", description = "Retrieves revenue data for charting")
     public ResponseEntity<ApiResponse<RevenueChartData>> getRevenueChart(

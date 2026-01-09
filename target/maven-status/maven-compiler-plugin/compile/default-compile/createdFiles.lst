@@ -1,4 +1,5 @@
 com/zuqi/api/dto/payment/PaymentMethodResponse$PaymentMethodResponseBuilder.class
+com/zuqi/api/dto/auth/VerifyOtpRequest$VerifyOtpRequestBuilder.class
 com/zuqi/api/dto/credit/CreditScoreResponse.class
 com/zuqi/api/dto/user/UpdateProfileRequest.class
 com/zuqi/domain/merchant/MerchantCategory.class
@@ -27,24 +28,34 @@ com/zuqi/repository/StockRepository.class
 com/zuqi/security/CasbinAuthorizationService.class
 com/zuqi/api/dto/role/PermissionFullResponse.class
 com/zuqi/api/dto/order/OrderItemRequest.class
+com/zuqi/domain/user/PasswordResetToken.class
 com/zuqi/api/dto/dashboard/RevenueChartData.class
+com/zuqi/domain/invoice/InvoiceStatus.class
 com/zuqi/service/impl/OrderServiceImpl$1.class
 com/zuqi/service/InventoryService.class
+com/zuqi/api/controller/InvoiceController.class
+com/zuqi/service/impl/InvoiceServiceImpl.class
 com/zuqi/api/dto/order/StatusUpdateRequest$StatusUpdateRequestBuilder.class
+com/zuqi/api/dto/invoice/InvoiceResponse.class
 com/zuqi/api/dto/auth/RegisterRequest$RegisterRequestBuilder.class
 com/zuqi/api/dto/merchant/MerchantCategoryResponse.class
+com/zuqi/domain/invoice/Invoice$InvoiceBuilder.class
 com/zuqi/api/dto/product/ProductRequest.class
 com/zuqi/domain/payment/PaymentMethod.class
 com/zuqi/api/dto/order/StatusUpdateRequest.class
 com/zuqi/api/dto/report/SalesReportResponse$SalesRepData.class
 com/zuqi/api/dto/dashboard/TopMerchantResponse.class
+com/zuqi/config/EmailConfig.class
 com/zuqi/api/dto/role/RoleResponse$RoleResponseBuilder.class
 com/zuqi/service/CreditService.class
 com/zuqi/api/dto/order/OrderResponse$OrderResponseBuilder.class
 com/zuqi/service/impl/PermissionServiceImpl.class
 com/zuqi/domain/product/ProductCategory.class
+com/zuqi/api/dto/invoice/SendInvoiceRequest.class
+com/zuqi/api/dto/invoice/SendInvoiceRequest$SendInvoiceRequestBuilder.class
 com/zuqi/domain/credit/CreditLimit$CreditLimitBuilder.class
 com/zuqi/api/dto/order/OrderResponse.class
+com/zuqi/api/dto/auth/VerifyOtpRequest.class
 com/zuqi/api/dto/merchant/MerchantResponse$MerchantResponseBuilder.class
 com/zuqi/api/dto/inventory/StockAdjustmentRequest.class
 com/zuqi/api/dto/dashboard/TopMerchantResponse$TopMerchantResponseBuilder.class
@@ -52,6 +63,7 @@ com/zuqi/api/dto/user/ResetPasswordRequest.class
 com/zuqi/api/controller/UserController.class
 com/zuqi/api/dto/product/ProductResponse.class
 com/zuqi/domain/order/OrderStatusHistory.class
+com/zuqi/api/dto/auth/ForgotPasswordRequest.class
 com/zuqi/service/MerchantService.class
 com/zuqi/domain/distributor/Distributor$DistributorBuilder.class
 com/zuqi/api/dto/report/PaymentReportResponse$DailyCollection$DailyCollectionBuilder.class
@@ -62,6 +74,7 @@ com/zuqi/security/JwtAuthenticationFilter.class
 com/zuqi/repository/StockMovementRepository.class
 com/zuqi/service/UserService.class
 com/zuqi/api/dto/payment/PaymentResponse.class
+com/zuqi/service/impl/EmailServiceImpl.class
 com/zuqi/api/dto/auth/RegisterRequest.class
 com/zuqi/domain/credit/CreditLimitStatus.class
 com/zuqi/repository/DistributorRepository.class
@@ -103,6 +116,7 @@ com/zuqi/api/dto/user/UserResponse.class
 com/zuqi/api/dto/dashboard/RevenueChartData$RevenueChartDataBuilder.class
 com/zuqi/service/impl/AuthenticationServiceImpl.class
 com/zuqi/domain/order/OrderStatus.class
+com/zuqi/domain/invoice/Invoice.class
 com/zuqi/domain/product/Product$ProductBuilder.class
 com/zuqi/api/dto/merchant/MerchantCategoryResponse$MerchantCategoryResponseBuilder.class
 com/zuqi/service/PaymentService.class
@@ -110,6 +124,7 @@ com/zuqi/util/SecurityUtils.class
 com/zuqi/api/controller/InventoryController.class
 com/zuqi/api/dto/order/OrderItemRequest$OrderItemRequestBuilder.class
 com/zuqi/api/dto/report/SalesReportResponse$DailyData$DailyDataBuilder.class
+com/zuqi/service/InvoiceService.class
 com/zuqi/api/controller/AuthController.class
 com/zuqi/repository/MerchantCategoryRepository.class
 com/zuqi/api/dto/report/InventoryReportResponse$InventoryReportResponseBuilder.class
@@ -119,6 +134,8 @@ com/zuqi/service/AuthenticationService.class
 com/zuqi/domain/merchant/Merchant.class
 com/zuqi/api/dto/report/SalesReportResponse$DailyData.class
 com/zuqi/api/dto/report/InventoryReportResponse$StockItem$StockItemBuilder.class
+com/zuqi/config/AsyncConfig.class
+com/zuqi/api/dto/auth/ResetPasswordRequest$ResetPasswordRequestBuilder.class
 com/zuqi/api/dto/auth/AuthenticationRequest.class
 com/zuqi/api/controller/PermissionController.class
 com/zuqi/repository/OrderStatusHistoryRepository.class
@@ -132,6 +149,7 @@ com/zuqi/api/dto/inventory/WarehouseResponse$WarehouseResponseBuilder.class
 com/zuqi/api/dto/merchant/MerchantResponse.class
 com/zuqi/api/dto/user/ChangePasswordRequest.class
 com/zuqi/exception/ValidationException.class
+com/zuqi/api/dto/auth/ResetPasswordRequest.class
 com/zuqi/api/dto/payment/PaymentResponse$PaymentResponseBuilder.class
 com/zuqi/api/dto/order/OrderItemResponse.class
 com/zuqi/repository/WarehouseRepository.class
@@ -161,7 +179,9 @@ com/zuqi/api/dto/role/RoleResponse.class
 com/zuqi/api/dto/merchant/MerchantRequest$MerchantRequestBuilder.class
 com/zuqi/api/dto/user/UpdateProfileRequest$UpdateProfileRequestBuilder.class
 com/zuqi/api/dto/report/PaymentReportResponse$PaymentReportResponseBuilder.class
+com/zuqi/config/AppConfig.class
 com/zuqi/domain/user/RefreshToken$RefreshTokenBuilder.class
+com/zuqi/api/dto/invoice/InvoiceResponse$InvoiceResponseBuilder.class
 com/zuqi/domain/user/User$UserBuilder.class
 com/zuqi/api/dto/payment/PaymentRequest.class
 com/zuqi/repository/OrderRepository.class
@@ -170,6 +190,7 @@ com/zuqi/config/SecurityConfig.class
 com/zuqi/api/dto/payment/PaymentRequest$PaymentRequestBuilder.class
 com/zuqi/api/dto/inventory/StockMovementResponse.class
 com/zuqi/api/dto/auth/RefreshTokenRequest.class
+com/zuqi/repository/InvoiceRepository.class
 com/zuqi/repository/ProductRepository.class
 com/zuqi/api/dto/auth/RefreshTokenRequest$RefreshTokenRequestBuilder.class
 com/zuqi/api/controller/CreditController.class
@@ -183,6 +204,7 @@ com/zuqi/api/dto/dashboard/RevenueChartData$ChartDataPoint$ChartDataPointBuilder
 com/zuqi/api/dto/payment/PaymentMethodResponse.class
 com/zuqi/service/impl/ProductServiceImpl.class
 com/zuqi/api/dto/inventory/WarehouseRequest$WarehouseRequestBuilder.class
+com/zuqi/api/dto/invoice/InvoiceRequest$InvoiceRequestBuilder.class
 com/zuqi/api/dto/dashboard/DashboardStatsResponse$DashboardStatsResponseBuilder.class
 com/zuqi/repository/MerchantRepository.class
 com/zuqi/api/dto/report/InventoryReportResponse$WarehouseSummary.class
@@ -194,6 +216,8 @@ com/zuqi/api/dto/inventory/WarehouseRequest.class
 com/zuqi/service/impl/UserServiceImpl.class
 com/zuqi/api/dto/user/CreateUserRequest.class
 com/zuqi/api/dto/dashboard/RecentOrderResponse.class
+com/zuqi/service/EmailService.class
+com/zuqi/api/dto/auth/ForgotPasswordRequest$ForgotPasswordRequestBuilder.class
 com/zuqi/api/dto/distributor/DistributorResponse$DistributorResponseBuilder.class
 com/zuqi/api/dto/order/OrderRequest$OrderRequestBuilder.class
 com/zuqi/api/dto/order/OrderRequest.class
@@ -209,6 +233,7 @@ com/zuqi/config/RedisConfig.class
 com/zuqi/api/dto/credit/CreditLimitResponse$CreditLimitResponseBuilder.class
 com/zuqi/api/dto/user/CreateUserRequest$CreateUserRequestBuilder.class
 com/zuqi/api/controller/ReportController.class
+com/zuqi/repository/PasswordResetTokenRepository.class
 com/zuqi/api/dto/role/RoleRequest.class
 com/zuqi/api/dto/user/UpdateUserRequest.class
 com/zuqi/api/dto/role/RoleResponse$PermissionResponse.class
@@ -220,6 +245,7 @@ com/zuqi/exception/DuplicateResourceException.class
 com/zuqi/api/dto/credit/CreditLimitResponse.class
 com/zuqi/domain/order/Order$OrderBuilder.class
 com/zuqi/api/controller/OrderController.class
+com/zuqi/api/dto/invoice/InvoiceRequest.class
 com/zuqi/api/controller/RoleController.class
 com/zuqi/domain/merchant/MerchantCategory$MerchantCategoryBuilder.class
 com/zuqi/domain/order/Order.class
@@ -231,3 +257,4 @@ com/zuqi/api/dto/report/PaymentReportResponse$DailyCollection.class
 com/zuqi/api/dto/order/OrderItemResponse$OrderItemResponseBuilder.class
 com/zuqi/repository/PaymentRepository.class
 com/zuqi/api/dto/report/InventoryReportResponse$StockItem.class
+com/zuqi/domain/user/PasswordResetToken$PasswordResetTokenBuilder.class

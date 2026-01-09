@@ -6,6 +6,7 @@ import com.zuqi.api.dto.auth.RefreshTokenRequest;
 import com.zuqi.api.dto.auth.RegisterRequest;
 import com.zuqi.api.dto.auth.ForgotPasswordRequest;
 import com.zuqi.api.dto.auth.ResetPasswordRequest;
+import com.zuqi.api.dto.auth.VerifyOtpRequest;
 import com.zuqi.domain.user.PasswordResetToken;
 import com.zuqi.domain.user.RefreshToken;
 import com.zuqi.domain.user.Role;
@@ -21,6 +22,7 @@ import com.zuqi.repository.RoleRepository;
 import com.zuqi.repository.UserRepository;
 import com.zuqi.security.JwtService;
 import com.zuqi.service.AuthenticationService;
+import com.zuqi.service.EmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -35,9 +37,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
-/**
- * Implementation of the authentication service.
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -50,9 +49,10 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
+    private final EmailService emailService;
 
-    // Password reset token expires in 1 hour
-    private static final int RESET_TOKEN_EXPIRY_HOURS = 1;
+    // OTP expires in 10 minutes
+    private static final int OTP_EXPIRY_MINUTES = 10;
 
     @Override
     @Transactional
@@ -210,16 +210,15 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     @Override
     @Transactional
-    public void forgotPassword(ForgotPasswordRequest request) {
+    public boolean forgotPassword(ForgotPasswordRequest request) {
         log.info("Processing forgot password request for email: {}", request.getEmail());
 
-        // Find user by email (don't reveal if user exists or not for security)
+        // Find user by email
         Optional<User> userOptional = userRepository.findByEmail(request.getEmail());
 
         if (userOptional.isEmpty()) {
-            // Log but don't throw exception to prevent email enumeration
             log.warn("Forgot password requested for non-existent email: {}", request.getEmail());
-            return;
+            return false;
         }
 
         User user = userOptional.get();
@@ -227,15 +226,15 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         // Check if user is active
         if (!user.isActive()) {
             log.warn("Forgot password requested for inactive user: {}", request.getEmail());
-            return;
+            return false;
         }
 
-        // Generate reset token
-        String token = UUID.randomUUID().toString();
-        LocalDateTime expiresAt = LocalDateTime.now().plusHours(RESET_TOKEN_EXPIRY_HOURS);
+        // Generate 6-digit OTP
+        String otp = generateOtp();
+        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES);
 
         PasswordResetToken resetToken = PasswordResetToken.builder()
-                .token(token)
+                .token(otp)
                 .user(user)
                 .expiresAt(expiresAt)
                 .used(false)
@@ -243,21 +242,39 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         passwordResetTokenRepository.save(resetToken);
 
-        // In production, send email with reset link here
-        // For now, just log the token (in production, this would be sent via email)
-        log.info("Password reset token generated for user {}: {}", user.getEmail(), token);
-        log.info("Reset link would be: {}/reset-password?token={}", "http://localhost:3000", token);
+        // Send password reset OTP email
+        emailService.sendPasswordResetOtpEmail(user, otp);
+        log.info("Password reset OTP sent to: {}", user.getEmail());
+        return true;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean verifyOtp(VerifyOtpRequest request) {
+        log.info("Verifying OTP for email: {}", request.getEmail());
+
+        // Check if OTP is valid
+        Optional<PasswordResetToken> tokenOptional = passwordResetTokenRepository
+                .findValidOtpByEmailAndCode(request.getEmail(), request.getOtp(), LocalDateTime.now());
+
+        if (tokenOptional.isEmpty()) {
+            log.warn("Invalid or expired OTP for email: {}", request.getEmail());
+            return false;
+        }
+
+        log.info("OTP verified successfully for email: {}", request.getEmail());
+        return true;
     }
 
     @Override
     @Transactional
     public void resetPassword(ResetPasswordRequest request) {
-        log.info("Processing password reset request");
+        log.info("Processing password reset request for email: {}", request.getEmail());
 
-        // Find and validate token
+        // Find and validate OTP by email and code
         PasswordResetToken resetToken = passwordResetTokenRepository
-                .findValidToken(request.getToken(), LocalDateTime.now())
-                .orElseThrow(() -> new ValidationException("Invalid or expired reset token"));
+                .findValidOtpByEmailAndCode(request.getEmail(), request.getOtp(), LocalDateTime.now())
+                .orElseThrow(() -> new ValidationException("Invalid or expired OTP"));
 
         User user = resetToken.getUser();
 
@@ -273,6 +290,14 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         // Invalidate all refresh tokens for this user (force re-login)
         refreshTokenRepository.revokeAllUserTokens(user.getId());
 
+        // Send password changed confirmation email
+        emailService.sendPasswordChangedEmail(user);
         log.info("Password reset successful for user: {}", user.getEmail());
+    }
+
+    private String generateOtp() {
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        int otp = 100000 + random.nextInt(900000);
+        return String.valueOf(otp);
     }
 }

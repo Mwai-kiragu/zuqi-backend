@@ -11,9 +11,6 @@ import org.springframework.core.io.ClassPathResource;
 
 import javax.sql.DataSource;
 
-/**
- * Configuration for Casbin authorization.
- */
 @Configuration
 public class CasbinConfig {
 
@@ -26,10 +23,6 @@ public class CasbinConfig {
     @Value("${casbin.use-database:false}")
     private boolean useDatabase;
 
-    /**
-     * Creates the Casbin Enforcer bean.
-     * Uses file-based policy by default, can switch to database adapter.
-     */
     @Bean
     public Enforcer enforcer(DataSource dataSource) throws Exception {
         // Load model from classpath

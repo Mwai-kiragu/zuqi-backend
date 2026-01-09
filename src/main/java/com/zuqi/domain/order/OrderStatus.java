@@ -1,8 +1,5 @@
 package com.zuqi.domain.order;
 
-/**
- * Order status enumeration.
- */
 public enum OrderStatus {
     PENDING,
     CONFIRMED,

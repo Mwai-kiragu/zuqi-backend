@@ -9,9 +9,6 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Response DTO for product category data.
- */
 @Data
 @Builder
 @NoArgsConstructor
@@ -29,9 +26,6 @@ public class ProductCategoryResponse {
     private LocalDateTime deactivatedAt;
     private String deactivatedByName;
 
-    /**
-     * Converts a ProductCategory entity to ProductCategoryResponse DTO.
-     */
     public static ProductCategoryResponse fromEntity(ProductCategory category) {
         return ProductCategoryResponse.builder()
                 .id(category.getId())

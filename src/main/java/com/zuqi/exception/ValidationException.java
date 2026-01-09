@@ -1,8 +1,5 @@
 package com.zuqi.exception;
 
-/**
- * Exception thrown when validation fails.
- */
 public class ValidationException extends RuntimeException {
 
     public ValidationException(String message) {

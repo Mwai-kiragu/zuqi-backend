@@ -23,9 +23,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * REST controller for inventory management.
- */
+
 @RestController
 @RequestMapping("/v1/inventory")
 @RequiredArgsConstructor
@@ -33,8 +31,6 @@ import java.util.UUID;
 public class InventoryController {
 
     private final InventoryService inventoryService;
-
-    // ==================== Stock Endpoints ====================
 
     @GetMapping("/warehouse/{warehouseId}")
     @Operation(summary = "Get stock by warehouse", description = "Get all stock levels for a warehouse")
@@ -80,8 +76,6 @@ public class InventoryController {
         Page<StockResponse> lowStock = inventoryService.getLowStock(distributorId, pageable);
         return ResponseEntity.ok(ApiResponse.success(lowStock));
     }
-
-    // ==================== Warehouse Endpoints ====================
 
     @GetMapping("/warehouses")
     @Operation(summary = "List warehouses", description = "Get all active warehouses for a distributor")
@@ -142,8 +136,6 @@ public class InventoryController {
         inventoryService.activateWarehouse(warehouseId);
         return ResponseEntity.ok(ApiResponse.success("Warehouse activated successfully", null));
     }
-
-    // ==================== Stock Movement Endpoints ====================
 
     @GetMapping("/movements/warehouse/{warehouseId}")
     @Operation(summary = "Get stock movements", description = "Get stock movements for a warehouse")

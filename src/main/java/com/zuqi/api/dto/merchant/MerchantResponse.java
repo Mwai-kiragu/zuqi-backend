@@ -10,9 +10,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Response DTO for merchant data.
- */
 @Data
 @Builder
 @NoArgsConstructor
@@ -45,9 +42,6 @@ public class MerchantResponse {
     private LocalDateTime deactivatedAt;
     private String deactivatedByName;
 
-    /**
-     * Converts a Merchant entity to MerchantResponse DTO.
-     */
     public static MerchantResponse fromEntity(Merchant merchant) {
         return MerchantResponse.builder()
                 .id(merchant.getId())

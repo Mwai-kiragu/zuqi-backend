@@ -9,9 +9,6 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.util.UUID;
 
-/**
- * Response DTO for order items.
- */
 @Data
 @Builder
 @NoArgsConstructor

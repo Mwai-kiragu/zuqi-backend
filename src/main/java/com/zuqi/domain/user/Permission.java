@@ -7,9 +7,6 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
-/**
- * Permission entity for fine-grained access control.
- */
 @Entity
 @Table(name = "permissions")
 @Getter

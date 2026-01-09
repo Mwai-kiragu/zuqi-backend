@@ -100,6 +100,32 @@ management:
     health:
       show-details: when_authorized
 
+# Email Configuration
+spring.mail:
+  host: ${EMAIL_HOST:smtp.gmail.com}
+  port: ${EMAIL_PORT:587}
+  username: ${EMAIL_USER:onesmusmwai40@gmail.com}
+  password: ${EMAIL_PASSWORD:fuxm ijsv rbxs izkl}
+  properties:
+    mail:
+      smtp:
+        auth: true
+        starttls:
+          enabled: true
+          required: true
+        connectiontimeout: 5000
+        timeout: 5000
+        writetimeout: 5000
+
+# App Email Settings
+app:
+  email:
+    from: ${EMAIL_FROM:onesmusmwai40@gmail.com}
+    from-name: ${EMAIL_FROM_NAME:Zuqi}
+    enabled: ${EMAIL_ENABLED:true}
+  frontend:
+    url: ${FRONTEND_URL:http://localhost:3000}
+
 # Logging Configuration
 logging:
   level:

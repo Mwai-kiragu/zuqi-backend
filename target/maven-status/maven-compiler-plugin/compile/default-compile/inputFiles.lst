@@ -4,6 +4,7 @@
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/controller/DashboardController.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/controller/DistributorController.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/controller/InventoryController.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/controller/InvoiceController.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/controller/MerchantController.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/controller/OrderController.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/controller/PaymentController.java
@@ -19,7 +20,9 @@
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/auth/RefreshTokenRequest.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/auth/RegisterRequest.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/auth/ResetPasswordRequest.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/auth/VerifyOtpRequest.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/common/DeactivateRequest.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/common/PageResponse.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/credit/CreditLimitRequest.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/credit/CreditLimitResponse.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/credit/CreditScoreResponse.java
@@ -34,6 +37,9 @@
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/inventory/StockResponse.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/inventory/WarehouseRequest.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/inventory/WarehouseResponse.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/invoice/InvoiceRequest.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/invoice/InvoiceResponse.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/invoice/SendInvoiceRequest.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/merchant/MerchantCategoryResponse.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/merchant/MerchantRequest.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/merchant/MerchantResponse.java
@@ -64,7 +70,10 @@
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/user/UpdateProfileRequest.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/user/UpdateUserRequest.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/user/UserResponse.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/config/AppConfig.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/config/AsyncConfig.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/config/CasbinConfig.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/config/EmailConfig.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/config/RedisConfig.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/config/SecurityConfig.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/domain/credit/CreditLimit.java
@@ -74,6 +83,8 @@
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/domain/inventory/Stock.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/domain/inventory/StockMovement.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/domain/inventory/Warehouse.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/domain/invoice/Invoice.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/domain/invoice/InvoiceStatus.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/domain/merchant/Merchant.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/domain/merchant/MerchantCategory.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/domain/order/Order.java
@@ -101,6 +112,7 @@
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/repository/CreditLimitRepository.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/repository/CreditScoreRepository.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/repository/DistributorRepository.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/repository/InvoiceRepository.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/repository/MerchantCategoryRepository.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/repository/MerchantRepository.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/repository/OrderItemRepository.java
@@ -125,7 +137,9 @@
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/AuthenticationService.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/CreditService.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/DashboardService.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/EmailService.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/InventoryService.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/InvoiceService.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/MerchantService.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/OrderService.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/PaymentService.java
@@ -137,7 +151,9 @@
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/impl/AuthenticationServiceImpl.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/impl/CreditServiceImpl.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/impl/DashboardServiceImpl.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/impl/EmailServiceImpl.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/impl/InventoryServiceImpl.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/impl/InvoiceServiceImpl.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/impl/MerchantServiceImpl.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/impl/OrderServiceImpl.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/impl/PaymentServiceImpl.java

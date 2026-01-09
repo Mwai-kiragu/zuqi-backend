@@ -17,9 +17,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
-/**
- * Filter for JWT authentication that intercepts every request.
- */
 @Component
 @RequiredArgsConstructor
 @Slf4j

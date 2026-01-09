@@ -19,9 +19,6 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.List;
 
-/**
- * Filter that checks Casbin authorization for each request.
- */
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -105,20 +102,16 @@ public class CasbinAuthorizationFilter extends OncePerRequestFilter {
                     .toList();
         }
 
-        // Fallback to authorities
         return authentication.getAuthorities().stream()
                 .map(auth -> auth.getAuthority().replace("ROLE_", ""))
                 .toList();
     }
 
     private String normalizePath(String path) {
-        // Remove /api prefix if present
         if (path.startsWith("/api")) {
             path = path.substring(4);
         }
 
-        // Replace UUIDs and numeric IDs with :id placeholder for matching
-        // e.g., /v1/orders/123e4567-e89b-12d3-a456-426614174000 -> /v1/orders/:id
         path = path.replaceAll("/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", "/:id");
         path = path.replaceAll("/\\d+", "/:id");
 

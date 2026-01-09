@@ -16,9 +16,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Merchant entity representing retail outlets/businesses.
- */
 @Entity
 @Table(name = "merchants", indexes = {
         @Index(name = "idx_merchants_distributor", columnList = "distributor_id"),

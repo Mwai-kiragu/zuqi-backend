@@ -7,9 +7,6 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.util.UUID;
 
-/**
- * Order item entity representing line items in an order.
- */
 @Entity
 @Table(name = "order_items", indexes = {
         @Index(name = "idx_order_items_order", columnList = "order_id")

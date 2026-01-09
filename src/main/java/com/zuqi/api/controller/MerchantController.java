@@ -25,9 +25,6 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * REST controller for merchant operations.
- */
 @RestController
 @RequestMapping("/v1/merchants")
 @RequiredArgsConstructor
@@ -36,9 +33,6 @@ public class MerchantController {
 
     private final MerchantService merchantService;
 
-    /**
-     * Get all merchants with pagination and optional filters.
-     */
     @GetMapping
     @Operation(summary = "Get all merchants", description = "Retrieves merchants with pagination and optional filters")
     public ResponseEntity<ApiResponse<Page<MerchantResponse>>> getAllMerchants(
@@ -65,9 +59,6 @@ public class MerchantController {
         return ResponseEntity.ok(ApiResponse.success(merchants));
     }
 
-    /**
-     * Get a merchant by ID.
-     */
     @GetMapping("/{id}")
     @Operation(summary = "Get merchant by ID", description = "Retrieves a specific merchant by ID")
     public ResponseEntity<ApiResponse<MerchantResponse>> getMerchantById(
@@ -76,9 +67,6 @@ public class MerchantController {
         return ResponseEntity.ok(ApiResponse.success(merchant));
     }
 
-    /**
-     * Create a new merchant.
-     */
     @PostMapping
     @Operation(summary = "Create merchant", description = "Creates a new merchant")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP')")
@@ -90,9 +78,6 @@ public class MerchantController {
                 .body(ApiResponse.success("Merchant created successfully", merchant));
     }
 
-    /**
-     * Update an existing merchant.
-     */
     @PutMapping("/{id}")
     @Operation(summary = "Update merchant", description = "Updates an existing merchant")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP')")
@@ -103,9 +88,6 @@ public class MerchantController {
         return ResponseEntity.ok(ApiResponse.success("Merchant updated successfully", merchant));
     }
 
-    /**
-     * Assign a sales rep to a merchant.
-     */
     @PatchMapping("/{id}/assign")
     @Operation(summary = "Assign sales rep", description = "Assigns a sales rep to a merchant")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
@@ -116,9 +98,6 @@ public class MerchantController {
         return ResponseEntity.ok(ApiResponse.success("Sales rep assigned successfully", merchant));
     }
 
-    /**
-     * Verify a merchant.
-     */
     @PatchMapping("/{id}/verify")
     @Operation(summary = "Verify merchant", description = "Marks a merchant as verified")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
@@ -128,9 +107,6 @@ public class MerchantController {
         return ResponseEntity.ok(ApiResponse.success("Merchant verified successfully", merchant));
     }
 
-    /**
-     * Deactivate a merchant with reason.
-     */
     @DeleteMapping("/{id}")
     @Operation(summary = "Deactivate merchant", description = "Deactivates a merchant (soft delete) with reason")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
@@ -142,9 +118,6 @@ public class MerchantController {
         return ResponseEntity.ok(ApiResponse.success("Merchant deactivated successfully"));
     }
 
-    /**
-     * Activate a merchant.
-     */
     @PostMapping("/{id}/activate")
     @Operation(summary = "Activate merchant", description = "Reactivates a deactivated merchant")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
@@ -154,9 +127,6 @@ public class MerchantController {
         return ResponseEntity.ok(ApiResponse.success("Merchant activated successfully"));
     }
 
-    /**
-     * Get all merchant categories.
-     */
     @GetMapping("/categories")
     @Operation(summary = "Get merchant categories", description = "Retrieves all merchant categories")
     public ResponseEntity<ApiResponse<List<MerchantCategoryResponse>>> getCategories() {
@@ -164,9 +134,6 @@ public class MerchantController {
         return ResponseEntity.ok(ApiResponse.success(categories));
     }
 
-    /**
-     * Get distinct cities for filtering.
-     */
     @GetMapping("/cities")
     @Operation(summary = "Get distinct cities", description = "Retrieves distinct cities for filtering")
     public ResponseEntity<ApiResponse<List<String>>> getCities() {

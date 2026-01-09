@@ -25,9 +25,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * REST controller for payment operations.
- */
 @RestController
 @RequestMapping("/v1/payments")
 @RequiredArgsConstructor
@@ -36,9 +33,6 @@ public class PaymentController {
 
     private final PaymentService paymentService;
 
-    /**
-     * Get all payments with pagination and optional filters.
-     */
     @GetMapping
     @Operation(summary = "Get all payments", description = "Retrieves payments with pagination and optional filters")
     public ResponseEntity<ApiResponse<Page<PaymentResponse>>> getAllPayments(
@@ -72,9 +66,6 @@ public class PaymentController {
         return ResponseEntity.ok(ApiResponse.success(payments));
     }
 
-    /**
-     * Get a payment by ID.
-     */
     @GetMapping("/{id}")
     @Operation(summary = "Get payment by ID", description = "Retrieves a specific payment by ID")
     public ResponseEntity<ApiResponse<PaymentResponse>> getPaymentById(
@@ -83,9 +74,6 @@ public class PaymentController {
         return ResponseEntity.ok(ApiResponse.success(payment));
     }
 
-    /**
-     * Get a payment by payment number.
-     */
     @GetMapping("/number/{paymentNumber}")
     @Operation(summary = "Get payment by number", description = "Retrieves a specific payment by payment number")
     public ResponseEntity<ApiResponse<PaymentResponse>> getPaymentByNumber(
@@ -94,9 +82,6 @@ public class PaymentController {
         return ResponseEntity.ok(ApiResponse.success(payment));
     }
 
-    /**
-     * Create a new payment.
-     */
     @PostMapping
     @Operation(summary = "Create payment", description = "Records a new payment")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE', 'MERCHANT')")
@@ -108,9 +93,6 @@ public class PaymentController {
                 .body(ApiResponse.success("Payment recorded successfully", payment));
     }
 
-    /**
-     * Update payment status.
-     */
     @PatchMapping("/{id}/status")
     @Operation(summary = "Update payment status", description = "Updates the status of a payment")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE')")
@@ -121,9 +103,6 @@ public class PaymentController {
         return ResponseEntity.ok(ApiResponse.success("Payment status updated successfully", payment));
     }
 
-    /**
-     * Reconcile a payment.
-     */
     @PostMapping("/{id}/reconcile")
     @Operation(summary = "Reconcile payment", description = "Marks a payment as reconciled")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'FINANCE')")
@@ -136,9 +115,6 @@ public class PaymentController {
         return ResponseEntity.ok(ApiResponse.success("Payment reconciled successfully", payment));
     }
 
-    /**
-     * Get unreconciled payments.
-     */
     @GetMapping("/unreconciled")
     @Operation(summary = "Get unreconciled payments", description = "Gets all unreconciled payments")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE')")
@@ -148,9 +124,6 @@ public class PaymentController {
         return ResponseEntity.ok(ApiResponse.success(payments));
     }
 
-    /**
-     * Count unreconciled payments.
-     */
     @GetMapping("/unreconciled/count")
     @Operation(summary = "Count unreconciled payments", description = "Gets the count of unreconciled payments")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE')")
@@ -160,9 +133,6 @@ public class PaymentController {
         return ResponseEntity.ok(ApiResponse.success(count));
     }
 
-    /**
-     * Get all payment methods.
-     */
     @GetMapping("/methods")
     @Operation(summary = "Get payment methods", description = "Gets all payment methods")
     public ResponseEntity<ApiResponse<List<PaymentMethodResponse>>> getPaymentMethods() {

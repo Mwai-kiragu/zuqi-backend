@@ -22,9 +22,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
-/**
- * REST controller for credit management operations.
- */
 @RestController
 @RequestMapping("/v1/credit")
 @RequiredArgsConstructor
@@ -33,9 +30,6 @@ public class CreditController {
 
     private final CreditService creditService;
 
-    /**
-     * Get all credit limits with filters.
-     */
     @GetMapping("/limits")
     @Operation(summary = "Get credit limits", description = "Retrieves credit limits with pagination and filters")
     public ResponseEntity<ApiResponse<Page<CreditLimitResponse>>> getCreditLimits(
@@ -55,9 +49,6 @@ public class CreditController {
         return ResponseEntity.ok(ApiResponse.success(limits));
     }
 
-    /**
-     * Get a credit limit by ID.
-     */
     @GetMapping("/limits/{id}")
     @Operation(summary = "Get credit limit by ID", description = "Retrieves a specific credit limit")
     public ResponseEntity<ApiResponse<CreditLimitResponse>> getCreditLimitById(
@@ -67,9 +58,6 @@ public class CreditController {
         return ResponseEntity.ok(ApiResponse.success(limit));
     }
 
-    /**
-     * Get active credit limit for a merchant.
-     */
     @GetMapping("/limits/merchant/{merchantId}")
     @Operation(summary = "Get active credit limit", description = "Retrieves the active credit limit for a merchant")
     public ResponseEntity<ApiResponse<CreditLimitResponse>> getActiveCreditLimit(
@@ -80,9 +68,6 @@ public class CreditController {
         return ResponseEntity.ok(ApiResponse.success(limit));
     }
 
-    /**
-     * Create a new credit limit.
-     */
     @PostMapping("/limits")
     @Operation(summary = "Create credit limit", description = "Creates a new credit limit for a merchant")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
@@ -96,9 +81,6 @@ public class CreditController {
                 .body(ApiResponse.success("Credit limit created successfully", limit));
     }
 
-    /**
-     * Update a credit limit.
-     */
     @PutMapping("/limits/{id}")
     @Operation(summary = "Update credit limit", description = "Updates an existing credit limit")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
@@ -110,9 +92,6 @@ public class CreditController {
         return ResponseEntity.ok(ApiResponse.success("Credit limit updated successfully", limit));
     }
 
-    /**
-     * Suspend a credit limit.
-     */
     @PatchMapping("/limits/{id}/suspend")
     @Operation(summary = "Suspend credit limit", description = "Suspends a credit limit")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
@@ -123,9 +102,6 @@ public class CreditController {
         return ResponseEntity.ok(ApiResponse.success("Credit limit suspended successfully", limit));
     }
 
-    /**
-     * Reactivate a credit limit.
-     */
     @PatchMapping("/limits/{id}/reactivate")
     @Operation(summary = "Reactivate credit limit", description = "Reactivates a suspended credit limit")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
@@ -136,9 +112,6 @@ public class CreditController {
         return ResponseEntity.ok(ApiResponse.success("Credit limit reactivated successfully", limit));
     }
 
-    /**
-     * Get merchant credit score.
-     */
     @GetMapping("/scores/merchant/{merchantId}")
     @Operation(summary = "Get merchant credit score", description = "Retrieves the latest credit score for a merchant")
     public ResponseEntity<ApiResponse<CreditScoreResponse>> getMerchantCreditScore(
@@ -148,9 +121,6 @@ public class CreditController {
         return ResponseEntity.ok(ApiResponse.success(score));
     }
 
-    /**
-     * Get credit score history.
-     */
     @GetMapping("/scores/merchant/{merchantId}/history")
     @Operation(summary = "Get credit score history", description = "Retrieves credit score history for a merchant")
     public ResponseEntity<ApiResponse<Page<CreditScoreResponse>>> getCreditScoreHistory(

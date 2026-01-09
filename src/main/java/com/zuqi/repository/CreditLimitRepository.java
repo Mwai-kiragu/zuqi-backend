@@ -12,9 +12,6 @@ import org.springframework.stereotype.Repository;
 import java.util.Optional;
 import java.util.UUID;
 
-/**
- * Repository for CreditLimit entity.
- */
 @Repository
 public interface CreditLimitRepository extends JpaRepository<CreditLimit, UUID> {
 

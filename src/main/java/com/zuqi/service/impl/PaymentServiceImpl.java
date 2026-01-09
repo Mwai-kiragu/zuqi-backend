@@ -26,9 +26,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Implementation of PaymentService.
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j

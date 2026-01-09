@@ -7,10 +7,6 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
-/**
- * Role entity defining user roles in the system.
- * Supports both system roles (from RoleName enum) and custom roles.
- */
 @Entity
 @Table(name = "roles")
 @Getter
@@ -56,9 +52,6 @@ public class Role {
         return Objects.hash(name);
     }
 
-    /**
-     * Check if this role matches a system role name.
-     */
     public boolean isRole(RoleName roleName) {
         return name != null && name.equals(roleName.name());
     }

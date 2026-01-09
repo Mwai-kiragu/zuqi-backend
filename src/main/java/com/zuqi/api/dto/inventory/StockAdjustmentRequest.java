@@ -10,9 +10,6 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.util.UUID;
 
-/**
- * Request DTO for stock adjustment.
- */
 @Data
 @Builder
 @NoArgsConstructor

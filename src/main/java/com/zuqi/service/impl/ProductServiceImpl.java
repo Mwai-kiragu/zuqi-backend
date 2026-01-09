@@ -26,9 +26,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Implementation of the product service.
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j

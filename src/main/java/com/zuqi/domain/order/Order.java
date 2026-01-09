@@ -21,9 +21,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Order entity representing customer orders.
- */
 @Entity
 @Table(name = "orders", indexes = {
         @Index(name = "idx_orders_distributor", columnList = "distributor_id"),

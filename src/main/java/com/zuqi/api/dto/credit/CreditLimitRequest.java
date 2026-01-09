@@ -11,9 +11,6 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Request DTO for creating/updating credit limits.
- */
 @Data
 @Builder
 @NoArgsConstructor

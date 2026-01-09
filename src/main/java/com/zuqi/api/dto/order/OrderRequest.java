@@ -13,9 +13,6 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Request DTO for creating/updating orders.
- */
 @Data
 @Builder
 @NoArgsConstructor

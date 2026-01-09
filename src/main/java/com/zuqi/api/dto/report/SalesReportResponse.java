@@ -9,9 +9,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
-/**
- * Sales report response DTO.
- */
 @Data
 @Builder
 @NoArgsConstructor

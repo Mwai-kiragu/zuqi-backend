@@ -15,9 +15,6 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Response DTO for orders.
- */
 @Data
 @Builder
 @NoArgsConstructor

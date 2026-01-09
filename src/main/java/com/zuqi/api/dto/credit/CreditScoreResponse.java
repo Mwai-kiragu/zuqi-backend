@@ -10,9 +10,6 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Response DTO for credit scores.
- */
 @Data
 @Builder
 @NoArgsConstructor

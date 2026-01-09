@@ -26,9 +26,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * REST controller for order operations.
- */
 @RestController
 @RequestMapping("/v1/orders")
 @RequiredArgsConstructor
@@ -37,9 +34,6 @@ public class OrderController {
 
     private final OrderService orderService;
 
-    /**
-     * Get all orders with pagination and optional filters.
-     */
     @GetMapping
     @Operation(summary = "Get all orders", description = "Retrieves orders with pagination and optional filters")
     public ResponseEntity<ApiResponse<Page<OrderResponse>>> getAllOrders(
@@ -73,9 +67,6 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success(orders));
     }
 
-    /**
-     * Get an order by ID.
-     */
     @GetMapping("/{id}")
     @Operation(summary = "Get order by ID", description = "Retrieves a specific order by ID")
     public ResponseEntity<ApiResponse<OrderResponse>> getOrderById(
@@ -84,9 +75,6 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success(order));
     }
 
-    /**
-     * Get an order by order number.
-     */
     @GetMapping("/number/{orderNumber}")
     @Operation(summary = "Get order by number", description = "Retrieves a specific order by order number")
     public ResponseEntity<ApiResponse<OrderResponse>> getOrderByNumber(
@@ -95,9 +83,6 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success(order));
     }
 
-    /**
-     * Create a new order.
-     */
     @PostMapping
     @Operation(summary = "Create order", description = "Creates a new order")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP', 'MERCHANT')")
@@ -110,9 +95,6 @@ public class OrderController {
                 .body(ApiResponse.success("Order created successfully", order));
     }
 
-    /**
-     * Update an existing order.
-     */
     @PutMapping("/{id}")
     @Operation(summary = "Update order", description = "Updates an existing order (only pending orders)")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP')")
@@ -123,9 +105,6 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Order updated successfully", order));
     }
 
-    /**
-     * Update order status.
-     */
     @PatchMapping("/{id}/status")
     @Operation(summary = "Update order status", description = "Updates the status of an order")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'WAREHOUSE_MANAGER', 'DRIVER')")
@@ -137,9 +116,6 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Order status updated successfully", order));
     }
 
-    /**
-     * Cancel an order.
-     */
     @PostMapping("/{id}/cancel")
     @Operation(summary = "Cancel order", description = "Cancels an order")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP')")
@@ -151,9 +127,6 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success("Order cancelled successfully", order));
     }
 
-    /**
-     * Get order status history.
-     */
     @GetMapping("/{id}/history")
     @Operation(summary = "Get order history", description = "Retrieves the status history of an order")
     public ResponseEntity<ApiResponse<List<OrderStatusHistoryResponse>>> getOrderHistory(
@@ -162,9 +135,6 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success(history));
     }
 
-    /**
-     * Get order count by status.
-     */
     @GetMapping("/count")
     @Operation(summary = "Get order count by status", description = "Gets the count of orders by status")
     public ResponseEntity<ApiResponse<Long>> getOrderCount(
@@ -174,9 +144,6 @@ public class OrderController {
         return ResponseEntity.ok(ApiResponse.success(count));
     }
 
-    /**
-     * Get overdue orders.
-     */
     @GetMapping("/overdue")
     @Operation(summary = "Get overdue orders", description = "Gets orders that are past their payment due date")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE')")

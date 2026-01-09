@@ -7,9 +7,6 @@ import lombok.*;
 
 import java.time.LocalDateTime;
 
-/**
- * ProductCategory entity representing product categories.
- */
 @Entity
 @Table(name = "product_categories", indexes = {
         @Index(name = "idx_product_categories_distributor", columnList = "distributor_id"),

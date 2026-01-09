@@ -12,9 +12,6 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Entity representing a credit score for a merchant.
- */
 @Entity
 @Table(name = "credit_scores")
 @Getter

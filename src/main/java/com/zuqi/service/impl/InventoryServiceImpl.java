@@ -25,9 +25,6 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/**
- * Implementation of InventoryService.
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -42,7 +39,6 @@ public class InventoryServiceImpl implements InventoryService {
     private final UserRepository userRepository;
     private final SecurityUtils securityUtils;
 
-    // ==================== Stock Operations ====================
 
     @Override
     public Page<StockResponse> getStockByWarehouse(UUID warehouseId, Pageable pageable) {
@@ -157,7 +153,6 @@ public class InventoryServiceImpl implements InventoryService {
                 .map(this::mapToStockResponse);
     }
 
-    // ==================== Warehouse Operations ====================
 
     @Override
     public List<WarehouseResponse> getWarehousesByDistributor(UUID distributorId) {
@@ -324,7 +319,6 @@ public class InventoryServiceImpl implements InventoryService {
         log.info("Activated warehouse: {} ({})", warehouse.getName(), warehouse.getCode());
     }
 
-    // ==================== Stock Movement Operations ====================
 
     @Override
     public Page<StockMovementResponse> getMovementsByWarehouse(UUID warehouseId, Pageable pageable) {
@@ -346,7 +340,6 @@ public class InventoryServiceImpl implements InventoryService {
                 .map(this::mapToStockMovementResponse);
     }
 
-    // ==================== Helper Methods ====================
 
     private void validateWarehouseExists(UUID warehouseId) {
         if (!warehouseRepository.existsById(warehouseId)) {

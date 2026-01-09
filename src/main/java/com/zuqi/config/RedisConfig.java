@@ -16,9 +16,6 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Redis configuration for caching.
- */
 @Configuration
 @EnableCaching
 public class RedisConfig {

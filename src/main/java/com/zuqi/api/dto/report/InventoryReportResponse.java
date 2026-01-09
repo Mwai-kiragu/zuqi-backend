@@ -8,9 +8,6 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.util.List;
 
-/**
- * Inventory report response DTO.
- */
 @Data
 @Builder
 @NoArgsConstructor

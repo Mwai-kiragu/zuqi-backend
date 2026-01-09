@@ -9,17 +9,6 @@ import org.springframework.scheduling.annotation.EnableAsync;
 
 import static org.springframework.data.web.config.EnableSpringDataWebSupport.PageSerializationMode.VIA_DTO;
 
-/**
- * Main application class for Zuqi - Field Sales and Supply Chain Execution Platform.
- *
- * <p>This platform provides:
- * <ul>
- *   <li>Field sales management and order processing</li>
- *   <li>Payment integration with KCB Bank</li>
- *   <li>AI-powered credit scoring</li>
- *   <li>Supply chain and inventory management</li>
- * </ul>
- */
 @SpringBootApplication(exclude = {
         org.springframework.ai.autoconfigure.openai.OpenAiAutoConfiguration.class
 })

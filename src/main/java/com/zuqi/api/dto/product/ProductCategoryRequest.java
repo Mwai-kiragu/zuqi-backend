@@ -9,9 +9,6 @@ import lombok.NoArgsConstructor;
 
 import java.util.UUID;
 
-/**
- * Request DTO for creating/updating product categories.
- */
 @Data
 @Builder
 @NoArgsConstructor

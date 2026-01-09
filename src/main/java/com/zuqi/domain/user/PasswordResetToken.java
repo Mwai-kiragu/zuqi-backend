@@ -6,9 +6,6 @@ import lombok.*;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Entity for storing password reset tokens.
- */
 @Entity
 @Table(name = "password_reset_tokens", indexes = {
         @Index(name = "idx_password_reset_token", columnList = "token", unique = true),

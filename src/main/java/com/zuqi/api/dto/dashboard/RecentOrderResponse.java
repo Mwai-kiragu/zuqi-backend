@@ -9,9 +9,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * Recent order for dashboard display.
- */
+
 @Data
 @Builder
 @NoArgsConstructor

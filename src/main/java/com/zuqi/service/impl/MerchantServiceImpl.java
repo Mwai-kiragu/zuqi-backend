@@ -25,9 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Implementation of the merchant service.
- */
 @Service
 @RequiredArgsConstructor
 @Slf4j

@@ -8,9 +8,6 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.util.UUID;
 
-/**
- * Top performing merchant for dashboard display.
- */
 @Data
 @Builder
 @NoArgsConstructor

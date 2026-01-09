@@ -7,6 +7,7 @@ import com.zuqi.api.dto.auth.RefreshTokenRequest;
 import com.zuqi.api.dto.auth.RegisterRequest;
 import com.zuqi.api.dto.auth.ForgotPasswordRequest;
 import com.zuqi.api.dto.auth.ResetPasswordRequest;
+import com.zuqi.api.dto.auth.VerifyOtpRequest;
 import com.zuqi.service.AuthenticationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -16,9 +17,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-/**
- * REST controller for authentication operations.
- */
 @RestController
 @RequestMapping("/v1/auth")
 @RequiredArgsConstructor
@@ -27,12 +25,6 @@ public class AuthController {
 
     private final AuthenticationService authenticationService;
 
-    /**
-     * Registers a new user account.
-     *
-     * @param request the registration request
-     * @return the authentication response with tokens
-     */
     @PostMapping("/register")
     @Operation(summary = "Register a new user", description = "Creates a new user account and returns authentication tokens")
     public ResponseEntity<ApiResponse<AuthenticationResponse>> register(
@@ -43,12 +35,6 @@ public class AuthController {
                 .body(ApiResponse.success("Registration successful", response));
     }
 
-    /**
-     * Authenticates a user with email and password.
-     *
-     * @param request the authentication request
-     * @return the authentication response with tokens
-     */
     @PostMapping("/login")
     @Operation(summary = "User login", description = "Authenticates user and returns access and refresh tokens")
     public ResponseEntity<ApiResponse<AuthenticationResponse>> login(
@@ -57,12 +43,6 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("Login successful", response));
     }
 
-    /**
-     * Refreshes the access token using a valid refresh token.
-     *
-     * @param request the refresh token request
-     * @return the authentication response with new tokens
-     */
     @PostMapping("/refresh")
     @Operation(summary = "Refresh access token", description = "Generates new access token using refresh token")
     public ResponseEntity<ApiResponse<AuthenticationResponse>> refreshToken(
@@ -71,12 +51,6 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("Token refreshed", response));
     }
 
-    /**
-     * Logs out the user by invalidating the refresh token.
-     *
-     * @param request the refresh token to invalidate
-     * @return success response
-     */
     @PostMapping("/logout")
     @Operation(summary = "User logout", description = "Invalidates the refresh token")
     public ResponseEntity<ApiResponse<Void>> logout(
@@ -85,29 +59,40 @@ public class AuthController {
         return ResponseEntity.ok(ApiResponse.success("Logged out successfully"));
     }
 
-    /**
-     * Initiates the forgot password flow.
-     *
-     * @param request the forgot password request containing email
-     * @return success response
-     */
     @PostMapping("/forgot-password")
-    @Operation(summary = "Forgot password", description = "Sends password reset instructions to the user's email")
-    public ResponseEntity<ApiResponse<Void>> forgotPassword(
+    @Operation(summary = "Forgot password", description = "Sends OTP to the user's email for password reset")
+    public ResponseEntity<ApiResponse<Boolean>> forgotPassword(
             @Valid @RequestBody ForgotPasswordRequest request) {
-        authenticationService.forgotPassword(request);
-        // Always return success to prevent email enumeration
-        return ResponseEntity.ok(ApiResponse.success("If your email is registered, you will receive password reset instructions shortly"));
+        boolean userExists = authenticationService.forgotPassword(request);
+        if (userExists) {
+            return ResponseEntity.ok(ApiResponse.success("OTP sent to your email. Please check your inbox.", true));
+        } else {
+            return ResponseEntity.ok(ApiResponse.<Boolean>builder()
+                    .success(false)
+                    .message("No account found with this email address")
+                    .data(false)
+                    .build());
+        }
     }
 
-    /**
-     * Resets the user's password using a valid reset token.
-     *
-     * @param request the reset password request containing token and new password
-     * @return success response
-     */
+    @PostMapping("/verify-otp")
+    @Operation(summary = "Verify OTP", description = "Verifies the OTP before allowing password reset")
+    public ResponseEntity<ApiResponse<Boolean>> verifyOtp(
+            @Valid @RequestBody VerifyOtpRequest request) {
+        boolean isValid = authenticationService.verifyOtp(request);
+        if (isValid) {
+            return ResponseEntity.ok(ApiResponse.success("OTP verified successfully", true));
+        } else {
+            return ResponseEntity.ok(ApiResponse.<Boolean>builder()
+                    .success(false)
+                    .message("Invalid or expired OTP")
+                    .data(false)
+                    .build());
+        }
+    }
+
     @PostMapping("/reset-password")
-    @Operation(summary = "Reset password", description = "Resets the user's password using a valid reset token")
+    @Operation(summary = "Reset password", description = "Resets the user's password using email and OTP")
     public ResponseEntity<ApiResponse<Void>> resetPassword(
             @Valid @RequestBody ResetPasswordRequest request) {
         authenticationService.resetPassword(request);

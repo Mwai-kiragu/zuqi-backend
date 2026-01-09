@@ -18,9 +18,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Payment entity.
- */
 @Entity
 @Table(name = "payments", indexes = {
         @Index(name = "idx_payments_order", columnList = "order_id"),

@@ -7,9 +7,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/**
- * Request DTO for updating order status.
- */
 @Data
 @Builder
 @NoArgsConstructor

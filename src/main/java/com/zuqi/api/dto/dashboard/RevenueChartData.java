@@ -8,9 +8,6 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.util.List;
 
-/**
- * Revenue chart data for dashboard visualization.
- */
 @Data
 @Builder
 @NoArgsConstructor
