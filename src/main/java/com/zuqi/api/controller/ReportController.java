@@ -33,7 +33,7 @@ public class ReportController {
      */
     @GetMapping("/sales")
     @Operation(summary = "Generate sales report", description = "Generates a sales report for the specified period")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE')")
     public ResponseEntity<ApiResponse<SalesReportResponse>> getSalesReport(
             @Parameter(description = "Distributor ID") @RequestParam UUID distributorId,
             @Parameter(description = "Start date") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
@@ -48,7 +48,7 @@ public class ReportController {
      */
     @GetMapping("/inventory")
     @Operation(summary = "Generate inventory report", description = "Generates an inventory status report")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISTRIBUTOR_ADMIN', 'WAREHOUSE_MANAGER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'WAREHOUSE_MANAGER')")
     public ResponseEntity<ApiResponse<InventoryReportResponse>> getInventoryReport(
             @Parameter(description = "Distributor ID") @RequestParam UUID distributorId) {
 
@@ -61,7 +61,7 @@ public class ReportController {
      */
     @GetMapping("/payments")
     @Operation(summary = "Generate payment report", description = "Generates a payment/collection report")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE')")
     public ResponseEntity<ApiResponse<PaymentReportResponse>> getPaymentReport(
             @Parameter(description = "Distributor ID") @RequestParam UUID distributorId,
             @Parameter(description = "Start date") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,

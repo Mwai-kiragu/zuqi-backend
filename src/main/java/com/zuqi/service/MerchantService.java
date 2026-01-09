@@ -3,6 +3,7 @@ package com.zuqi.service;
 import com.zuqi.api.dto.merchant.MerchantCategoryResponse;
 import com.zuqi.api.dto.merchant.MerchantRequest;
 import com.zuqi.api.dto.merchant.MerchantResponse;
+import com.zuqi.domain.user.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -20,9 +21,19 @@ public interface MerchantService {
     Page<MerchantResponse> getAllMerchants(Pageable pageable);
 
     /**
+     * Get all inactive merchants with pagination.
+     */
+    Page<MerchantResponse> getInactiveMerchants(Pageable pageable);
+
+    /**
      * Get merchants by distributor with pagination.
      */
     Page<MerchantResponse> getMerchantsByDistributor(UUID distributorId, Pageable pageable);
+
+    /**
+     * Get inactive merchants by distributor with pagination.
+     */
+    Page<MerchantResponse> getInactiveMerchantsByDistributor(UUID distributorId, Pageable pageable);
 
     /**
      * Get merchants by assigned sales rep.
@@ -65,9 +76,14 @@ public interface MerchantService {
     MerchantResponse verifyMerchant(UUID merchantId);
 
     /**
-     * Deactivate a merchant.
+     * Deactivate a merchant with reason.
      */
-    void deactivateMerchant(UUID id);
+    void deactivateMerchant(UUID id, String reason, User currentUser);
+
+    /**
+     * Activate a merchant.
+     */
+    void activateMerchant(UUID id);
 
     /**
      * Get all merchant categories.

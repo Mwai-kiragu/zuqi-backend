@@ -36,7 +36,6 @@ public class OrderResponse {
     private OrderStatus status;
     private OrderType orderType;
     private BigDecimal subtotal;
-    private BigDecimal taxAmount;
     private BigDecimal discountAmount;
     private BigDecimal totalAmount;
     private BigDecimal paidAmount;
@@ -65,7 +64,6 @@ public class OrderResponse {
                 .status(order.getStatus())
                 .orderType(order.getOrderType())
                 .subtotal(order.getSubtotal())
-                .taxAmount(order.getTaxAmount())
                 .discountAmount(order.getDiscountAmount())
                 .totalAmount(order.getTotalAmount())
                 .paidAmount(order.getPaidAmount())

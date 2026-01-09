@@ -41,6 +41,9 @@ public class MerchantResponse {
     private boolean verified;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String deactivationReason;
+    private LocalDateTime deactivatedAt;
+    private String deactivatedByName;
 
     /**
      * Converts a Merchant entity to MerchantResponse DTO.
@@ -69,6 +72,9 @@ public class MerchantResponse {
                 .verified(merchant.isVerified())
                 .createdAt(merchant.getCreatedAt())
                 .updatedAt(merchant.getUpdatedAt())
+                .deactivationReason(merchant.getDeactivationReason())
+                .deactivatedAt(merchant.getDeactivatedAt())
+                .deactivatedByName(merchant.getDeactivatedBy() != null ? merchant.getDeactivatedBy().getFullName() : null)
                 .build();
     }
 }

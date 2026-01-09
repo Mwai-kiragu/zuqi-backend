@@ -48,29 +48,56 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public Page<UserResponse> getAllUsers(Pageable pageable) {
-        log.info("Fetching all users");
+        return getAllUsers(pageable, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<UserResponse> getAllUsers(Pageable pageable, Boolean active) {
+        log.info("Fetching all users with active filter: {}", active);
 
         // SUPER_ADMIN and ADMIN can see all users
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
         if (distributorId != null) {
-            List<User> users = userRepository.findByDistributorIdAndActiveTrue(distributorId);
-            int start = (int) pageable.getOffset();
-            int end = Math.min((start + pageable.getPageSize()), users.size());
-            List<UserResponse> responseList = users.subList(start, end).stream()
-                    .map(this::mapToUserResponse)
-                    .toList();
-            return new PageImpl<>(responseList, pageable, users.size());
+            return getUsersByDistributor(distributorId, pageable, active);
         }
 
-        Page<User> users = userRepository.findAll(pageable);
-        return mapToUserResponsePage(users, pageable);
+        List<User> allUsers = userRepository.findAll();
+        List<User> filteredUsers = allUsers;
+
+        if (active != null) {
+            filteredUsers = allUsers.stream()
+                    .filter(u -> u.isActive() == active)
+                    .toList();
+        }
+
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), filteredUsers.size());
+        List<UserResponse> responseList = filteredUsers.subList(start, end).stream()
+                .map(this::mapToUserResponse)
+                .toList();
+        return new PageImpl<>(responseList, pageable, filteredUsers.size());
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<UserResponse> getUsersByDistributor(UUID distributorId, Pageable pageable) {
-        log.info("Fetching users for distributor: {}", distributorId);
-        List<User> users = userRepository.findByDistributorIdAndActiveTrue(distributorId);
+        return getUsersByDistributor(distributorId, pageable, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<UserResponse> getUsersByDistributor(UUID distributorId, Pageable pageable, Boolean active) {
+        log.info("Fetching users for distributor: {} with active filter: {}", distributorId, active);
+
+        List<User> users;
+        if (active == null) {
+            users = userRepository.findByDistributorId(distributorId);
+        } else if (active) {
+            users = userRepository.findByDistributorIdAndActiveTrue(distributorId);
+        } else {
+            users = userRepository.findByDistributorIdAndActiveFalse(distributorId);
+        }
 
         int start = (int) pageable.getOffset();
         int end = Math.min((start + pageable.getPageSize()), users.size());
@@ -323,10 +350,47 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Page<UserResponse> getInactiveUsers(Pageable pageable) {
+        log.info("Fetching inactive users");
+        UUID distributorId = securityUtils.getDistributorIdForFiltering();
+        if (distributorId != null) {
+            return userRepository.findByDistributorIdAndActiveFalse(distributorId, pageable)
+                    .map(this::mapToUserResponse);
+        }
+        return userRepository.findByActiveFalse(pageable)
+                .map(this::mapToUserResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<UserResponse> getInactiveUsersByDistributor(UUID distributorId, Pageable pageable) {
+        log.info("Fetching inactive users for distributor: {}", distributorId);
+        return userRepository.findByDistributorIdAndActiveFalse(distributorId, pageable)
+                .map(this::mapToUserResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public User findById(UUID id) {
+        return userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", id.toString()));
+    }
+
+    @Override
     @Transactional
-    public void deactivateUser(UUID id) {
-        log.info("Deactivating user: {}", id);
-        userRepository.softDeleteById(id);
+    public void deactivateUser(UUID id, String reason, User currentUser) {
+        log.info("Deactivating user: {} with reason: {}", id, reason);
+
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", id.toString()));
+
+        user.setActive(false);
+        user.setDeactivationReason(reason);
+        user.setDeactivatedAt(java.time.LocalDateTime.now());
+        user.setDeactivatedBy(currentUser);
+        userRepository.save(user);
+
         log.info("User deactivated: {}", id);
     }
 
@@ -339,6 +403,9 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", id.toString()));
 
         user.setActive(true);
+        user.setDeactivationReason(null);
+        user.setDeactivatedAt(null);
+        user.setDeactivatedBy(null);
         userRepository.save(user);
 
         log.info("User activated: {}", id);

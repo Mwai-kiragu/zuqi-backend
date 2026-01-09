@@ -4,6 +4,7 @@ import com.zuqi.api.dto.product.ProductCategoryRequest;
 import com.zuqi.api.dto.product.ProductCategoryResponse;
 import com.zuqi.api.dto.product.ProductRequest;
 import com.zuqi.api.dto.product.ProductResponse;
+import com.zuqi.domain.user.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -21,9 +22,19 @@ public interface ProductService {
     Page<ProductResponse> getAllProducts(Pageable pageable);
 
     /**
+     * Get all inactive products with pagination.
+     */
+    Page<ProductResponse> getInactiveProducts(Pageable pageable);
+
+    /**
      * Get products by distributor with pagination.
      */
     Page<ProductResponse> getProductsByDistributor(UUID distributorId, Pageable pageable);
+
+    /**
+     * Get inactive products by distributor with pagination.
+     */
+    Page<ProductResponse> getInactiveProductsByDistributor(UUID distributorId, Pageable pageable);
 
     /**
      * Get products by category.
@@ -56,14 +67,24 @@ public interface ProductService {
     ProductResponse updateProduct(UUID id, ProductRequest request);
 
     /**
-     * Deactivate a product.
+     * Deactivate a product with reason.
      */
-    void deactivateProduct(UUID id);
+    void deactivateProduct(UUID id, String reason, User currentUser);
 
     /**
-     * Get all product categories.
+     * Activate a product.
+     */
+    void activateProduct(UUID id);
+
+    /**
+     * Get all active product categories.
      */
     List<ProductCategoryResponse> getAllCategories(UUID distributorId);
+
+    /**
+     * Get all inactive product categories.
+     */
+    List<ProductCategoryResponse> getInactiveCategories(UUID distributorId);
 
     /**
      * Get a product category by ID.
@@ -81,7 +102,12 @@ public interface ProductService {
     ProductCategoryResponse updateCategory(Long id, ProductCategoryRequest request);
 
     /**
-     * Delete a product category.
+     * Deactivate a product category with reason.
      */
-    void deleteCategory(Long id);
+    void deactivateCategory(Long id, String reason, User currentUser);
+
+    /**
+     * Activate a product category.
+     */
+    void activateCategory(Long id);
 }

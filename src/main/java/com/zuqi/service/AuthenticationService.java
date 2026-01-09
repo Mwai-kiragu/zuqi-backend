@@ -4,6 +4,8 @@ import com.zuqi.api.dto.auth.AuthenticationRequest;
 import com.zuqi.api.dto.auth.AuthenticationResponse;
 import com.zuqi.api.dto.auth.RegisterRequest;
 import com.zuqi.api.dto.auth.RefreshTokenRequest;
+import com.zuqi.api.dto.auth.ForgotPasswordRequest;
+import com.zuqi.api.dto.auth.ResetPasswordRequest;
 
 /**
  * Service interface for authentication operations.
@@ -40,4 +42,18 @@ public interface AuthenticationService {
      * @param refreshToken the refresh token to invalidate
      */
     void logout(String refreshToken);
+
+    /**
+     * Initiates the forgot password flow by generating a reset token.
+     *
+     * @param request the forgot password request containing email
+     */
+    void forgotPassword(ForgotPasswordRequest request);
+
+    /**
+     * Resets the user's password using a valid reset token.
+     *
+     * @param request the reset password request containing token and new password
+     */
+    void resetPassword(ResetPasswordRequest request);
 }

@@ -30,12 +30,14 @@ public class ProductResponse {
     private String unitOfMeasure;
     private BigDecimal unitPrice;
     private BigDecimal costPrice;
-    private BigDecimal taxRate;
     private String imageUrl;
     private String barcode;
     private boolean active;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String deactivationReason;
+    private LocalDateTime deactivatedAt;
+    private String deactivatedByName;
 
     /**
      * Converts a Product entity to ProductResponse DTO.
@@ -53,12 +55,14 @@ public class ProductResponse {
                 .unitOfMeasure(product.getUnitOfMeasure())
                 .unitPrice(product.getUnitPrice())
                 .costPrice(product.getCostPrice())
-                .taxRate(product.getTaxRate())
                 .imageUrl(product.getImageUrl())
                 .barcode(product.getBarcode())
                 .active(product.isActive())
                 .createdAt(product.getCreatedAt())
                 .updatedAt(product.getUpdatedAt())
+                .deactivationReason(product.getDeactivationReason())
+                .deactivatedAt(product.getDeactivatedAt())
+                .deactivatedByName(product.getDeactivatedBy() != null ? product.getDeactivatedBy().getFullName() : null)
                 .build();
     }
 }

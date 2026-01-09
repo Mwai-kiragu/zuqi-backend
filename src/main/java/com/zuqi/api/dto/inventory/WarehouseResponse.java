@@ -32,4 +32,7 @@ public class WarehouseResponse {
     private boolean active;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String deactivationReason;
+    private LocalDateTime deactivatedAt;
+    private String deactivatedByName;
 }

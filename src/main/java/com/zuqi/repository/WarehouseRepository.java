@@ -37,6 +37,16 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
     Page<Warehouse> findByDistributorIdAndActiveTrue(UUID distributorId, Pageable pageable);
 
     /**
+     * Find all inactive warehouses.
+     */
+    Page<Warehouse> findByActiveFalse(Pageable pageable);
+
+    /**
+     * Find inactive warehouses by distributor with pagination.
+     */
+    Page<Warehouse> findByDistributorIdAndActiveFalse(UUID distributorId, Pageable pageable);
+
+    /**
      * Find warehouse by code and distributor.
      */
     Optional<Warehouse> findByCodeAndDistributorId(String code, UUID distributorId);

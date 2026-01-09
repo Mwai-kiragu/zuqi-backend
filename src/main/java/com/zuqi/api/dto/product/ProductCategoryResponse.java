@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
@@ -23,6 +24,10 @@ public class ProductCategoryResponse {
     private Long parentId;
     private String parentName;
     private UUID distributorId;
+    private boolean active;
+    private String deactivationReason;
+    private LocalDateTime deactivatedAt;
+    private String deactivatedByName;
 
     /**
      * Converts a ProductCategory entity to ProductCategoryResponse DTO.
@@ -35,6 +40,10 @@ public class ProductCategoryResponse {
                 .parentId(category.getParent() != null ? category.getParent().getId() : null)
                 .parentName(category.getParent() != null ? category.getParent().getName() : null)
                 .distributorId(category.getDistributor() != null ? category.getDistributor().getId() : null)
+                .active(category.isActive())
+                .deactivationReason(category.getDeactivationReason())
+                .deactivatedAt(category.getDeactivatedAt())
+                .deactivatedByName(category.getDeactivatedBy() != null ? category.getDeactivatedBy().getFullName() : null)
                 .build();
     }
 }

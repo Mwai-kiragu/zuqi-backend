@@ -26,7 +26,6 @@ public class OrderItemResponse {
     private BigDecimal quantity;
     private BigDecimal unitPrice;
     private BigDecimal discountPercent;
-    private BigDecimal taxAmount;
     private BigDecimal totalAmount;
 
     public static OrderItemResponse fromEntity(OrderItem item) {
@@ -39,7 +38,6 @@ public class OrderItemResponse {
                 .quantity(item.getQuantity())
                 .unitPrice(item.getUnitPrice())
                 .discountPercent(item.getDiscountPercent())
-                .taxAmount(item.getTaxAmount())
                 .totalAmount(item.getTotalAmount())
                 .build();
     }

@@ -175,6 +175,7 @@ com/zuqi/api/dto/auth/RefreshTokenRequest$RefreshTokenRequestBuilder.class
 com/zuqi/api/controller/CreditController.class
 com/zuqi/api/dto/credit/CreditLimitRequest$CreditLimitRequestBuilder.class
 com/zuqi/config/CasbinConfig.class
+com/zuqi/api/dto/common/DeactivateRequest.class
 com/zuqi/domain/user/RoleName.class
 com/zuqi/exception/ResourceNotFoundException.class
 com/zuqi/security/JwtService.class

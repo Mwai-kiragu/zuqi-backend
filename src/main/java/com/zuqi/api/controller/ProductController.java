@@ -1,11 +1,14 @@
 package com.zuqi.api.controller;
 
 import com.zuqi.api.dto.ApiResponse;
+import com.zuqi.api.dto.common.DeactivateRequest;
 import com.zuqi.api.dto.product.ProductCategoryRequest;
 import com.zuqi.api.dto.product.ProductCategoryResponse;
 import com.zuqi.api.dto.product.ProductRequest;
 import com.zuqi.api.dto.product.ProductResponse;
+import com.zuqi.domain.user.User;
 import com.zuqi.service.ProductService;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -43,12 +46,20 @@ public class ProductController {
             @Parameter(description = "Distributor ID filter") @RequestParam(required = false) UUID distributorId,
             @Parameter(description = "Category ID filter") @RequestParam(required = false) Long categoryId,
             @Parameter(description = "Search term") @RequestParam(required = false) String search,
+            @Parameter(description = "Filter by active status") @RequestParam(required = false) Boolean active,
             @PageableDefault(size = 20, sort = "name", direction = Sort.Direction.ASC) Pageable pageable) {
 
         Page<ProductResponse> products;
 
         if (search != null && !search.isBlank()) {
             products = productService.searchProducts(search, distributorId, pageable);
+        } else if (active != null && !active) {
+            // Return inactive products
+            if (distributorId != null) {
+                products = productService.getInactiveProductsByDistributor(distributorId, pageable);
+            } else {
+                products = productService.getInactiveProducts(pageable);
+            }
         } else if (distributorId != null) {
             products = productService.getProductsByDistributor(distributorId, pageable);
         } else if (categoryId != null) {
@@ -88,7 +99,7 @@ public class ProductController {
      */
     @PostMapping
     @Operation(summary = "Create product", description = "Creates a new product")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<ProductResponse>> createProduct(
             @Valid @RequestBody ProductRequest request) {
         ProductResponse product = productService.createProduct(request);
@@ -102,7 +113,7 @@ public class ProductController {
      */
     @PutMapping("/{id}")
     @Operation(summary = "Update product", description = "Updates an existing product")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<ProductResponse>> updateProduct(
             @Parameter(description = "Product ID") @PathVariable UUID id,
             @Valid @RequestBody ProductRequest request) {
@@ -111,15 +122,29 @@ public class ProductController {
     }
 
     /**
-     * Deactivate a product.
+     * Deactivate a product with reason.
      */
     @DeleteMapping("/{id}")
-    @Operation(summary = "Deactivate product", description = "Deactivates a product (soft delete)")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @Operation(summary = "Deactivate product", description = "Deactivates a product (soft delete) with reason")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deactivateProduct(
-            @Parameter(description = "Product ID") @PathVariable UUID id) {
-        productService.deactivateProduct(id);
+            @Parameter(description = "Product ID") @PathVariable UUID id,
+            @Valid @RequestBody DeactivateRequest request,
+            @AuthenticationPrincipal User currentUser) {
+        productService.deactivateProduct(id, request.getReason(), currentUser);
         return ResponseEntity.ok(ApiResponse.success("Product deactivated successfully"));
+    }
+
+    /**
+     * Activate a product.
+     */
+    @PostMapping("/{id}/activate")
+    @Operation(summary = "Activate product", description = "Reactivates a deactivated product")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> activateProduct(
+            @Parameter(description = "Product ID") @PathVariable UUID id) {
+        productService.activateProduct(id);
+        return ResponseEntity.ok(ApiResponse.success("Product activated successfully"));
     }
 
     /**
@@ -149,7 +174,7 @@ public class ProductController {
      */
     @PostMapping("/categories")
     @Operation(summary = "Create category", description = "Creates a new product category")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<ProductCategoryResponse>> createCategory(
             @Valid @RequestBody ProductCategoryRequest request) {
         ProductCategoryResponse category = productService.createCategory(request);
@@ -163,7 +188,7 @@ public class ProductController {
      */
     @PutMapping("/categories/{id}")
     @Operation(summary = "Update category", description = "Updates an existing product category")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<ProductCategoryResponse>> updateCategory(
             @Parameter(description = "Category ID") @PathVariable Long id,
             @Valid @RequestBody ProductCategoryRequest request) {
@@ -172,14 +197,28 @@ public class ProductController {
     }
 
     /**
-     * Delete a product category.
+     * Deactivate a product category with reason.
      */
     @DeleteMapping("/categories/{id}")
-    @Operation(summary = "Delete category", description = "Deletes a product category")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISTRIBUTOR_ADMIN')")
-    public ResponseEntity<ApiResponse<Void>> deleteCategory(
+    @Operation(summary = "Deactivate category", description = "Deactivates a product category (soft delete) with reason")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> deactivateCategory(
+            @Parameter(description = "Category ID") @PathVariable Long id,
+            @Valid @RequestBody DeactivateRequest request,
+            @AuthenticationPrincipal User currentUser) {
+        productService.deactivateCategory(id, request.getReason(), currentUser);
+        return ResponseEntity.ok(ApiResponse.success("Category deactivated successfully"));
+    }
+
+    /**
+     * Activate a product category.
+     */
+    @PostMapping("/categories/{id}/activate")
+    @Operation(summary = "Activate category", description = "Reactivates a deactivated product category")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> activateCategory(
             @Parameter(description = "Category ID") @PathVariable Long id) {
-        productService.deleteCategory(id);
-        return ResponseEntity.ok(ApiResponse.success("Category deleted successfully"));
+        productService.activateCategory(id);
+        return ResponseEntity.ok(ApiResponse.success("Category activated successfully"));
     }
 }

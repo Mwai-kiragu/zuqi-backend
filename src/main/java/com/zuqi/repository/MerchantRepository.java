@@ -30,6 +30,16 @@ public interface MerchantRepository extends JpaRepository<Merchant, UUID>, JpaSp
     Page<Merchant> findByDistributorIdAndActiveTrue(UUID distributorId, Pageable pageable);
 
     /**
+     * Find all inactive merchants.
+     */
+    Page<Merchant> findByActiveFalse(Pageable pageable);
+
+    /**
+     * Find inactive merchants by distributor ID.
+     */
+    Page<Merchant> findByDistributorIdAndActiveFalse(UUID distributorId, Pageable pageable);
+
+    /**
      * Find merchants by assigned sales rep.
      */
     Page<Merchant> findByAssignedSalesRepIdAndActiveTrue(UUID salesRepId, Pageable pageable);

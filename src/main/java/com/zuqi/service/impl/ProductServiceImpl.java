@@ -7,6 +7,7 @@ import com.zuqi.api.dto.product.ProductResponse;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.product.Product;
 import com.zuqi.domain.product.ProductCategory;
+import com.zuqi.domain.user.User;
 import com.zuqi.exception.DuplicateResourceException;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.repository.DistributorRepository;
@@ -21,7 +22,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -131,7 +132,6 @@ public class ProductServiceImpl implements ProductService {
                 .unitOfMeasure(request.getUnitOfMeasure() != null ? request.getUnitOfMeasure() : "PIECE")
                 .unitPrice(request.getUnitPrice())
                 .costPrice(request.getCostPrice())
-                .taxRate(request.getTaxRate() != null ? request.getTaxRate() : BigDecimal.ZERO)
                 .imageUrl(request.getImageUrl())
                 .barcode(request.getBarcode())
                 .build();
@@ -174,9 +174,6 @@ public class ProductServiceImpl implements ProductService {
         if (request.getCostPrice() != null) {
             product.setCostPrice(request.getCostPrice());
         }
-        if (request.getTaxRate() != null) {
-            product.setTaxRate(request.getTaxRate());
-        }
         if (request.getImageUrl() != null) {
             product.setImageUrl(request.getImageUrl());
         }
@@ -198,23 +195,66 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Page<ProductResponse> getInactiveProducts(Pageable pageable) {
+        log.debug("Fetching all inactive products");
+
+        UUID distributorId = securityUtils.getDistributorIdForFiltering();
+        if (distributorId != null) {
+            return productRepository.findByDistributorIdAndActiveFalse(distributorId, pageable)
+                    .map(ProductResponse::fromEntity);
+        }
+
+        return productRepository.findByActiveFalse(pageable)
+                .map(ProductResponse::fromEntity);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProductResponse> getInactiveProductsByDistributor(UUID distributorId, Pageable pageable) {
+        log.debug("Fetching inactive products for distributor: {}", distributorId);
+        return productRepository.findByDistributorIdAndActiveFalse(distributorId, pageable)
+                .map(ProductResponse::fromEntity);
+    }
+
+    @Override
     @Transactional
-    public void deactivateProduct(UUID id) {
-        log.info("Deactivating product: {}", id);
+    public void deactivateProduct(UUID id, String reason, User currentUser) {
+        log.info("Deactivating product: {} with reason: {}", id, reason);
 
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id.toString()));
 
         product.setActive(false);
+        product.setDeactivationReason(reason);
+        product.setDeactivatedAt(LocalDateTime.now());
+        product.setDeactivatedBy(currentUser);
         productRepository.save(product);
 
         log.info("Product deactivated successfully");
     }
 
     @Override
+    @Transactional
+    public void activateProduct(UUID id) {
+        log.info("Activating product: {}", id);
+
+        Product product = productRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id.toString()));
+
+        product.setActive(true);
+        product.setDeactivationReason(null);
+        product.setDeactivatedAt(null);
+        product.setDeactivatedBy(null);
+        productRepository.save(product);
+
+        log.info("Product activated successfully");
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<ProductCategoryResponse> getAllCategories(UUID distributorId) {
-        log.debug("Fetching product categories for distributor: {}", distributorId);
+        log.debug("Fetching active product categories for distributor: {}", distributorId);
 
         // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
@@ -223,13 +263,38 @@ public class ProductServiceImpl implements ProductService {
         }
 
         if (effectiveDistributorId != null) {
-            return categoryRepository.findByDistributorId(effectiveDistributorId).stream()
+            return categoryRepository.findByDistributorIdAndActiveTrue(effectiveDistributorId).stream()
                     .map(ProductCategoryResponse::fromEntity)
                     .toList();
         }
 
         // SUPER_ADMIN/ADMIN can see all categories
         return categoryRepository.findAll().stream()
+                .filter(ProductCategory::isActive)
+                .map(ProductCategoryResponse::fromEntity)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductCategoryResponse> getInactiveCategories(UUID distributorId) {
+        log.debug("Fetching inactive product categories for distributor: {}", distributorId);
+
+        // Determine effective distributor ID for filtering
+        UUID effectiveDistributorId = distributorId;
+        if (effectiveDistributorId == null) {
+            effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
+        }
+
+        if (effectiveDistributorId != null) {
+            return categoryRepository.findByDistributorIdAndActiveFalse(effectiveDistributorId).stream()
+                    .map(ProductCategoryResponse::fromEntity)
+                    .toList();
+        }
+
+        // SUPER_ADMIN/ADMIN can see all inactive categories
+        return categoryRepository.findAll().stream()
+                .filter(c -> !c.isActive())
                 .map(ProductCategoryResponse::fromEntity)
                 .toList();
     }
@@ -310,24 +375,35 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional
-    public void deleteCategory(Long id) {
-        log.info("Deleting product category: {}", id);
+    public void deactivateCategory(Long id, String reason, User currentUser) {
+        log.info("Deactivating product category: {} with reason: {}", id, reason);
 
         ProductCategory category = categoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ProductCategory", "id", id.toString()));
 
-        // Check if category has child categories
-        List<ProductCategory> children = categoryRepository.findByParentId(id);
-        if (!children.isEmpty()) {
-            throw new IllegalStateException("Cannot delete category with child categories");
-        }
+        category.setActive(false);
+        category.setDeactivationReason(reason);
+        category.setDeactivatedAt(LocalDateTime.now());
+        category.setDeactivatedBy(currentUser);
+        categoryRepository.save(category);
 
-        // Check if category has products
-        if (productRepository.existsByCategoryId(id)) {
-            throw new IllegalStateException("Cannot delete category with associated products");
-        }
+        log.info("Product category deactivated successfully: {}", id);
+    }
 
-        categoryRepository.delete(category);
-        log.info("Product category deleted successfully: {}", id);
+    @Override
+    @Transactional
+    public void activateCategory(Long id) {
+        log.info("Activating product category: {}", id);
+
+        ProductCategory category = categoryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("ProductCategory", "id", id.toString()));
+
+        category.setActive(true);
+        category.setDeactivationReason(null);
+        category.setDeactivatedAt(null);
+        category.setDeactivatedBy(null);
+        categoryRepository.save(category);
+
+        log.info("Product category activated successfully: {}", id);
     }
 }

@@ -45,9 +45,6 @@ public class ProductRequest {
     @DecimalMin(value = "0.0", message = "Cost price must be non-negative")
     private BigDecimal costPrice;
 
-    @DecimalMin(value = "0.0", message = "Tax rate must be non-negative")
-    private BigDecimal taxRate;
-
     private String imageUrl;
 
     @Size(max = 100, message = "Barcode must not exceed 100 characters")

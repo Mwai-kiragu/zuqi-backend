@@ -100,7 +100,7 @@ public class OrderController {
      */
     @PostMapping
     @Operation(summary = "Create order", description = "Creates a new order")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP', 'MERCHANT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP', 'MERCHANT')")
     public ResponseEntity<ApiResponse<OrderResponse>> createOrder(
             @Valid @RequestBody OrderRequest request,
             @AuthenticationPrincipal User currentUser) {
@@ -115,7 +115,7 @@ public class OrderController {
      */
     @PutMapping("/{id}")
     @Operation(summary = "Update order", description = "Updates an existing order (only pending orders)")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP')")
     public ResponseEntity<ApiResponse<OrderResponse>> updateOrder(
             @Parameter(description = "Order ID") @PathVariable UUID id,
             @Valid @RequestBody OrderRequest request) {
@@ -128,7 +128,7 @@ public class OrderController {
      */
     @PatchMapping("/{id}/status")
     @Operation(summary = "Update order status", description = "Updates the status of an order")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISTRIBUTOR_ADMIN', 'WAREHOUSE_MANAGER', 'DRIVER')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'WAREHOUSE_MANAGER', 'DRIVER')")
     public ResponseEntity<ApiResponse<OrderResponse>> updateOrderStatus(
             @Parameter(description = "Order ID") @PathVariable UUID id,
             @Valid @RequestBody StatusUpdateRequest request,
@@ -142,7 +142,7 @@ public class OrderController {
      */
     @PostMapping("/{id}/cancel")
     @Operation(summary = "Cancel order", description = "Cancels an order")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP')")
     public ResponseEntity<ApiResponse<OrderResponse>> cancelOrder(
             @Parameter(description = "Order ID") @PathVariable UUID id,
             @RequestParam(required = false) String reason,
@@ -179,7 +179,7 @@ public class OrderController {
      */
     @GetMapping("/overdue")
     @Operation(summary = "Get overdue orders", description = "Gets orders that are past their payment due date")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE')")
     public ResponseEntity<ApiResponse<List<OrderResponse>>> getOverdueOrders() {
         List<OrderResponse> orders = orderService.getOverdueOrders();
         return ResponseEntity.ok(ApiResponse.success(orders));

@@ -1,6 +1,7 @@
 package com.zuqi.service;
 
 import com.zuqi.api.dto.inventory.*;
+import com.zuqi.domain.user.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -29,13 +30,17 @@ public interface InventoryService {
 
     Page<WarehouseResponse> getWarehousesByDistributor(UUID distributorId, Pageable pageable);
 
+    Page<WarehouseResponse> getInactiveWarehousesByDistributor(UUID distributorId, Pageable pageable);
+
     WarehouseResponse getWarehouseById(UUID warehouseId);
 
     WarehouseResponse createWarehouse(WarehouseRequest request);
 
     WarehouseResponse updateWarehouse(UUID warehouseId, WarehouseRequest request);
 
-    void deactivateWarehouse(UUID warehouseId);
+    void deactivateWarehouse(UUID warehouseId, String reason, User currentUser);
+
+    void activateWarehouse(UUID warehouseId);
 
     // Stock movement operations
     Page<StockMovementResponse> getMovementsByWarehouse(UUID warehouseId, Pageable pageable);

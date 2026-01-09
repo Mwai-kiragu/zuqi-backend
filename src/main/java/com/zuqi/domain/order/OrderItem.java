@@ -43,10 +43,6 @@ public class OrderItem {
     @Builder.Default
     private BigDecimal discountPercent = BigDecimal.ZERO;
 
-    @Column(name = "tax_amount", precision = 15, scale = 2)
-    @Builder.Default
-    private BigDecimal taxAmount = BigDecimal.ZERO;
-
     @Column(name = "total_amount", nullable = false, precision = 15, scale = 2)
     private BigDecimal totalAmount;
 
@@ -64,6 +60,6 @@ public class OrderItem {
             lineTotal = lineTotal.multiply(discountMultiplier);
         }
 
-        this.totalAmount = lineTotal.add(this.taxAmount != null ? this.taxAmount : BigDecimal.ZERO);
+        this.totalAmount = lineTotal;
     }
 }

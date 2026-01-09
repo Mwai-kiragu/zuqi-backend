@@ -1,10 +1,13 @@
 package com.zuqi.api.controller;
 
 import com.zuqi.api.dto.ApiResponse;
+import com.zuqi.api.dto.common.DeactivateRequest;
 import com.zuqi.api.dto.merchant.MerchantCategoryResponse;
 import com.zuqi.api.dto.merchant.MerchantRequest;
 import com.zuqi.api.dto.merchant.MerchantResponse;
+import com.zuqi.domain.user.User;
 import com.zuqi.service.MerchantService;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -78,7 +81,7 @@ public class MerchantController {
      */
     @PostMapping
     @Operation(summary = "Create merchant", description = "Creates a new merchant")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP')")
     public ResponseEntity<ApiResponse<MerchantResponse>> createMerchant(
             @Valid @RequestBody MerchantRequest request) {
         MerchantResponse merchant = merchantService.createMerchant(request);
@@ -92,7 +95,7 @@ public class MerchantController {
      */
     @PutMapping("/{id}")
     @Operation(summary = "Update merchant", description = "Updates an existing merchant")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP')")
     public ResponseEntity<ApiResponse<MerchantResponse>> updateMerchant(
             @Parameter(description = "Merchant ID") @PathVariable UUID id,
             @Valid @RequestBody MerchantRequest request) {
@@ -105,7 +108,7 @@ public class MerchantController {
      */
     @PatchMapping("/{id}/assign")
     @Operation(summary = "Assign sales rep", description = "Assigns a sales rep to a merchant")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<MerchantResponse>> assignSalesRep(
             @Parameter(description = "Merchant ID") @PathVariable UUID id,
             @Parameter(description = "Sales Rep ID") @RequestParam UUID salesRepId) {
@@ -118,7 +121,7 @@ public class MerchantController {
      */
     @PatchMapping("/{id}/verify")
     @Operation(summary = "Verify merchant", description = "Marks a merchant as verified")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<MerchantResponse>> verifyMerchant(
             @Parameter(description = "Merchant ID") @PathVariable UUID id) {
         MerchantResponse merchant = merchantService.verifyMerchant(id);
@@ -126,15 +129,29 @@ public class MerchantController {
     }
 
     /**
-     * Deactivate a merchant.
+     * Deactivate a merchant with reason.
      */
     @DeleteMapping("/{id}")
-    @Operation(summary = "Deactivate merchant", description = "Deactivates a merchant (soft delete)")
-    @PreAuthorize("hasAnyRole('ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @Operation(summary = "Deactivate merchant", description = "Deactivates a merchant (soft delete) with reason")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deactivateMerchant(
-            @Parameter(description = "Merchant ID") @PathVariable UUID id) {
-        merchantService.deactivateMerchant(id);
+            @Parameter(description = "Merchant ID") @PathVariable UUID id,
+            @Valid @RequestBody DeactivateRequest request,
+            @AuthenticationPrincipal User currentUser) {
+        merchantService.deactivateMerchant(id, request.getReason(), currentUser);
         return ResponseEntity.ok(ApiResponse.success("Merchant deactivated successfully"));
+    }
+
+    /**
+     * Activate a merchant.
+     */
+    @PostMapping("/{id}/activate")
+    @Operation(summary = "Activate merchant", description = "Reactivates a deactivated merchant")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> activateMerchant(
+            @Parameter(description = "Merchant ID") @PathVariable UUID id) {
+        merchantService.activateMerchant(id);
+        return ResponseEntity.ok(ApiResponse.success("Merchant activated successfully"));
     }
 
     /**

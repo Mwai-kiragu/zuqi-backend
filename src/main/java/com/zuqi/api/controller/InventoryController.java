@@ -1,6 +1,7 @@
 package com.zuqi.api.controller;
 
 import com.zuqi.api.dto.ApiResponse;
+import com.zuqi.api.dto.common.DeactivateRequest;
 import com.zuqi.api.dto.inventory.*;
 import com.zuqi.domain.user.User;
 import com.zuqi.service.InventoryService;
@@ -85,7 +86,7 @@ public class InventoryController {
     @GetMapping("/warehouses")
     @Operation(summary = "List warehouses", description = "Get all active warehouses for a distributor")
     public ResponseEntity<ApiResponse<List<WarehouseResponse>>> getWarehouses(
-            @Parameter(description = "Distributor ID") @RequestParam UUID distributorId) {
+            @Parameter(description = "Distributor ID (optional for admins)") @RequestParam(required = false) UUID distributorId) {
         List<WarehouseResponse> warehouses = inventoryService.getWarehousesByDistributor(distributorId);
         return ResponseEntity.ok(ApiResponse.success(warehouses));
     }
@@ -93,7 +94,7 @@ public class InventoryController {
     @GetMapping("/warehouses/page")
     @Operation(summary = "List warehouses (paginated)", description = "Get warehouses with pagination")
     public ResponseEntity<ApiResponse<Page<WarehouseResponse>>> getWarehousesPaged(
-            @Parameter(description = "Distributor ID") @RequestParam UUID distributorId,
+            @Parameter(description = "Distributor ID (optional for admins)") @RequestParam(required = false) UUID distributorId,
             @PageableDefault(size = 20) Pageable pageable) {
         Page<WarehouseResponse> warehouses = inventoryService.getWarehousesByDistributor(distributorId, pageable);
         return ResponseEntity.ok(ApiResponse.success(warehouses));
@@ -126,11 +127,20 @@ public class InventoryController {
     }
 
     @DeleteMapping("/warehouses/{warehouseId}")
-    @Operation(summary = "Deactivate warehouse", description = "Deactivate a warehouse")
+    @Operation(summary = "Deactivate warehouse", description = "Deactivate a warehouse with reason")
     public ResponseEntity<ApiResponse<Void>> deactivateWarehouse(
-            @PathVariable UUID warehouseId) {
-        inventoryService.deactivateWarehouse(warehouseId);
+            @PathVariable UUID warehouseId,
+            @Valid @RequestBody DeactivateRequest request,
+            @AuthenticationPrincipal User currentUser) {
+        inventoryService.deactivateWarehouse(warehouseId, request.getReason(), currentUser);
         return ResponseEntity.ok(ApiResponse.success("Warehouse deactivated successfully", null));
+    }
+
+    @PostMapping("/warehouses/{warehouseId}/activate")
+    @Operation(summary = "Activate warehouse", description = "Reactivate a deactivated warehouse")
+    public ResponseEntity<ApiResponse<Void>> activateWarehouse(@PathVariable UUID warehouseId) {
+        inventoryService.activateWarehouse(warehouseId);
+        return ResponseEntity.ok(ApiResponse.success("Warehouse activated successfully", null));
     }
 
     // ==================== Stock Movement Endpoints ====================

@@ -1,6 +1,7 @@
 package com.zuqi.api.controller;
 
 import com.zuqi.api.dto.ApiResponse;
+import com.zuqi.api.dto.common.DeactivateRequest;
 import com.zuqi.api.dto.user.ChangePasswordRequest;
 import com.zuqi.api.dto.user.CreateUserRequest;
 import com.zuqi.api.dto.user.ResetPasswordRequest;
@@ -34,9 +35,10 @@ public class UserController {
     @Operation(summary = "Get all users (ADMIN only)")
     public ResponseEntity<ApiResponse<Page<UserResponse>>> getAllUsers(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) Boolean active) {
 
-        Page<UserResponse> users = userService.getAllUsers(PageRequest.of(page, size));
+        Page<UserResponse> users = userService.getAllUsers(PageRequest.of(page, size), active);
         return ResponseEntity.ok(ApiResponse.success("Users retrieved successfully", users));
     }
 
@@ -45,9 +47,10 @@ public class UserController {
     public ResponseEntity<ApiResponse<Page<UserResponse>>> getUsersByDistributor(
             @PathVariable UUID distributorId,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) Boolean active) {
 
-        Page<UserResponse> users = userService.getUsersByDistributor(distributorId, PageRequest.of(page, size));
+        Page<UserResponse> users = userService.getUsersByDistributor(distributorId, PageRequest.of(page, size), active);
         return ResponseEntity.ok(ApiResponse.success("Users retrieved successfully", users));
     }
 
@@ -144,9 +147,12 @@ public class UserController {
     }
 
     @DeleteMapping("/{id}")
-    @Operation(summary = "Deactivate a user")
-    public ResponseEntity<ApiResponse<Void>> deactivateUser(@PathVariable UUID id) {
-        userService.deactivateUser(id);
+    @Operation(summary = "Deactivate a user with reason")
+    public ResponseEntity<ApiResponse<Void>> deactivateUser(
+            @PathVariable UUID id,
+            @Valid @RequestBody DeactivateRequest request,
+            @AuthenticationPrincipal User currentUser) {
+        userService.deactivateUser(id, request.getReason(), currentUser);
         return ResponseEntity.ok(ApiResponse.success("User deactivated successfully"));
     }
 

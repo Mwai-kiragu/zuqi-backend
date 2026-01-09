@@ -15,8 +15,11 @@
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/ApiResponse.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/auth/AuthenticationRequest.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/auth/AuthenticationResponse.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/auth/ForgotPasswordRequest.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/auth/RefreshTokenRequest.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/auth/RegisterRequest.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/auth/ResetPasswordRequest.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/common/DeactivateRequest.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/credit/CreditLimitRequest.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/credit/CreditLimitResponse.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/credit/CreditScoreResponse.java
@@ -84,6 +87,7 @@
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/domain/payment/PaymentStatus.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/domain/product/Product.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/domain/product/ProductCategory.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/domain/user/PasswordResetToken.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/domain/user/Permission.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/domain/user/RefreshToken.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/domain/user/Role.java
@@ -102,6 +106,7 @@
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/repository/OrderItemRepository.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/repository/OrderRepository.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/repository/OrderStatusHistoryRepository.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/repository/PasswordResetTokenRepository.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/repository/PaymentMethodRepository.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/repository/PaymentRepository.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/repository/PermissionRepository.java

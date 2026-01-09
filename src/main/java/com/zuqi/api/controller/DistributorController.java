@@ -57,7 +57,6 @@ public class DistributorController {
         Distributor distributor = Distributor.builder()
                 .name(request.getName())
                 .registrationNumber(request.getRegistrationNumber())
-                .taxId(request.getTaxId())
                 .email(request.getEmail())
                 .phone(request.getPhone())
                 .address(request.getAddress())
@@ -90,7 +89,6 @@ public class DistributorController {
 
         distributor.setName(request.getName());
         distributor.setRegistrationNumber(request.getRegistrationNumber());
-        distributor.setTaxId(request.getTaxId());
         distributor.setEmail(request.getEmail());
         distributor.setPhone(request.getPhone());
         distributor.setAddress(request.getAddress());
@@ -115,5 +113,17 @@ public class DistributorController {
         distributorRepository.save(distributor);
 
         return ResponseEntity.ok(ApiResponse.success("Distributor deactivated successfully"));
+    }
+
+    @PostMapping("/{id}/activate")
+    @Operation(summary = "Activate a distributor")
+    public ResponseEntity<ApiResponse<Void>> activateDistributor(@PathVariable UUID id) {
+        Distributor distributor = distributorRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Distributor not found"));
+
+        distributor.setActive(true);
+        distributorRepository.save(distributor);
+
+        return ResponseEntity.ok(ApiResponse.success("Distributor activated successfully"));
     }
 }

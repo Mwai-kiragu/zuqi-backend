@@ -176,7 +176,6 @@ public class OrderServiceImpl implements OrderService {
                 .deliveryLongitude(request.getDeliveryLongitude())
                 .notes(request.getNotes())
                 .subtotal(BigDecimal.ZERO)
-                .taxAmount(BigDecimal.ZERO)
                 .totalAmount(BigDecimal.ZERO)
                 .build();
 
@@ -190,7 +189,6 @@ public class OrderServiceImpl implements OrderService {
                     .quantity(itemRequest.getQuantity())
                     .unitPrice(product.getUnitPrice())
                     .discountPercent(itemRequest.getDiscountPercent() != null ? itemRequest.getDiscountPercent() : BigDecimal.ZERO)
-                    .taxAmount(calculateTax(product, itemRequest.getQuantity()))
                     .build();
 
             item.calculateTotal();
@@ -252,7 +250,6 @@ public class OrderServiceImpl implements OrderService {
                         .quantity(itemRequest.getQuantity())
                         .unitPrice(product.getUnitPrice())
                         .discountPercent(itemRequest.getDiscountPercent() != null ? itemRequest.getDiscountPercent() : BigDecimal.ZERO)
-                        .taxAmount(calculateTax(product, itemRequest.getQuantity()))
                         .build();
 
                 item.calculateTotal();
@@ -343,14 +340,6 @@ public class OrderServiceImpl implements OrderService {
         Integer maxNum = orderRepository.findMaxOrderNumberByPrefix(prefix);
         int nextNum = (maxNum != null ? maxNum : 0) + 1;
         return prefix + String.format("%04d", nextNum);
-    }
-
-    private BigDecimal calculateTax(Product product, BigDecimal quantity) {
-        if (product.getTaxRate() == null || product.getTaxRate().compareTo(BigDecimal.ZERO) == 0) {
-            return BigDecimal.ZERO;
-        }
-        BigDecimal lineTotal = product.getUnitPrice().multiply(quantity);
-        return lineTotal.multiply(product.getTaxRate());
     }
 
     private void addStatusHistory(Order order, OrderStatus status, String notes, User changedBy) {

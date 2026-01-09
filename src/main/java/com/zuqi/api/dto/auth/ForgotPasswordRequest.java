@@ -1,4 +1,4 @@
-package com.zuqi.api.dto.distributor;
+package com.zuqi.api.dto.auth;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -7,25 +7,16 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+/**
+ * Request DTO for forgot password.
+ */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class DistributorRequest {
+public class ForgotPasswordRequest {
 
-    @NotBlank(message = "Name is required")
-    private String name;
-
-    private String registrationNumber;
-
+    @NotBlank(message = "Email is required")
     @Email(message = "Invalid email format")
     private String email;
-
-    private String phone;
-
-    private String address;
-
-    private String city;
-
-    private String country;
 }

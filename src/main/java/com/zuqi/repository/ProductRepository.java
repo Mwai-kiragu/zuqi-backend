@@ -30,6 +30,16 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
     Page<Product> findByDistributorIdAndActiveTrue(UUID distributorId, Pageable pageable);
 
     /**
+     * Find all inactive products.
+     */
+    Page<Product> findByActiveFalse(Pageable pageable);
+
+    /**
+     * Find inactive products by distributor.
+     */
+    Page<Product> findByDistributorIdAndActiveFalse(UUID distributorId, Pageable pageable);
+
+    /**
      * Find products by category.
      */
     Page<Product> findByCategoryIdAndActiveTrue(Long categoryId, Pageable pageable);

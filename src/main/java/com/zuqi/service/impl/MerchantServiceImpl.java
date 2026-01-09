@@ -261,17 +261,60 @@ public class MerchantServiceImpl implements MerchantService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Page<MerchantResponse> getInactiveMerchants(Pageable pageable) {
+        log.debug("Fetching all inactive merchants");
+
+        UUID distributorId = securityUtils.getDistributorIdForFiltering();
+        if (distributorId != null) {
+            return merchantRepository.findByDistributorIdAndActiveFalse(distributorId, pageable)
+                    .map(MerchantResponse::fromEntity);
+        }
+
+        return merchantRepository.findByActiveFalse(pageable)
+                .map(MerchantResponse::fromEntity);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<MerchantResponse> getInactiveMerchantsByDistributor(UUID distributorId, Pageable pageable) {
+        log.debug("Fetching inactive merchants for distributor: {}", distributorId);
+        return merchantRepository.findByDistributorIdAndActiveFalse(distributorId, pageable)
+                .map(MerchantResponse::fromEntity);
+    }
+
+    @Override
     @Transactional
-    public void deactivateMerchant(UUID id) {
-        log.info("Deactivating merchant: {}", id);
+    public void deactivateMerchant(UUID id, String reason, User currentUser) {
+        log.info("Deactivating merchant: {} with reason: {}", id, reason);
 
         Merchant merchant = merchantRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", id.toString()));
 
         merchant.setActive(false);
+        merchant.setDeactivationReason(reason);
+        merchant.setDeactivatedAt(java.time.LocalDateTime.now());
+        merchant.setDeactivatedBy(currentUser);
         merchantRepository.save(merchant);
 
         log.info("Merchant deactivated successfully");
+    }
+
+    @Override
+    @Transactional
+    public void activateMerchant(UUID id) {
+        log.info("Activating merchant: {}", id);
+
+        Merchant merchant = merchantRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", id.toString()));
+
+        merchant.setActive(true);
+        merchant.setDeactivationReason(null);
+        merchant.setDeactivatedAt(null);
+        merchant.setDeactivatedBy(null);
+        merchantRepository.save(merchant);
+
+        log.info("Merchant activated successfully");
     }
 
     @Override

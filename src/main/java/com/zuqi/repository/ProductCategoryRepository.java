@@ -15,7 +15,17 @@ import java.util.UUID;
 public interface ProductCategoryRepository extends JpaRepository<ProductCategory, Long> {
 
     /**
-     * Find categories by distributor.
+     * Find active categories by distributor.
+     */
+    List<ProductCategory> findByDistributorIdAndActiveTrue(UUID distributorId);
+
+    /**
+     * Find inactive categories by distributor.
+     */
+    List<ProductCategory> findByDistributorIdAndActiveFalse(UUID distributorId);
+
+    /**
+     * Find categories by distributor (both active and inactive).
      */
     List<ProductCategory> findByDistributorId(UUID distributorId);
 
@@ -23,6 +33,11 @@ public interface ProductCategoryRepository extends JpaRepository<ProductCategory
      * Find top-level categories (no parent) by distributor.
      */
     List<ProductCategory> findByDistributorIdAndParentIsNull(UUID distributorId);
+
+    /**
+     * Find active top-level categories (no parent) by distributor.
+     */
+    List<ProductCategory> findByDistributorIdAndParentIsNullAndActiveTrue(UUID distributorId);
 
     /**
      * Find category by name and distributor.
@@ -38,4 +53,9 @@ public interface ProductCategoryRepository extends JpaRepository<ProductCategory
      * Find child categories.
      */
     List<ProductCategory> findByParentId(Long parentId);
+
+    /**
+     * Find active child categories.
+     */
+    List<ProductCategory> findByParentIdAndActiveTrue(Long parentId);
 }

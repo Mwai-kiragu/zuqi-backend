@@ -200,6 +200,25 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     @Override
+    public Page<WarehouseResponse> getInactiveWarehousesByDistributor(UUID distributorId, Pageable pageable) {
+        // Determine effective distributor ID for filtering
+        UUID effectiveDistributorId = distributorId;
+        if (effectiveDistributorId == null) {
+            effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
+        }
+
+        if (effectiveDistributorId != null) {
+            validateDistributorExists(effectiveDistributorId);
+            return warehouseRepository.findByDistributorIdAndActiveFalse(effectiveDistributorId, pageable)
+                    .map(this::mapToWarehouseResponse);
+        }
+
+        // SUPER_ADMIN/ADMIN can see all inactive warehouses
+        return warehouseRepository.findByActiveFalse(pageable)
+                .map(this::mapToWarehouseResponse);
+    }
+
+    @Override
     public WarehouseResponse getWarehouseById(UUID warehouseId) {
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Warehouse", "id", warehouseId));
@@ -279,13 +298,30 @@ public class InventoryServiceImpl implements InventoryService {
 
     @Override
     @Transactional
-    public void deactivateWarehouse(UUID warehouseId) {
+    public void deactivateWarehouse(UUID warehouseId, String reason, User currentUser) {
         Warehouse warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new ResourceNotFoundException("Warehouse", "id", warehouseId));
 
         warehouse.setActive(false);
+        warehouse.setDeactivationReason(reason);
+        warehouse.setDeactivatedAt(LocalDateTime.now());
+        warehouse.setDeactivatedBy(currentUser);
         warehouseRepository.save(warehouse);
-        log.info("Deactivated warehouse: {} ({})", warehouse.getName(), warehouse.getCode());
+        log.info("Deactivated warehouse: {} ({}) with reason: {}", warehouse.getName(), warehouse.getCode(), reason);
+    }
+
+    @Override
+    @Transactional
+    public void activateWarehouse(UUID warehouseId) {
+        Warehouse warehouse = warehouseRepository.findById(warehouseId)
+                .orElseThrow(() -> new ResourceNotFoundException("Warehouse", "id", warehouseId));
+
+        warehouse.setActive(true);
+        warehouse.setDeactivationReason(null);
+        warehouse.setDeactivatedAt(null);
+        warehouse.setDeactivatedBy(null);
+        warehouseRepository.save(warehouse);
+        log.info("Activated warehouse: {} ({})", warehouse.getName(), warehouse.getCode());
     }
 
     // ==================== Stock Movement Operations ====================
@@ -365,6 +401,9 @@ public class InventoryServiceImpl implements InventoryService {
                 .active(warehouse.isActive())
                 .createdAt(warehouse.getCreatedAt())
                 .updatedAt(warehouse.getUpdatedAt())
+                .deactivationReason(warehouse.getDeactivationReason())
+                .deactivatedAt(warehouse.getDeactivatedAt())
+                .deactivatedByName(warehouse.getDeactivatedBy() != null ? warehouse.getDeactivatedBy().getFullName() : null)
                 .build();
     }
 

@@ -5,6 +5,8 @@ import com.zuqi.api.dto.auth.AuthenticationRequest;
 import com.zuqi.api.dto.auth.AuthenticationResponse;
 import com.zuqi.api.dto.auth.RefreshTokenRequest;
 import com.zuqi.api.dto.auth.RegisterRequest;
+import com.zuqi.api.dto.auth.ForgotPasswordRequest;
+import com.zuqi.api.dto.auth.ResetPasswordRequest;
 import com.zuqi.service.AuthenticationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -81,5 +83,34 @@ public class AuthController {
             @Valid @RequestBody RefreshTokenRequest request) {
         authenticationService.logout(request.getRefreshToken());
         return ResponseEntity.ok(ApiResponse.success("Logged out successfully"));
+    }
+
+    /**
+     * Initiates the forgot password flow.
+     *
+     * @param request the forgot password request containing email
+     * @return success response
+     */
+    @PostMapping("/forgot-password")
+    @Operation(summary = "Forgot password", description = "Sends password reset instructions to the user's email")
+    public ResponseEntity<ApiResponse<Void>> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request) {
+        authenticationService.forgotPassword(request);
+        // Always return success to prevent email enumeration
+        return ResponseEntity.ok(ApiResponse.success("If your email is registered, you will receive password reset instructions shortly"));
+    }
+
+    /**
+     * Resets the user's password using a valid reset token.
+     *
+     * @param request the reset password request containing token and new password
+     * @return success response
+     */
+    @PostMapping("/reset-password")
+    @Operation(summary = "Reset password", description = "Resets the user's password using a valid reset token")
+    public ResponseEntity<ApiResponse<Void>> resetPassword(
+            @Valid @RequestBody ResetPasswordRequest request) {
+        authenticationService.resetPassword(request);
+        return ResponseEntity.ok(ApiResponse.success("Password reset successful. You can now login with your new password."));
     }
 }

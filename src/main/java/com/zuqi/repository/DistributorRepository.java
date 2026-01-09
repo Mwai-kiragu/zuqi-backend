@@ -29,6 +29,11 @@ public interface DistributorRepository extends JpaRepository<Distributor, UUID> 
     List<Distributor> findByActiveTrue();
 
     /**
+     * Find all inactive distributors.
+     */
+    Page<Distributor> findByActiveFalse(Pageable pageable);
+
+    /**
      * Find distributor by name.
      */
     Optional<Distributor> findByName(String name);

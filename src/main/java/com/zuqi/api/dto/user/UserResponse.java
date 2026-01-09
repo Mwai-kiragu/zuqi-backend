@@ -30,6 +30,9 @@ public class UserResponse {
     private boolean emailVerified;
     private LocalDateTime lastLoginAt;
     private LocalDateTime createdAt;
+    private String deactivationReason;
+    private LocalDateTime deactivatedAt;
+    private String deactivatedByName;
 
     public static UserResponse fromEntity(User user) {
         List<String> roleNames = user.getRoles() != null
@@ -49,6 +52,9 @@ public class UserResponse {
                 .emailVerified(user.isEmailVerified())
                 .lastLoginAt(user.getLastLoginAt())
                 .createdAt(user.getCreatedAt())
+                .deactivationReason(user.getDeactivationReason())
+                .deactivatedAt(user.getDeactivatedAt())
+                .deactivatedByName(user.getDeactivatedBy() != null ? user.getDeactivatedBy().getFullName() : null)
                 .build();
     }
 

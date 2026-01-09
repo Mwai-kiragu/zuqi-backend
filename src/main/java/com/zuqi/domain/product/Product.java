@@ -1,6 +1,7 @@
 package com.zuqi.domain.product;
 
 import com.zuqi.domain.distributor.Distributor;
+import com.zuqi.domain.user.User;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -65,10 +66,6 @@ public class Product {
     @Column(name = "cost_price", precision = 15, scale = 2)
     private BigDecimal costPrice;
 
-    @Column(name = "tax_rate", precision = 5, scale = 2)
-    @Builder.Default
-    private BigDecimal taxRate = BigDecimal.ZERO;
-
     @Column(name = "image_url")
     private String imageUrl;
 
@@ -93,4 +90,14 @@ public class Product {
     @LastModifiedDate
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @Column(name = "deactivation_reason", length = 500)
+    private String deactivationReason;
+
+    @Column(name = "deactivated_at")
+    private LocalDateTime deactivatedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "deactivated_by")
+    private User deactivatedBy;
 }

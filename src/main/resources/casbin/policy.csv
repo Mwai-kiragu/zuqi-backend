@@ -1,6 +1,10 @@
 # Zuqi Default Policies
 # Format: p, subject, object, action
 
+# SUPER_ADMIN - Full system access (highest level)
+p, SUPER_ADMIN, /*, .*
+p, SUPER_ADMIN, /v1/*, .*
+
 # ADMIN - Full access to all resources
 p, ADMIN, /*, .*
 
@@ -91,6 +95,8 @@ p, DRIVER, /v1/deliveries/:id, GET|PUT|PATCH
 p, DRIVER, /v1/orders/:id, GET
 
 # Profile endpoints - All authenticated users can access their own profile
+p, SUPER_ADMIN, /v1/users/me, GET|PUT
+p, SUPER_ADMIN, /v1/users/me/change-password, POST
 p, DISTRIBUTOR_ADMIN, /v1/users/me, GET|PUT
 p, DISTRIBUTOR_ADMIN, /v1/users/me/change-password, POST
 p, SALES_REP, /v1/users/me, GET|PUT
@@ -105,7 +111,10 @@ p, DRIVER, /v1/users/me, GET|PUT
 p, DRIVER, /v1/users/me/change-password, POST
 
 # Role hierarchy - who inherits what
+g, SUPER_ADMIN, ADMIN
 g, ADMIN, DISTRIBUTOR_ADMIN
 g, DISTRIBUTOR_ADMIN, FINANCE
 g, DISTRIBUTOR_ADMIN, WAREHOUSE_MANAGER
 g, DISTRIBUTOR_ADMIN, SALES_REP
+
+wallet

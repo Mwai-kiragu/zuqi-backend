@@ -61,12 +61,45 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Page<User> findByActiveTrue(Pageable pageable);
 
     /**
-     * Find users by distributor ID.
+     * Find all inactive (deactivated) users.
+     *
+     * @param pageable pagination information
+     * @return a page of inactive users
+     */
+    Page<User> findByActiveFalse(Pageable pageable);
+
+    /**
+     * Find inactive users by distributor ID.
      *
      * @param distributorId the distributor ID
-     * @return list of users belonging to the distributor
+     * @param pageable pagination information
+     * @return a page of inactive users
+     */
+    Page<User> findByDistributorIdAndActiveFalse(UUID distributorId, Pageable pageable);
+
+    /**
+     * Find all users by distributor ID.
+     *
+     * @param distributorId the distributor ID
+     * @return list of all users belonging to the distributor
+     */
+    List<User> findByDistributorId(UUID distributorId);
+
+    /**
+     * Find active users by distributor ID.
+     *
+     * @param distributorId the distributor ID
+     * @return list of active users belonging to the distributor
      */
     List<User> findByDistributorIdAndActiveTrue(UUID distributorId);
+
+    /**
+     * Find inactive users by distributor ID (list version).
+     *
+     * @param distributorId the distributor ID
+     * @return list of inactive users belonging to the distributor
+     */
+    List<User> findByDistributorIdAndActiveFalse(UUID distributorId);
 
     /**
      * Find users by role name.

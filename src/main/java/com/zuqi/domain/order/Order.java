@@ -77,10 +77,6 @@ public class Order {
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal subtotal;
 
-    @Column(name = "tax_amount", precision = 15, scale = 2)
-    @Builder.Default
-    private BigDecimal taxAmount = BigDecimal.ZERO;
-
     @Column(name = "discount_amount", precision = 15, scale = 2)
     @Builder.Default
     private BigDecimal discountAmount = BigDecimal.ZERO;
@@ -162,10 +158,6 @@ public class Order {
                 .map(OrderItem::getTotalAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        this.taxAmount = items.stream()
-                .map(OrderItem::getTaxAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        this.totalAmount = this.subtotal.add(this.taxAmount).subtract(this.discountAmount);
+        this.totalAmount = this.subtotal.subtract(this.discountAmount != null ? this.discountAmount : BigDecimal.ZERO);
     }
 }
