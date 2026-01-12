@@ -1,5 +1,6 @@
 package com.zuqi.service;
 
+import com.zuqi.api.dto.merchant.MerchantCategoryRequest;
 import com.zuqi.api.dto.merchant.MerchantCategoryResponse;
 import com.zuqi.api.dto.merchant.MerchantRequest;
 import com.zuqi.api.dto.merchant.MerchantResponse;
@@ -24,7 +25,7 @@ public interface MerchantService {
 
     Page<MerchantResponse> getMerchantsByCategory(Long categoryId, Pageable pageable);
 
-    Page<MerchantResponse> searchMerchants(String searchTerm, UUID distributorId, Pageable pageable);
+    Page<MerchantResponse> searchMerchants(String searchTerm, UUID distributorId, Boolean active, Pageable pageable);
 
     MerchantResponse getMerchantById(UUID id);
 
@@ -41,6 +42,14 @@ public interface MerchantService {
     void activateMerchant(UUID id);
 
     List<MerchantCategoryResponse> getAllCategories();
+
+    MerchantCategoryResponse getCategoryById(Long id);
+
+    MerchantCategoryResponse createCategory(MerchantCategoryRequest request);
+
+    MerchantCategoryResponse updateCategory(Long id, MerchantCategoryRequest request);
+
+    void deleteCategory(Long id);
 
     List<String> getDistinctCities();
 }

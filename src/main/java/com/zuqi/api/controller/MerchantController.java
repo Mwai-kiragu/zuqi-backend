@@ -2,6 +2,7 @@ package com.zuqi.api.controller;
 
 import com.zuqi.api.dto.ApiResponse;
 import com.zuqi.api.dto.common.DeactivateRequest;
+import com.zuqi.api.dto.merchant.MerchantCategoryRequest;
 import com.zuqi.api.dto.merchant.MerchantCategoryResponse;
 import com.zuqi.api.dto.merchant.MerchantRequest;
 import com.zuqi.api.dto.merchant.MerchantResponse;
@@ -40,20 +41,29 @@ public class MerchantController {
             @Parameter(description = "Category ID filter") @RequestParam(required = false) Long categoryId,
             @Parameter(description = "Sales rep ID filter") @RequestParam(required = false) UUID salesRepId,
             @Parameter(description = "Search term") @RequestParam(required = false) String search,
+            @Parameter(description = "Active status filter (default: true)") @RequestParam(required = false, defaultValue = "true") Boolean active,
             @PageableDefault(size = 20, sort = "businessName", direction = Sort.Direction.ASC) Pageable pageable) {
 
         Page<MerchantResponse> merchants;
 
         if (search != null && !search.isBlank()) {
-            merchants = merchantService.searchMerchants(search, distributorId, pageable);
+            merchants = merchantService.searchMerchants(search, distributorId, active, pageable);
         } else if (distributorId != null) {
-            merchants = merchantService.getMerchantsByDistributor(distributorId, pageable);
+            if (active) {
+                merchants = merchantService.getMerchantsByDistributor(distributorId, pageable);
+            } else {
+                merchants = merchantService.getInactiveMerchantsByDistributor(distributorId, pageable);
+            }
         } else if (categoryId != null) {
             merchants = merchantService.getMerchantsByCategory(categoryId, pageable);
         } else if (salesRepId != null) {
             merchants = merchantService.getMerchantsBySalesRep(salesRepId, pageable);
         } else {
-            merchants = merchantService.getAllMerchants(pageable);
+            if (active) {
+                merchants = merchantService.getAllMerchants(pageable);
+            } else {
+                merchants = merchantService.getInactiveMerchants(pageable);
+            }
         }
 
         return ResponseEntity.ok(ApiResponse.success(merchants));
@@ -132,6 +142,44 @@ public class MerchantController {
     public ResponseEntity<ApiResponse<List<MerchantCategoryResponse>>> getCategories() {
         List<MerchantCategoryResponse> categories = merchantService.getAllCategories();
         return ResponseEntity.ok(ApiResponse.success(categories));
+    }
+
+    @GetMapping("/categories/{id}")
+    @Operation(summary = "Get merchant category by ID", description = "Retrieves a specific merchant category by ID")
+    public ResponseEntity<ApiResponse<MerchantCategoryResponse>> getCategoryById(
+            @Parameter(description = "Category ID") @PathVariable Long id) {
+        MerchantCategoryResponse category = merchantService.getCategoryById(id);
+        return ResponseEntity.ok(ApiResponse.success(category));
+    }
+
+    @PostMapping("/categories")
+    @Operation(summary = "Create merchant category", description = "Creates a new merchant category")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    public ResponseEntity<ApiResponse<MerchantCategoryResponse>> createCategory(
+            @Valid @RequestBody MerchantCategoryRequest request) {
+        MerchantCategoryResponse category = merchantService.createCategory(request);
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Category created successfully", category));
+    }
+
+    @PutMapping("/categories/{id}")
+    @Operation(summary = "Update merchant category", description = "Updates an existing merchant category")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    public ResponseEntity<ApiResponse<MerchantCategoryResponse>> updateCategory(
+            @Parameter(description = "Category ID") @PathVariable Long id,
+            @Valid @RequestBody MerchantCategoryRequest request) {
+        MerchantCategoryResponse category = merchantService.updateCategory(id, request);
+        return ResponseEntity.ok(ApiResponse.success("Category updated successfully", category));
+    }
+
+    @DeleteMapping("/categories/{id}")
+    @Operation(summary = "Delete merchant category", description = "Deletes a merchant category (only if not in use)")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    public ResponseEntity<ApiResponse<Void>> deleteCategory(
+            @Parameter(description = "Category ID") @PathVariable Long id) {
+        merchantService.deleteCategory(id);
+        return ResponseEntity.ok(ApiResponse.success("Category deleted successfully"));
     }
 
     @GetMapping("/cities")

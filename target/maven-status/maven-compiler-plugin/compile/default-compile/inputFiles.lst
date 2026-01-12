@@ -40,6 +40,7 @@
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/invoice/InvoiceRequest.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/invoice/InvoiceResponse.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/invoice/SendInvoiceRequest.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/merchant/MerchantCategoryRequest.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/merchant/MerchantCategoryResponse.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/merchant/MerchantRequest.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/merchant/MerchantResponse.java

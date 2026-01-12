@@ -1,5 +1,6 @@
 package com.zuqi.service.impl;
 
+import com.zuqi.api.dto.merchant.MerchantCategoryRequest;
 import com.zuqi.api.dto.merchant.MerchantCategoryResponse;
 import com.zuqi.api.dto.merchant.MerchantRequest;
 import com.zuqi.api.dto.merchant.MerchantResponse;
@@ -79,8 +80,8 @@ public class MerchantServiceImpl implements MerchantService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<MerchantResponse> searchMerchants(String searchTerm, UUID distributorId, Pageable pageable) {
-        log.debug("Searching merchants with term: {}, distributor: {}", searchTerm, distributorId);
+    public Page<MerchantResponse> searchMerchants(String searchTerm, UUID distributorId, Boolean active, Pageable pageable) {
+        log.debug("Searching merchants with term: {}, distributor: {}, active: {}", searchTerm, distributorId, active);
 
         // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
@@ -89,12 +90,12 @@ public class MerchantServiceImpl implements MerchantService {
         }
 
         if (effectiveDistributorId != null) {
-            return merchantRepository.searchByDistributor(effectiveDistributorId, searchTerm, pageable)
+            return merchantRepository.searchByDistributorAndActive(effectiveDistributorId, searchTerm, active, pageable)
                     .map(MerchantResponse::fromEntity);
         }
 
         // SUPER_ADMIN/ADMIN can search across all distributors
-        return merchantRepository.searchByBusinessName(searchTerm, pageable)
+        return merchantRepository.searchByBusinessNameAndActive(searchTerm, active, pageable)
                 .map(MerchantResponse::fromEntity);
     }
 
@@ -321,6 +322,74 @@ public class MerchantServiceImpl implements MerchantService {
         return categoryRepository.findAll().stream()
                 .map(MerchantCategoryResponse::fromEntity)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public MerchantCategoryResponse getCategoryById(Long id) {
+        log.debug("Fetching merchant category by ID: {}", id);
+        MerchantCategory category = categoryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("MerchantCategory", "id", id.toString()));
+        return MerchantCategoryResponse.fromEntity(category);
+    }
+
+    @Override
+    @Transactional
+    public MerchantCategoryResponse createCategory(MerchantCategoryRequest request) {
+        log.info("Creating new merchant category: {}", request.getName());
+
+        if (categoryRepository.existsByName(request.getName())) {
+            throw new DuplicateResourceException("MerchantCategory", "name", request.getName());
+        }
+
+        MerchantCategory category = MerchantCategory.builder()
+                .name(request.getName())
+                .description(request.getDescription())
+                .build();
+
+        MerchantCategory savedCategory = categoryRepository.save(category);
+        log.info("Merchant category created successfully with ID: {}", savedCategory.getId());
+
+        return MerchantCategoryResponse.fromEntity(savedCategory);
+    }
+
+    @Override
+    @Transactional
+    public MerchantCategoryResponse updateCategory(Long id, MerchantCategoryRequest request) {
+        log.info("Updating merchant category: {}", id);
+
+        MerchantCategory category = categoryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("MerchantCategory", "id", id.toString()));
+
+        // Check for duplicate name if changed
+        if (!category.getName().equals(request.getName()) && categoryRepository.existsByName(request.getName())) {
+            throw new DuplicateResourceException("MerchantCategory", "name", request.getName());
+        }
+
+        category.setName(request.getName());
+        category.setDescription(request.getDescription());
+
+        MerchantCategory updatedCategory = categoryRepository.save(category);
+        log.info("Merchant category updated successfully: {}", id);
+
+        return MerchantCategoryResponse.fromEntity(updatedCategory);
+    }
+
+    @Override
+    @Transactional
+    public void deleteCategory(Long id) {
+        log.info("Deleting merchant category: {}", id);
+
+        MerchantCategory category = categoryRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("MerchantCategory", "id", id.toString()));
+
+        // Check if category is in use
+        if (merchantRepository.existsByCategoryId(id)) {
+            throw new IllegalStateException("Cannot delete category that is assigned to merchants");
+        }
+
+        categoryRepository.delete(category);
+        log.info("Merchant category deleted successfully: {}", id);
     }
 
     @Override

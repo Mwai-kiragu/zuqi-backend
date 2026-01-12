@@ -36,9 +36,15 @@ public interface MerchantRepository extends JpaRepository<Merchant, UUID>, JpaSp
 
     boolean existsByEmail(String email);
 
+    boolean existsByCategoryId(Long categoryId);
+
     @Query("SELECT m FROM Merchant m WHERE m.active = true AND " +
             "LOWER(m.businessName) LIKE LOWER(CONCAT('%', :searchTerm, '%'))")
     Page<Merchant> searchByBusinessName(@Param("searchTerm") String searchTerm, Pageable pageable);
+
+    @Query("SELECT m FROM Merchant m WHERE m.active = :active AND " +
+            "LOWER(m.businessName) LIKE LOWER(CONCAT('%', :searchTerm, '%'))")
+    Page<Merchant> searchByBusinessNameAndActive(@Param("searchTerm") String searchTerm, @Param("active") Boolean active, Pageable pageable);
 
     @Query("SELECT m FROM Merchant m WHERE m.distributor.id = :distributorId AND m.active = true AND " +
             "(LOWER(m.businessName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
@@ -47,6 +53,16 @@ public interface MerchantRepository extends JpaRepository<Merchant, UUID>, JpaSp
     Page<Merchant> searchByDistributor(
             @Param("distributorId") UUID distributorId,
             @Param("searchTerm") String searchTerm,
+            Pageable pageable);
+
+    @Query("SELECT m FROM Merchant m WHERE m.distributor.id = :distributorId AND m.active = :active AND " +
+            "(LOWER(m.businessName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+            "LOWER(m.ownerName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+            "m.phone LIKE CONCAT('%', :searchTerm, '%'))")
+    Page<Merchant> searchByDistributorAndActive(
+            @Param("distributorId") UUID distributorId,
+            @Param("searchTerm") String searchTerm,
+            @Param("active") Boolean active,
             Pageable pageable);
 
     long countByDistributorIdAndActiveTrue(UUID distributorId);
