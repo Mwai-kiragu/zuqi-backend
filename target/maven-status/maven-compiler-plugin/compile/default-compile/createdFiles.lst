@@ -100,8 +100,10 @@ com/zuqi/api/dto/product/ProductCategoryRequest.class
 com/zuqi/api/dto/report/SalesReportResponse$SalesReportResponseBuilder.class
 com/zuqi/domain/distributor/Distributor.class
 com/zuqi/api/dto/report/SalesReportResponse$SalesRepData$SalesRepDataBuilder.class
+com/zuqi/api/dto/common/PageResponse.class
 com/zuqi/api/dto/distributor/DistributorResponse.class
 com/zuqi/exception/AuthenticationException.class
+com/zuqi/api/dto/merchant/MerchantCategoryRequest$MerchantCategoryRequestBuilder.class
 com/zuqi/domain/inventory/Warehouse.class
 com/zuqi/api/dto/credit/CreditScoreResponse$CreditScoreResponseBuilder.class
 com/zuqi/api/controller/DistributorController.class
@@ -118,6 +120,7 @@ com/zuqi/service/impl/AuthenticationServiceImpl.class
 com/zuqi/domain/order/OrderStatus.class
 com/zuqi/domain/invoice/Invoice.class
 com/zuqi/domain/product/Product$ProductBuilder.class
+com/zuqi/api/dto/merchant/MerchantCategoryRequest.class
 com/zuqi/api/dto/merchant/MerchantCategoryResponse$MerchantCategoryResponseBuilder.class
 com/zuqi/service/PaymentService.class
 com/zuqi/util/SecurityUtils.class
@@ -152,6 +155,7 @@ com/zuqi/exception/ValidationException.class
 com/zuqi/api/dto/auth/ResetPasswordRequest.class
 com/zuqi/api/dto/payment/PaymentResponse$PaymentResponseBuilder.class
 com/zuqi/api/dto/order/OrderItemResponse.class
+com/zuqi/api/dto/common/PageResponse$PageResponseBuilder.class
 com/zuqi/repository/WarehouseRepository.class
 com/zuqi/domain/product/Product.class
 com/zuqi/service/impl/CreditServiceImpl.class

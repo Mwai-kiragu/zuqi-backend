@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<configuration scan="true">
+    <appender name="consoleAppender" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <Pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{35} - %msg %n</Pattern>
+        </encoder>
+    </appender>
+
+    <appender name="RollingFileAppender" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <File>logs/zuqi.log</File>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <!-- daily rollover -->
+            <FileNamePattern>logs/archive/zuqi.%d{yyyy-MM-dd_HH}.%i.log</FileNamePattern>
+
+            <maxFileSize>100MB</maxFileSize>
+        </rollingPolicy>
+
+        <encoder>
+            <Pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{35} - %msg %n</Pattern>
+        </encoder>
+    </appender>
+
+    <root>
+        <level value="INFO" />
+        <appender-ref ref="consoleAppender" />
+        <appender-ref ref="RollingFileAppender"/>
+    </root>
+
+</configuration>
