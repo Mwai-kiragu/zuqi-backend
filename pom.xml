@@ -21,6 +21,11 @@
         <java.version>21</java.version>
         <spring-ai.version>1.0.0-M4</spring-ai.version>
         <jjwt.version>0.12.6</jjwt.version>
+        <langchain4j.version>0.35.0</langchain4j.version>
+        <tribuo.version>4.3.2</tribuo.version>
+        <timefold.version>1.17.0</timefold.version>
+        <graphhopper.version>9.1</graphhopper.version>
+        <onnxruntime.version>1.19.2</onnxruntime.version>
     </properties>
 
     <dependencies>
@@ -71,6 +76,82 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-openai-spring-boot-starter</artifactId>
             <version>${spring-ai.version}</version>
+        </dependency>
+
+        <!-- Spring Batch for AI training pipelines -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-batch</artifactId>
+        </dependency>
+
+        <!-- LangChain4j for LLM Integration -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-ollama</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-open-ai</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-pgvector</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-embeddings</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+
+        <!-- Tribuo for Classical ML (XGBoost, Isolation Forest) -->
+        <dependency>
+            <groupId>org.tribuo</groupId>
+            <artifactId>tribuo-core</artifactId>
+            <version>${tribuo.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.tribuo</groupId>
+            <artifactId>tribuo-classification-xgboost</artifactId>
+            <version>${tribuo.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.tribuo</groupId>
+            <artifactId>tribuo-regression-xgboost</artifactId>
+            <version>${tribuo.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.tribuo</groupId>
+            <artifactId>tribuo-anomaly-libsvm</artifactId>
+            <version>${tribuo.version}</version>
+        </dependency>
+
+        <!-- Timefold for Route Optimization -->
+        <dependency>
+            <groupId>ai.timefold.solver</groupId>
+            <artifactId>timefold-solver-spring-boot-starter</artifactId>
+            <version>${timefold.version}</version>
+        </dependency>
+
+        <!-- GraphHopper for Road Network -->
+        <dependency>
+            <groupId>com.graphhopper</groupId>
+            <artifactId>graphhopper-core</artifactId>
+            <version>${graphhopper.version}</version>
+        </dependency>
+
+        <!-- ONNX Runtime (optional fallback for externally trained models) -->
+        <dependency>
+            <groupId>com.microsoft.onnxruntime</groupId>
+            <artifactId>onnxruntime</artifactId>
+            <version>${onnxruntime.version}</version>
         </dependency>
 
         <!-- Database -->
