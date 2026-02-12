@@ -93,6 +93,16 @@ p, FINANCE, /v1/credit/:id, GET
 p, SUPER_ADMIN, /v1/ai/system/*, .*
 p, ADMIN, /v1/ai/system/*, GET
 
+# AI Credit Scoring - SUPER_ADMIN, ADMIN, DISTRIBUTOR_ADMIN, FINANCE
+p, SUPER_ADMIN, /v1/ai/credit/*, .*
+p, ADMIN, /v1/ai/credit/*, .*
+p, DISTRIBUTOR_ADMIN, /v1/ai/credit/evaluate/:id, POST
+p, DISTRIBUTOR_ADMIN, /v1/ai/credit/evaluations/:id, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/credit/score/:id, GET
+p, FINANCE, /v1/ai/credit/evaluate/:id, POST
+p, FINANCE, /v1/ai/credit/evaluations/:id, GET
+p, FINANCE, /v1/ai/credit/score/:id, GET
+
 # DRIVER - Delivery operations
 p, DRIVER, /v1/deliveries, GET
 p, DRIVER, /v1/deliveries/:id, GET|PUT|PATCH
