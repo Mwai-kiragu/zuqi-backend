@@ -69,6 +69,9 @@ public class RedisConfig {
         // Merchant payment trends - 24 hour TTL for distress prediction features
         cacheConfigurations.put("merchantPaymentTrends", defaultConfig.entryTtl(Duration.ofHours(24)));
 
+        // Demand features - 24 hour TTL, refreshed nightly by batch job
+        cacheConfigurations.put("demandFeatures", defaultConfig.entryTtl(Duration.ofHours(24)));
+
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)
                 .withInitialCacheConfigurations(cacheConfigurations)
