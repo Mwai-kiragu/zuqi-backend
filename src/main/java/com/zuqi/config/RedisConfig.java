@@ -75,6 +75,9 @@ public class RedisConfig {
         // Inventory features - 6 hour TTL for shrinkage detection and stockout prediction
         cacheConfigurations.put("inventoryFeatures", defaultConfig.entryTtl(Duration.ofHours(6)));
 
+        // Sales rep features - 24 hour TTL for performance tracking
+        cacheConfigurations.put("salesRepFeatures", defaultConfig.entryTtl(Duration.ofHours(24)));
+
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)
                 .withInitialCacheConfigurations(cacheConfigurations)
