@@ -72,6 +72,9 @@ public class RedisConfig {
         // Demand features - 24 hour TTL, refreshed nightly by batch job
         cacheConfigurations.put("demandFeatures", defaultConfig.entryTtl(Duration.ofHours(24)));
 
+        // Inventory features - 6 hour TTL for shrinkage detection and stockout prediction
+        cacheConfigurations.put("inventoryFeatures", defaultConfig.entryTtl(Duration.ofHours(6)));
+
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)
                 .withInitialCacheConfigurations(cacheConfigurations)
