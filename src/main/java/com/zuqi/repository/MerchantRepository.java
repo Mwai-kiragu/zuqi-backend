@@ -83,4 +83,9 @@ public interface MerchantRepository extends JpaRepository<Merchant, UUID>, JpaSp
 
     @Query("SELECT COUNT(m) FROM Merchant m WHERE m.active = true AND m.createdAt >= :startDate")
     long countNewMerchantsFromDateAll(@Param("startDate") java.time.LocalDateTime startDate);
+
+    /**
+     * Find all merchants for a distributor (for batch operations).
+     */
+    List<Merchant> findByDistributorId(UUID distributorId);
 }
