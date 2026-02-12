@@ -1,6 +1,8 @@
 package com.zuqi.ai.event.handler;
 
+import com.zuqi.ai.credit.CreditScoringOrchestrator;
 import com.zuqi.ai.event.MerchantCreatedEvent;
+import com.zuqi.ai.service.MerchantEmbeddingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -15,15 +17,15 @@ import org.springframework.stereotype.Component;
  * - Merchant embedding generation for RAG
  * - Onboarding workflow automation
  *
- * Blueprint reference: plan.md Section 7.1 - Credit Risk Scoring
+ * Blueprint reference: implementation_plan.md Phase 2 Task 2.7
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class MerchantCreditEventHandler {
 
-    // TODO: Inject CreditScoringService when implemented in Phase 2
-    // TODO: Inject MerchantEmbeddingService when implemented in Phase 2
+    private final CreditScoringOrchestrator creditScoringOrchestrator;
+    private final MerchantEmbeddingService merchantEmbeddingService;
 
     @Async
     @EventListener
@@ -32,15 +34,18 @@ public class MerchantCreditEventHandler {
                 event.merchantId(), event.businessName(), event.distributorId());
 
         try {
-            // TODO Phase 2: Perform initial credit risk evaluation
-            // creditScoringService.evaluateNewMerchant(event.merchantId());
+            // Step 1: Generate merchant embedding for RAG
+            log.debug("Generating embedding for new merchant {}", event.merchantId());
+            merchantEmbeddingService.embedMerchant(event.merchantId());
 
-            // TODO Phase 2: Generate merchant embedding for RAG
-            // merchantEmbeddingService.generateEmbedding(event.merchantId());
+            // Step 2: Perform initial credit risk evaluation
+            log.debug("Evaluating credit for new merchant {}", event.merchantId());
+            creditScoringOrchestrator.evaluateMerchant(event.merchantId());
 
-            log.debug("Merchant AI processing completed for merchant {}", event.merchantId());
+            log.info("Merchant AI processing completed for merchant {}", event.merchantId());
         } catch (Exception e) {
-            log.error("Failed to process merchant AI operations for merchant {}", event.merchantId(), e);
+            log.error("Failed to process merchant AI operations for merchant {}: {}",
+                    event.merchantId(), e.getMessage(), e);
             // Don't rethrow - event processing failures should not break the transaction
         }
     }
