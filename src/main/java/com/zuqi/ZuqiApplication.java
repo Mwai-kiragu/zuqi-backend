@@ -9,9 +9,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 
 import static org.springframework.data.web.config.EnableSpringDataWebSupport.PageSerializationMode.VIA_DTO;
 
-@SpringBootApplication(exclude = {
-        org.springframework.ai.autoconfigure.openai.OpenAiAutoConfiguration.class
-})
+@SpringBootApplication
 @EnableJpaAuditing
 @EnableCaching
 @EnableAsync

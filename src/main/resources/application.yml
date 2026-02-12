@@ -76,14 +76,17 @@ casbin:
   model-path: casbin/model.conf
   use-database: true  # Use database-backed policies (casbin_rule table)
 
-# Spring AI Configuration
-spring.ai:
-  openai:
-    api-key: ${OPENAI_API_KEY:}
-    chat:
-      options:
-        model: gpt-4
-        temperature: 0.7
+# LangChain4j Ollama Configuration 
+langchain4j:
+  ollama:
+    base-url: http://192.168.2.17:11434
+    chat-model:
+      model-name: qwen2.5:32b
+      temperature: 0.1  # Low for consistency in credit scoring
+      timeout: 30s
+    embedding-model:
+      model-name: all-minilm-l6-v2
+      timeout: 30s
 
 # OpenAPI/Swagger Configuration
 springdoc:
