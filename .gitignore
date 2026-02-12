@@ -24,3 +24,11 @@ Thumbs.db
 
 # Redis
 dump.rdb
+
+# Markdown files - ignore all except core documentation
+*.md
+!ai.md
+!CLAUDE.md
+!implementation_plan.md
+!plan.md
+!README.md
