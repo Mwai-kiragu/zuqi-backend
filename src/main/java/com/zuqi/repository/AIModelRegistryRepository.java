@@ -33,4 +33,8 @@ public interface AIModelRegistryRepository extends JpaRepository<AIModelRegistry
     List<AIModelRegistry> findByDistributorAndStatus(
             @Param("distributorId") UUID distributorId,
             @Param("status") ModelStatus status);
+
+    long countByStatus(ModelStatus status);
+
+    Optional<AIModelRegistry> findByModelNameAndStatus(String modelName, ModelStatus status);
 }

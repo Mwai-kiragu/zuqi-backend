@@ -10,11 +10,13 @@ import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
+import com.zuqi.ai.event.OrderCreatedEvent;
 import com.zuqi.service.InvoiceService;
 import com.zuqi.service.OrderService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -43,6 +45,7 @@ public class OrderServiceImpl implements OrderService {
     private final UserRepository userRepository;
     private final SecurityUtils securityUtils;
     private final InvoiceService invoiceService;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public Page<OrderResponse> getAllOrders(Pageable pageable) {
@@ -217,6 +220,9 @@ public class OrderServiceImpl implements OrderService {
             // Don't fail the order creation if invoice creation fails
         }
 
+        // Publish AI event for data quality validation and demand forecasting
+        publishOrderCreatedEvent(order);
+
         log.info("Order created successfully: {}", order.getOrderNumber());
         return OrderResponse.fromEntity(order);
     }
@@ -374,5 +380,29 @@ public class OrderServiceImpl implements OrderService {
         if (!valid) {
             throw new ValidationException("Invalid status transition from " + from + " to " + to);
         }
+    }
+
+    private void publishOrderCreatedEvent(Order order) {
+        List<OrderCreatedEvent.OrderItem> eventItems = order.getItems().stream()
+                .map(item -> new OrderCreatedEvent.OrderItem(
+                        item.getProduct().getId(),
+                        item.getQuantity().intValue(),
+                        item.getUnitPrice(),
+                        item.getTotalAmount()
+                ))
+                .toList();
+
+        OrderCreatedEvent event = new OrderCreatedEvent(
+                order.getId(),
+                order.getMerchant().getId(),
+                order.getSalesRep() != null ? order.getSalesRep().getId() : null,
+                order.getDistributor().getId(),
+                order.getTotalAmount(),
+                eventItems,
+                order.getCreatedAt(),
+                order.getOrderType().name()
+        );
+        eventPublisher.publishEvent(event);
+        log.debug("Published OrderCreatedEvent for order {}", order.getId());
     }
 }

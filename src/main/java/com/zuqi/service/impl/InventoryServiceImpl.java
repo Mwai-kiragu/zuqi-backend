@@ -10,10 +10,12 @@ import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
+import com.zuqi.ai.event.StockAdjustedEvent;
 import com.zuqi.service.InventoryService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -38,6 +40,7 @@ public class InventoryServiceImpl implements InventoryService {
     private final DistributorRepository distributorRepository;
     private final UserRepository userRepository;
     private final SecurityUtils securityUtils;
+    private final ApplicationEventPublisher eventPublisher;
 
 
     @Override
@@ -83,6 +86,8 @@ public class InventoryServiceImpl implements InventoryService {
                         .quantity(BigDecimal.ZERO)
                         .reservedQuantity(BigDecimal.ZERO)
                         .build());
+
+        BigDecimal previousQuantity = stock.getQuantity();
 
         // Calculate new quantity based on movement type
         BigDecimal newQuantity;
@@ -130,6 +135,9 @@ public class InventoryServiceImpl implements InventoryService {
         log.info("Stock adjusted - Warehouse: {}, Product: {}, Type: {}, Qty: {}, New Balance: {}",
                 warehouse.getName(), product.getName(), request.getMovementType(),
                 request.getQuantity(), newQuantity);
+
+        // Publish AI event for shrinkage detection and stockout prediction
+        publishStockAdjustedEvent(savedStock, previousQuantity, request);
 
         return mapToStockResponse(savedStock);
     }
@@ -417,5 +425,22 @@ public class InventoryServiceImpl implements InventoryService {
                 .createdByName(movement.getCreatedBy() != null ? movement.getCreatedBy().getFullName() : null)
                 .createdAt(movement.getCreatedAt())
                 .build();
+    }
+
+    private void publishStockAdjustedEvent(Stock stock, BigDecimal previousQuantity, StockAdjustmentRequest request) {
+        StockAdjustedEvent event = new StockAdjustedEvent(
+                stock.getId(),
+                stock.getWarehouse().getId(),
+                stock.getProduct().getId(),
+                stock.getWarehouse().getDistributor().getId(),
+                previousQuantity,
+                stock.getQuantity(),
+                request.getQuantity(),
+                request.getMovementType().name(),
+                request.getNotes(),
+                LocalDateTime.now()
+        );
+        eventPublisher.publishEvent(event);
+        log.debug("Published StockAdjustedEvent for stock {}", stock.getId());
     }
 }

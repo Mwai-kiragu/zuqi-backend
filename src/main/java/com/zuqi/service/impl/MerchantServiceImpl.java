@@ -14,10 +14,12 @@ import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.MerchantCategoryRepository;
 import com.zuqi.repository.MerchantRepository;
 import com.zuqi.repository.UserRepository;
+import com.zuqi.ai.event.MerchantCreatedEvent;
 import com.zuqi.service.MerchantService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -36,6 +38,7 @@ public class MerchantServiceImpl implements MerchantService {
     private final DistributorRepository distributorRepository;
     private final UserRepository userRepository;
     private final SecurityUtils securityUtils;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional(readOnly = true)
@@ -159,6 +162,9 @@ public class MerchantServiceImpl implements MerchantService {
 
         Merchant savedMerchant = merchantRepository.save(merchant);
         log.info("Merchant created successfully with ID: {}", savedMerchant.getId());
+
+        // Publish AI event for credit risk evaluation and embedding generation
+        publishMerchantCreatedEvent(savedMerchant);
 
         return MerchantResponse.fromEntity(savedMerchant);
     }
@@ -397,5 +403,20 @@ public class MerchantServiceImpl implements MerchantService {
     public List<String> getDistinctCities() {
         log.debug("Fetching distinct cities");
         return merchantRepository.findDistinctCities();
+    }
+
+    private void publishMerchantCreatedEvent(Merchant merchant) {
+        MerchantCreatedEvent event = new MerchantCreatedEvent(
+                merchant.getId(),
+                merchant.getDistributor() != null ? merchant.getDistributor().getId() : null,
+                merchant.getBusinessName(),
+                merchant.getPhone(),
+                merchant.getAddress(),
+                merchant.getCategory() != null ? merchant.getCategory().getId() : null,
+                merchant.getAssignedSalesRep() != null ? merchant.getAssignedSalesRep().getId() : null,
+                merchant.getCreatedAt()
+        );
+        eventPublisher.publishEvent(event);
+        log.debug("Published MerchantCreatedEvent for merchant {}", merchant.getId());
     }
 }

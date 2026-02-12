@@ -10,10 +10,12 @@ import com.zuqi.domain.payment.PaymentStatus;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.repository.*;
+import com.zuqi.ai.event.PaymentRecordedEvent;
 import com.zuqi.service.PaymentService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -38,6 +40,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final MerchantRepository merchantRepository;
     private final DistributorRepository distributorRepository;
     private final SecurityUtils securityUtils;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public Page<PaymentResponse> getAllPayments(Pageable pageable) {
@@ -172,6 +175,9 @@ public class PaymentServiceImpl implements PaymentService {
             updateOrderPaidAmount(order);
         }
 
+        // Publish AI event for payment anomaly detection
+        publishPaymentRecordedEvent(payment);
+
         log.info("Payment created successfully: {}", payment.getPaymentNumber());
         return PaymentResponse.fromEntity(payment);
     }
@@ -195,6 +201,11 @@ public class PaymentServiceImpl implements PaymentService {
 
         payment = paymentRepository.save(payment);
         log.info("Payment {} status updated to {}", payment.getPaymentNumber(), status);
+
+        // Publish AI event when payment is completed
+        if (status == PaymentStatus.COMPLETED) {
+            publishPaymentRecordedEvent(payment);
+        }
 
         return PaymentResponse.fromEntity(payment);
     }
@@ -272,5 +283,20 @@ public class PaymentServiceImpl implements PaymentService {
         }
 
         orderRepository.save(order);
+    }
+
+    private void publishPaymentRecordedEvent(Payment payment) {
+        PaymentRecordedEvent event = new PaymentRecordedEvent(
+                payment.getId(),
+                payment.getOrder() != null ? payment.getOrder().getId() : null,
+                payment.getMerchant().getId(),
+                payment.getDistributor().getId(),
+                payment.getAmount(),
+                payment.getPaymentMethod() != null ? payment.getPaymentMethod().getName() : "UNKNOWN",
+                payment.getCreatedAt(),
+                payment.getStatus().name()
+        );
+        eventPublisher.publishEvent(event);
+        log.debug("Published PaymentRecordedEvent for payment {}", payment.getId());
     }
 }

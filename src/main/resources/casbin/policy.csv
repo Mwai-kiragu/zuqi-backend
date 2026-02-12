@@ -89,6 +89,10 @@ p, FINANCE, /v1/reports/:id, GET
 p, FINANCE, /v1/credit, GET
 p, FINANCE, /v1/credit/:id, GET
 
+# AI System Health - SUPER_ADMIN and ADMIN only
+p, SUPER_ADMIN, /v1/ai/system/*, .*
+p, ADMIN, /v1/ai/system/*, GET
+
 # DRIVER - Delivery operations
 p, DRIVER, /v1/deliveries, GET
 p, DRIVER, /v1/deliveries/:id, GET|PUT|PATCH
