@@ -19,4 +19,8 @@ logs/
 .DS_Store
 Thumbs.db
 
-CLAUDE.md
+# Claude Code
+.claude/
+
+# Redis
+dump.rdb
