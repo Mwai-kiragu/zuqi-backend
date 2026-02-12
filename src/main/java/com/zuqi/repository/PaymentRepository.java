@@ -68,4 +68,10 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     // Global queries for SUPER_ADMIN/ADMIN (no distributor filter)
     @Query("SELECT COUNT(p) FROM Payment p WHERE p.reconciled = false")
     long countAllUnreconciledPayments();
+
+    // AI Feature Engineering - Historical queries
+    @Query("SELECT p FROM Payment p WHERE p.merchant.id = :merchantId AND p.createdAt < :asOfDate")
+    List<Payment> findByMerchantIdAndCreatedAtBefore(
+            @Param("merchantId") UUID merchantId,
+            @Param("asOfDate") LocalDateTime asOfDate);
 }

@@ -9,6 +9,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -45,4 +47,18 @@ public interface CreditLimitRepository extends JpaRepository<CreditLimit, UUID> 
     long countByDistributorIdAndStatus(
             @Param("distributorId") UUID distributorId,
             @Param("status") CreditLimitStatus status);
+
+    // AI Feature Engineering - Historical queries
+    @Query("SELECT cl FROM CreditLimit cl WHERE cl.merchant.id = :merchantId " +
+            "AND cl.status = 'ACTIVE' AND cl.createdAt < :asOfDate " +
+            "ORDER BY cl.createdAt DESC")
+    Optional<CreditLimit> findActiveLimitByMerchantId(
+            @Param("merchantId") UUID merchantId,
+            @Param("asOfDate") LocalDateTime asOfDate);
+
+    @Query("SELECT cl FROM CreditLimit cl WHERE cl.merchant.id = :merchantId " +
+            "AND cl.createdAt < :asOfDate ORDER BY cl.createdAt DESC")
+    List<CreditLimit> findByMerchantIdAndCreatedAtBefore(
+            @Param("merchantId") UUID merchantId,
+            @Param("asOfDate") LocalDateTime asOfDate);
 }

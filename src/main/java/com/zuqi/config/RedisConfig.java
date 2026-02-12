@@ -60,6 +60,9 @@ public class RedisConfig {
         // Embeddings - long TTL since they're deterministic and expensive
         cacheConfigurations.put("embeddings", defaultConfig.entryTtl(Duration.ofHours(24)));
 
+        // Merchant features - 24 hour TTL since feature computation is expensive
+        cacheConfigurations.put("merchantFeatures", defaultConfig.entryTtl(Duration.ofHours(24)));
+
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)
                 .withInitialCacheConfigurations(cacheConfigurations)
