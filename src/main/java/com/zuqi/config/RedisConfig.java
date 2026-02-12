@@ -63,6 +63,12 @@ public class RedisConfig {
         // Merchant features - 24 hour TTL since feature computation is expensive
         cacheConfigurations.put("merchantFeatures", defaultConfig.entryTtl(Duration.ofHours(24)));
 
+        // Payment features - 6 hour TTL for per-payment anomaly detection
+        cacheConfigurations.put("paymentFeatures", defaultConfig.entryTtl(Duration.ofHours(6)));
+
+        // Merchant payment trends - 24 hour TTL for distress prediction features
+        cacheConfigurations.put("merchantPaymentTrends", defaultConfig.entryTtl(Duration.ofHours(24)));
+
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)
                 .withInitialCacheConfigurations(cacheConfigurations)
