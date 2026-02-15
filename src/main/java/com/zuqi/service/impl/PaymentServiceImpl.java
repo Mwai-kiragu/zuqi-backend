@@ -89,7 +89,7 @@ public class PaymentServiceImpl implements PaymentService {
 
         return paymentRepository.findByFilters(
                 effectiveDistributorId,
-                status,
+                status != null ? status.name() : null,
                 merchantId,
                 reconciled,
                 startDateTime,

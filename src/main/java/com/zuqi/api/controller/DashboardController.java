@@ -24,9 +24,9 @@ public class DashboardController {
     private final DashboardService dashboardService;
 
     @GetMapping("/stats")
-    @Operation(summary = "Get dashboard stats", description = "Retrieves role-specific dashboard statistics")
+    @Operation(summary = "Get dashboard stats", description = "Retrieves role-specific dashboard statistics. If distributorId is null, returns aggregated data (admin only)")
     public ResponseEntity<ApiResponse<DashboardStatsResponse>> getStats(
-            @Parameter(description = "Distributor ID") @RequestParam UUID distributorId) {
+            @Parameter(description = "Distributor ID (optional for admins)") @RequestParam(required = false) UUID distributorId) {
 
         DashboardStatsResponse stats = dashboardService.getStats(distributorId, null);
         return ResponseEntity.ok(ApiResponse.success(stats));
@@ -35,7 +35,7 @@ public class DashboardController {
     @GetMapping("/orders/recent")
     @Operation(summary = "Get recent orders", description = "Retrieves recent orders for dashboard display")
     public ResponseEntity<ApiResponse<List<RecentOrderResponse>>> getRecentOrders(
-            @Parameter(description = "Distributor ID") @RequestParam UUID distributorId,
+            @Parameter(description = "Distributor ID (optional for admins)") @RequestParam(required = false) UUID distributorId,
             @Parameter(description = "Number of orders to return") @RequestParam(defaultValue = "10") int limit) {
 
         List<RecentOrderResponse> orders = dashboardService.getRecentOrders(distributorId, null, limit);
@@ -45,7 +45,7 @@ public class DashboardController {
     @GetMapping("/merchants/top")
     @Operation(summary = "Get top merchants", description = "Retrieves top performing merchants by revenue")
     public ResponseEntity<ApiResponse<List<TopMerchantResponse>>> getTopMerchants(
-            @Parameter(description = "Distributor ID") @RequestParam UUID distributorId,
+            @Parameter(description = "Distributor ID (optional for admins)") @RequestParam(required = false) UUID distributorId,
             @Parameter(description = "Number of merchants to return") @RequestParam(defaultValue = "5") int limit) {
 
         List<TopMerchantResponse> merchants = dashboardService.getTopMerchants(distributorId, limit);
@@ -55,7 +55,7 @@ public class DashboardController {
     @GetMapping("/revenue/chart")
     @Operation(summary = "Get revenue chart", description = "Retrieves revenue data for charting")
     public ResponseEntity<ApiResponse<RevenueChartData>> getRevenueChart(
-            @Parameter(description = "Distributor ID") @RequestParam UUID distributorId,
+            @Parameter(description = "Distributor ID (optional for admins)") @RequestParam(required = false) UUID distributorId,
             @Parameter(description = "Start date") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @Parameter(description = "End date") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
 

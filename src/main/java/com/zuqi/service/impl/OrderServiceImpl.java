@@ -95,10 +95,10 @@ public class OrderServiceImpl implements OrderService {
 
         return orderRepository.findByFilters(
                 effectiveDistributorId,
-                status,
+                status != null ? status.name() : null,
                 merchantId,
                 salesRepId,
-                paymentStatus,
+                paymentStatus != null ? paymentStatus.name() : null,
                 startDateTime,
                 endDateTime,
                 pageable

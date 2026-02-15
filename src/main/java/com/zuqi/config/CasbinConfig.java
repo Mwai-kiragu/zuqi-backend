@@ -1,13 +1,16 @@
 package com.zuqi.config;
 
+import lombok.extern.slf4j.Slf4j;
 import org.casbin.jcasbin.main.Enforcer;
 import org.casbin.jcasbin.model.Model;
 import org.casbin.jcasbin.persist.Adapter;
 import org.casbin.jcasbin.persist.file_adapter.FileAdapter;
 import org.casbin.adapter.JDBCAdapter;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.event.EventListener;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.util.StreamUtils;
 
@@ -16,6 +19,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
 @Configuration
+@Slf4j
 public class CasbinConfig {
 
     @Value("${casbin.model-path:casbin/model.conf}")
@@ -62,4 +66,23 @@ public class CasbinConfig {
 
         return enforcer;
     }
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void reloadPoliciesOnStartup() {
+        try {
+            Enforcer enforcer = applicationContext.getBean(Enforcer.class);
+            enforcer.loadPolicy();
+            log.info("Casbin policies reloaded after application startup. Total policies: {}",
+                    enforcer.getPolicy().size());
+
+            // Log SUPER_ADMIN policies for debugging
+            var superAdminPolicies = enforcer.getFilteredPolicy(0, "SUPER_ADMIN");
+            log.info("SUPER_ADMIN policies loaded: {}", superAdminPolicies);
+        } catch (Exception e) {
+            log.error("Failed to reload Casbin policies on startup", e);
+        }
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.context.ApplicationContext applicationContext;
 }

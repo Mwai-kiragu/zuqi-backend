@@ -27,21 +27,22 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
 
     Page<Invoice> findByDistributorIdAndStatus(UUID distributorId, InvoiceStatus status, Pageable pageable);
 
-    @Query(value = "SELECT i FROM Invoice i WHERE " +
-           "(:distributorId IS NULL OR i.distributor.id = :distributorId) " +
-           "AND (:status IS NULL OR i.status = :status) " +
-           "AND (:merchantId IS NULL OR i.merchant.id = :merchantId) " +
-           "AND (:startDate IS NULL OR i.issueDate >= :startDate) " +
-           "AND (:endDate IS NULL OR i.issueDate <= :endDate)",
-           countQuery = "SELECT COUNT(i) FROM Invoice i WHERE " +
-           "(:distributorId IS NULL OR i.distributor.id = :distributorId) " +
-           "AND (:status IS NULL OR i.status = :status) " +
-           "AND (:merchantId IS NULL OR i.merchant.id = :merchantId) " +
-           "AND (:startDate IS NULL OR i.issueDate >= :startDate) " +
-           "AND (:endDate IS NULL OR i.issueDate <= :endDate)")
+    @Query(value = "SELECT * FROM invoices i WHERE " +
+           "(CAST(:distributorId AS UUID) IS NULL OR i.distributor_id = CAST(:distributorId AS UUID)) " +
+           "AND (:status IS NULL OR i.status = CAST(:status AS VARCHAR)) " +
+           "AND (CAST(:merchantId AS UUID) IS NULL OR i.merchant_id = CAST(:merchantId AS UUID)) " +
+           "AND (CAST(:startDate AS DATE) IS NULL OR i.issue_date >= CAST(:startDate AS DATE)) " +
+           "AND (CAST(:endDate AS DATE) IS NULL OR i.issue_date <= CAST(:endDate AS DATE))",
+           countQuery = "SELECT COUNT(*) FROM invoices i WHERE " +
+           "(CAST(:distributorId AS UUID) IS NULL OR i.distributor_id = CAST(:distributorId AS UUID)) " +
+           "AND (:status IS NULL OR i.status = CAST(:status AS VARCHAR)) " +
+           "AND (CAST(:merchantId AS UUID) IS NULL OR i.merchant_id = CAST(:merchantId AS UUID)) " +
+           "AND (CAST(:startDate AS DATE) IS NULL OR i.issue_date >= CAST(:startDate AS DATE)) " +
+           "AND (CAST(:endDate AS DATE) IS NULL OR i.issue_date <= CAST(:endDate AS DATE))",
+           nativeQuery = true)
     Page<Invoice> findByFilters(
             @Param("distributorId") UUID distributorId,
-            @Param("status") InvoiceStatus status,
+            @Param("status") String status,
             @Param("merchantId") UUID merchantId,
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate,

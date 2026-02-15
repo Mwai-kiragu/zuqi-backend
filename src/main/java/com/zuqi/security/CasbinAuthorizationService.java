@@ -16,7 +16,14 @@ public class CasbinAuthorizationService {
 
     public boolean enforce(String subject, String object, String action) {
         boolean allowed = enforcer.enforce(subject, object, action);
-        log.debug("Casbin enforce: sub={}, obj={}, act={}, allowed={}", subject, object, action, allowed);
+        if (!allowed) {
+            log.warn("Casbin DENIED: sub={}, obj={}, act={}", subject, object, action);
+            // Log available policies for this subject
+            var policies = enforcer.getFilteredPolicy(0, subject);
+            log.warn("Available policies for {}: {}", subject, policies);
+        } else {
+            log.debug("Casbin enforce: sub={}, obj={}, act={}, allowed={}", subject, object, action, allowed);
+        }
         return allowed;
     }
 

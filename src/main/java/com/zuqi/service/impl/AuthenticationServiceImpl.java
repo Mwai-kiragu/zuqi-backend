@@ -103,6 +103,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .email(savedUser.getEmail())
                 .fullName(savedUser.getFullName())
                 .roles(savedUser.getRoles().stream().map(r -> r.getName()).toList())
+                .distributorId(savedUser.getDistributorId())
+                .merchantId(savedUser.getMerchantId())
+                .phoneNumber(savedUser.getPhoneNumber())
                 .build();
     }
 
@@ -142,6 +145,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .roles(user.getRoles().stream().map(r -> r.getName()).toList())
+                .distributorId(user.getDistributorId())
+                .merchantId(user.getMerchantId())
+                .phoneNumber(user.getPhoneNumber())
                 .build();
     }
 
@@ -179,6 +185,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .roles(user.getRoles().stream().map(r -> r.getName()).toList())
+                .distributorId(user.getDistributorId())
+                .merchantId(user.getMerchantId())
+                .phoneNumber(user.getPhoneNumber())
                 .build();
     }
 

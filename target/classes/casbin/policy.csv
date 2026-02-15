@@ -4,11 +4,77 @@
 # SUPER_ADMIN - Full system access (highest level)
 p, SUPER_ADMIN, /*, .*
 p, SUPER_ADMIN, /v1/*, .*
+p, SUPER_ADMIN, /v1/roles, .*
+p, SUPER_ADMIN, /v1/roles/:id, .*
+p, SUPER_ADMIN, /v1/roles/:id/permissions, .*
+p, SUPER_ADMIN, /v1/roles/system, .*
+p, SUPER_ADMIN, /v1/roles/custom, .*
+p, SUPER_ADMIN, /v1/roles/name/:name, .*
+p, SUPER_ADMIN, /v1/permissions, .*
+p, SUPER_ADMIN, /v1/permissions/:id, .*
+p, SUPER_ADMIN, /v1/permissions/modules, .*
+p, SUPER_ADMIN, /v1/permissions/module/:module, .*
+p, SUPER_ADMIN, /v1/permissions/name/:name, .*
+p, SUPER_ADMIN, /v1/dashboard, .*
+p, SUPER_ADMIN, /v1/dashboard/stats, .*
+p, SUPER_ADMIN, /v1/dashboard/orders, .*
+p, SUPER_ADMIN, /v1/dashboard/merchants, .*
+p, SUPER_ADMIN, /v1/dashboard/products, .*
+p, SUPER_ADMIN, /v1/dashboard/revenue, .*
+p, SUPER_ADMIN, /v1/dashboard/top-products, .*
+p, SUPER_ADMIN, /v1/dashboard/top-merchants, .*
+p, SUPER_ADMIN, /v1/distributors, .*
+p, SUPER_ADMIN, /v1/distributors/:id, .*
+p, SUPER_ADMIN, /v1/users, .*
+p, SUPER_ADMIN, /v1/users/:id, .*
+p, SUPER_ADMIN, /v1/users/roles, .*
+p, SUPER_ADMIN, /v1/users/distributor/:id, .*
+p, SUPER_ADMIN, /v1/users/role/:role, .*
+p, SUPER_ADMIN, /v1/users/:id/reset-password, .*
+p, SUPER_ADMIN, /v1/users/:id/activate, .*
+p, SUPER_ADMIN, /v1/users/:id/deactivate, .*
 
 # ADMIN - Full access to all resources
 p, ADMIN, /*, .*
+p, ADMIN, /v1/roles, .*
+p, ADMIN, /v1/roles/:id, .*
+p, ADMIN, /v1/roles/:id/permissions, .*
+p, ADMIN, /v1/roles/system, .*
+p, ADMIN, /v1/roles/custom, .*
+p, ADMIN, /v1/roles/name/:name, .*
+p, ADMIN, /v1/permissions, .*
+p, ADMIN, /v1/permissions/:id, .*
+p, ADMIN, /v1/permissions/modules, .*
+p, ADMIN, /v1/permissions/module/:module, .*
+p, ADMIN, /v1/permissions/name/:name, .*
+p, ADMIN, /v1/dashboard, .*
+p, ADMIN, /v1/dashboard/stats, .*
+p, ADMIN, /v1/dashboard/orders, .*
+p, ADMIN, /v1/dashboard/merchants, .*
+p, ADMIN, /v1/dashboard/products, .*
+p, ADMIN, /v1/dashboard/revenue, .*
+p, ADMIN, /v1/dashboard/top-products, .*
+p, ADMIN, /v1/dashboard/top-merchants, .*
+p, ADMIN, /v1/distributors, .*
+p, ADMIN, /v1/distributors/:id, .*
+p, ADMIN, /v1/users, .*
+p, ADMIN, /v1/users/:id, .*
+p, ADMIN, /v1/users/roles, .*
+p, ADMIN, /v1/users/distributor/:id, .*
+p, ADMIN, /v1/users/role/:role, .*
+p, ADMIN, /v1/users/:id/reset-password, .*
+p, ADMIN, /v1/users/:id/activate, .*
+p, ADMIN, /v1/users/:id/deactivate, .*
 
 # DISTRIBUTOR_ADMIN - Manage their distributor's resources
+p, DISTRIBUTOR_ADMIN, /v1/dashboard, GET
+p, DISTRIBUTOR_ADMIN, /v1/dashboard/stats, GET
+p, DISTRIBUTOR_ADMIN, /v1/dashboard/orders, GET
+p, DISTRIBUTOR_ADMIN, /v1/dashboard/merchants, GET
+p, DISTRIBUTOR_ADMIN, /v1/dashboard/products, GET
+p, DISTRIBUTOR_ADMIN, /v1/dashboard/revenue, GET
+p, DISTRIBUTOR_ADMIN, /v1/dashboard/top-products, GET
+p, DISTRIBUTOR_ADMIN, /v1/dashboard/top-merchants, GET
 p, DISTRIBUTOR_ADMIN, /v1/roles, GET
 p, DISTRIBUTOR_ADMIN, /v1/roles/:id, GET
 p, DISTRIBUTOR_ADMIN, /v1/permissions, GET
@@ -116,5 +182,3 @@ g, ADMIN, DISTRIBUTOR_ADMIN
 g, DISTRIBUTOR_ADMIN, FINANCE
 g, DISTRIBUTOR_ADMIN, WAREHOUSE_MANAGER
 g, DISTRIBUTOR_ADMIN, SALES_REP
-
-wallet

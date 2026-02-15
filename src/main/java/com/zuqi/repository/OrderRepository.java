@@ -45,19 +45,27 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
             @Param("merchantId") UUID merchantId,
             Pageable pageable);
 
-    @Query("SELECT o FROM Order o WHERE o.distributor.id = :distributorId " +
-            "AND (:status IS NULL OR o.status = :status) " +
-            "AND (:merchantId IS NULL OR o.merchant.id = :merchantId) " +
-            "AND (:salesRepId IS NULL OR o.salesRep.id = :salesRepId) " +
-            "AND (:paymentStatus IS NULL OR o.paymentStatus = :paymentStatus) " +
-            "AND (:startDate IS NULL OR o.createdAt >= :startDate) " +
-            "AND (:endDate IS NULL OR o.createdAt <= :endDate)")
+    @Query(value = "SELECT * FROM orders o WHERE o.distributor_id = :distributorId " +
+            "AND (:status IS NULL OR o.status = CAST(:status AS VARCHAR)) " +
+            "AND (CAST(:merchantId AS UUID) IS NULL OR o.merchant_id = CAST(:merchantId AS UUID)) " +
+            "AND (CAST(:salesRepId AS UUID) IS NULL OR o.sales_rep_id = CAST(:salesRepId AS UUID)) " +
+            "AND (:paymentStatus IS NULL OR o.payment_status = CAST(:paymentStatus AS VARCHAR)) " +
+            "AND (CAST(:startDate AS TIMESTAMP) IS NULL OR o.created_at >= CAST(:startDate AS TIMESTAMP)) " +
+            "AND (CAST(:endDate AS TIMESTAMP) IS NULL OR o.created_at <= CAST(:endDate AS TIMESTAMP))",
+            countQuery = "SELECT COUNT(*) FROM orders o WHERE o.distributor_id = :distributorId " +
+            "AND (:status IS NULL OR o.status = CAST(:status AS VARCHAR)) " +
+            "AND (CAST(:merchantId AS UUID) IS NULL OR o.merchant_id = CAST(:merchantId AS UUID)) " +
+            "AND (CAST(:salesRepId AS UUID) IS NULL OR o.sales_rep_id = CAST(:salesRepId AS UUID)) " +
+            "AND (:paymentStatus IS NULL OR o.payment_status = CAST(:paymentStatus AS VARCHAR)) " +
+            "AND (CAST(:startDate AS TIMESTAMP) IS NULL OR o.created_at >= CAST(:startDate AS TIMESTAMP)) " +
+            "AND (CAST(:endDate AS TIMESTAMP) IS NULL OR o.created_at <= CAST(:endDate AS TIMESTAMP))",
+            nativeQuery = true)
     Page<Order> findByFilters(
             @Param("distributorId") UUID distributorId,
-            @Param("status") OrderStatus status,
+            @Param("status") String status,
             @Param("merchantId") UUID merchantId,
             @Param("salesRepId") UUID salesRepId,
-            @Param("paymentStatus") PaymentStatus paymentStatus,
+            @Param("paymentStatus") String paymentStatus,
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate,
             Pageable pageable);
