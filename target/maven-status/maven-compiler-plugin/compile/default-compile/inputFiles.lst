@@ -67,10 +67,17 @@
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/role/RoleResponse.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/user/ChangePasswordRequest.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/user/CreateUserRequest.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/user/DisableTwoFactorRequest.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/user/EnableTwoFactorRequest.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/user/EnableTwoFactorResponse.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/user/NotificationSettingsRequest.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/user/NotificationSettingsResponse.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/user/ResetPasswordRequest.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/user/SecuritySettingsResponse.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/user/UpdateProfileRequest.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/user/UpdateUserRequest.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/user/UserResponse.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/api/dto/user/VerifyTwoFactorRequest.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/config/AppConfig.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/config/AsyncConfig.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/config/CasbinConfig.java
@@ -104,7 +111,9 @@
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/domain/user/RefreshToken.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/domain/user/Role.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/domain/user/RoleName.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/domain/user/TwoFactorAuth.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/domain/user/User.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/domain/user/UserSettings.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/exception/AuthenticationException.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/exception/DuplicateResourceException.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/exception/GlobalExceptionHandler.java
@@ -129,7 +138,9 @@
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/repository/RoleRepository.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/repository/StockMovementRepository.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/repository/StockRepository.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/repository/TwoFactorAuthRepository.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/repository/UserRepository.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/repository/UserSettingsRepository.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/repository/WarehouseRepository.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/security/CasbinAuthorizationFilter.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/security/CasbinAuthorizationService.java
@@ -148,7 +159,9 @@
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/ProductService.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/ReportService.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/RoleService.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/TwoFactorAuthService.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/UserService.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/UserSettingsService.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/impl/AuthenticationServiceImpl.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/impl/CreditServiceImpl.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/impl/DashboardServiceImpl.java
@@ -162,6 +175,8 @@
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/impl/ProductServiceImpl.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/impl/ReportServiceImpl.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/impl/RoleServiceImpl.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/impl/TwoFactorAuthServiceImpl.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/impl/UserDetailsServiceImpl.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/impl/UserServiceImpl.java
+/Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/service/impl/UserSettingsServiceImpl.java
 /Users/onesmus/zuqi/zuqi-backend/src/main/java/com/zuqi/util/SecurityUtils.java

@@ -4,12 +4,21 @@ import com.zuqi.api.dto.ApiResponse;
 import com.zuqi.api.dto.common.DeactivateRequest;
 import com.zuqi.api.dto.user.ChangePasswordRequest;
 import com.zuqi.api.dto.user.CreateUserRequest;
+import com.zuqi.api.dto.user.DisableTwoFactorRequest;
+import com.zuqi.api.dto.user.EnableTwoFactorRequest;
+import com.zuqi.api.dto.user.EnableTwoFactorResponse;
+import com.zuqi.api.dto.user.NotificationSettingsRequest;
+import com.zuqi.api.dto.user.NotificationSettingsResponse;
 import com.zuqi.api.dto.user.ResetPasswordRequest;
+import com.zuqi.api.dto.user.SecuritySettingsResponse;
 import com.zuqi.api.dto.user.UpdateProfileRequest;
 import com.zuqi.api.dto.user.UpdateUserRequest;
 import com.zuqi.api.dto.user.UserResponse;
+import com.zuqi.api.dto.user.VerifyTwoFactorRequest;
 import com.zuqi.domain.user.User;
+import com.zuqi.service.TwoFactorAuthService;
 import com.zuqi.service.UserService;
+import com.zuqi.service.UserSettingsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -30,6 +39,8 @@ import java.util.UUID;
 public class UserController {
 
     private final UserService userService;
+    private final UserSettingsService userSettingsService;
+    private final TwoFactorAuthService twoFactorAuthService;
 
     @GetMapping
     @Operation(summary = "Get all users (ADMIN only)")
@@ -106,6 +117,76 @@ public class UserController {
 
         userService.changePassword(currentUser.getId(), request);
         return ResponseEntity.ok(ApiResponse.success("Password changed successfully"));
+    }
+
+    @GetMapping("/me/settings/notifications")
+    @Operation(summary = "Get current user notification settings")
+    public ResponseEntity<ApiResponse<NotificationSettingsResponse>> getNotificationSettings(
+            @AuthenticationPrincipal User currentUser) {
+
+        NotificationSettingsResponse settings = userSettingsService.getNotificationSettings(currentUser.getId());
+        return ResponseEntity.ok(ApiResponse.success("Notification settings retrieved successfully", settings));
+    }
+
+    @PutMapping("/me/settings/notifications")
+    @Operation(summary = "Update current user notification settings")
+    public ResponseEntity<ApiResponse<NotificationSettingsResponse>> updateNotificationSettings(
+            @AuthenticationPrincipal User currentUser,
+            @Valid @RequestBody NotificationSettingsRequest request) {
+
+        NotificationSettingsResponse settings = userSettingsService.updateNotificationSettings(currentUser.getId(), request);
+        return ResponseEntity.ok(ApiResponse.success("Notification settings updated successfully", settings));
+    }
+
+    @GetMapping("/me/settings/security")
+    @Operation(summary = "Get current user security settings")
+    public ResponseEntity<ApiResponse<SecuritySettingsResponse>> getSecuritySettings(
+            @AuthenticationPrincipal User currentUser) {
+
+        SecuritySettingsResponse settings = userSettingsService.getSecuritySettings(currentUser.getId());
+        return ResponseEntity.ok(ApiResponse.success("Security settings retrieved successfully", settings));
+    }
+
+    @PostMapping("/me/two-factor/enable")
+    @Operation(summary = "Initialize two-factor authentication setup")
+    public ResponseEntity<ApiResponse<EnableTwoFactorResponse>> enableTwoFactor(
+            @AuthenticationPrincipal User currentUser,
+            @Valid @RequestBody EnableTwoFactorRequest request) {
+
+        EnableTwoFactorResponse response = twoFactorAuthService.initializeTwoFactor(currentUser.getId(), request);
+        return ResponseEntity.ok(ApiResponse.success("Two-factor authentication initialized", response));
+    }
+
+    @PostMapping("/me/two-factor/verify")
+    @Operation(summary = "Verify and complete two-factor authentication setup")
+    public ResponseEntity<ApiResponse<Void>> verifyTwoFactor(
+            @AuthenticationPrincipal User currentUser,
+            @Valid @RequestBody VerifyTwoFactorRequest request) {
+
+        boolean verified = twoFactorAuthService.verifyAndEnable(currentUser.getId(), request.getCode());
+        if (verified) {
+            return ResponseEntity.ok(ApiResponse.success("Two-factor authentication enabled successfully"));
+        }
+        return ResponseEntity.badRequest().body(ApiResponse.error("Invalid verification code"));
+    }
+
+    @PostMapping("/me/two-factor/disable")
+    @Operation(summary = "Disable two-factor authentication")
+    public ResponseEntity<ApiResponse<Void>> disableTwoFactor(
+            @AuthenticationPrincipal User currentUser,
+            @Valid @RequestBody DisableTwoFactorRequest request) {
+
+        twoFactorAuthService.disableTwoFactor(currentUser.getId(), request.getCurrentPassword());
+        return ResponseEntity.ok(ApiResponse.success("Two-factor authentication disabled successfully"));
+    }
+
+    @PostMapping("/me/two-factor/backup-codes/regenerate")
+    @Operation(summary = "Regenerate backup codes for two-factor authentication")
+    public ResponseEntity<ApiResponse<java.util.List<String>>> regenerateBackupCodes(
+            @AuthenticationPrincipal User currentUser) {
+
+        java.util.List<String> backupCodes = twoFactorAuthService.regenerateBackupCodes(currentUser.getId());
+        return ResponseEntity.ok(ApiResponse.success("Backup codes regenerated successfully", backupCodes));
     }
 
     @GetMapping("/{id}")
