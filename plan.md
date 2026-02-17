@@ -45,10 +45,11 @@ This document defines the complete system architecture for integrating AI capabi
 
 | Layer | Technology | Version | Purpose |
 |---|---|---|---|
-| LLM Framework | LangChain4j | Latest stable | LLM chains, agents, RAG, structured output |
-| Local LLM Runtime | Ollama | Latest stable | Hosts local open-source LLMs |
-| Local LLM Model | Qwen 2.5 32B / Mixtral 8x7B | Latest | Credit scoring, suggestions, reporting |
-| Cloud LLM (fallback) | GPT-4 / Claude API | Latest | Complex agent reasoning, fallback |
+| LLM Framework | LangChain4j | 0.35.0 | LLM chains, agents, RAG, structured output |
+| Local LLM Runtime | Ollama | Running at http://192.168.2.17:11434 | Hosts local open-source LLMs |
+| Local LLM Model | qwen2.5-coder:32b | Active | Credit scoring, suggestions, reporting |
+| Embedding Model | nomic-embed-text | Active | RAG embeddings (768 dimensions) |
+| Cloud LLM (fallback) | **DISABLED** | N/A | **Local-only deployment - no cloud fallback** |
 | Classical ML | Tribuo (Oracle) | Latest stable | XGBoost, Isolation Forest, regression, classification |
 | Optimization Solver | Timefold (OptaPlanner) | Latest stable | Vehicle routing optimization |
 | Road Network | GraphHopper | Latest stable | Distance/time matrix for Kenya road network |
@@ -125,7 +126,7 @@ zuqi-backend/
 com.zuqi/
 ├── ai/
 │   ├── config/                    # AI module configuration
-│   │   ├── LangChain4jConfig      # LLM provider configuration (Ollama/OpenAI)
+│   │   ├── LangChain4jConfig      # LLM provider configuration (local Ollama only)
 │   │   ├── TribuoConfig            # ML model loader and registry config
 │   │   ├── TimefoldConfig           # Solver configuration
 │   │   └── GraphHopperConfig        # Road network configuration
@@ -549,8 +550,11 @@ TRAINING → EVALUATING → ACTIVE → RETIRED
 - Input: `MerchantCreditProfile` (computed by `CreditFeatureBuilder`)
 - Peer context: similar merchants retrieved via pgvector embedding similarity
 - Output: `CreditEvaluation` POJO — grade (A-F), recommended_limit (KES), confidence (0-1), risk_factors (List<String>), reasoning (String)
-- LLM provider: Ollama (Qwen 2.5 32B) primary, cloud GPT-4/Claude fallback
+- LLM provider: **Local-only Ollama** at http://192.168.2.17:11434 (no cloud fallback)
+- Model: qwen2.5-coder:32b (32 billion parameters)
+- Embedding model: nomic-embed-text (768 dimensions)
 - Temperature: 0.1 (low for consistency)
+- Timeout: 30 seconds
 - Protected by Resilience4j circuit breaker
 
 **CreditClassifier** (Tribuo XGBoost — Phase 2+)
@@ -759,8 +763,8 @@ TRAINING → EVALUATING → ACTIVE → RETIRED
 
 **RecommendationAgent**
 - Technology: LangChain4j Agent with tool-use capability
-- LLM: Ollama (Qwen 2.5 32B) or cloud GPT-4/Claude for higher quality
-- Max tool calls per run: 10 (prevents runaway costs)
+- LLM: **Local-only Ollama** (qwen2.5-coder:32b) at http://192.168.2.17:11434
+- Max tool calls per run: 10 (prevents excessive computation)
 - System prompt: defines role as operational advisor for FMCG distributor
 
 **Agent Tools** (Java methods exposed to LLM via LangChain4j `@Tool` annotation):
@@ -887,29 +891,29 @@ All training runs scheduled during off-peak hours (2:00-5:00 AM EAT).
 ### 8.1 Provider Strategy
 
 ```
-Primary:    Ollama (localhost) → Qwen 2.5 32B or Mixtral 8x7B
-Fallback:   Cloud API → GPT-4 or Claude
+Primary:    **Local-only Ollama** at http://192.168.2.17:11434 → qwen2.5-coder:32b
+Fallback:   **DISABLED** - No cloud API fallback (local-only deployment)
 ```
 
-LangChain4j model configuration supports multiple providers. Each AI Service specifies its preferred provider with automatic fallback.
+LangChain4j model configuration uses single local provider. All AI services use the same Ollama instance for data privacy and cost control.
 
 ### 8.2 LLM Usage by Module
 
-| Module | Primary LLM | Fallback | Temperature | Max Tokens |
+| Module | LLM | Temperature | Timeout | Max Tokens |
 |---|---|---|---|---|
-| Credit Scoring | Ollama (Qwen 2.5 32B) | GPT-4 / Claude | 0.1 | 1000 |
-| Credit Explainer | Ollama (Qwen 2.5 32B) | GPT-4 / Claude | 0.2 | 500 |
-| Order Suggestions | Ollama (Qwen 2.5 32B) | GPT-4 / Claude | 0.3 | 300 |
-| Recommendation Agent | Cloud GPT-4 / Claude | Ollama (Qwen 2.5 32B) | 0.4 | 2000 |
-| Compliance Reporting | Ollama (Qwen 2.5 32B) | GPT-4 / Claude | 0.3 | 3000 |
+| Credit Scoring | Ollama (qwen2.5-coder:32b) | 0.1 | 30s | 1000 |
+| Credit Explainer | Ollama (qwen2.5-coder:32b) | 0.2 | 30s | 500 |
+| Order Suggestions | Ollama (qwen2.5-coder:32b) | 0.3 | 30s | 300 |
+| Recommendation Agent | Ollama (qwen2.5-coder:32b) | 0.4 | 30s | 2000 |
+| Compliance Reporting | Ollama (qwen2.5-coder:32b) | 0.3 | 30s | 3000 |
 
-Note: Recommendation Agent defaults to cloud for higher reasoning quality. All others default to local.
+Note: All modules use the same local Ollama instance for consistency and data privacy.
 
 ### 8.3 RAG Configuration
 
-- Embedding model: Ollama (nomic-embed-text or similar) for local embedding generation
+- Embedding model: **nomic-embed-text** via Ollama at http://192.168.2.17:11434
 - Embedding storage: pgvector extension in existing PostgreSQL
-- Embedding dimensions: 768 (dependent on chosen embedding model)
+- Embedding dimensions: **768** (nomic-embed-text standard output)
 - Similarity search: cosine similarity via pgvector `<=>` operator
 - RAG contexts:
   - Credit scoring: similar merchant profiles (5 nearest neighbors)
@@ -919,10 +923,10 @@ Note: Recommendation Agent defaults to cloud for higher reasoning quality. All o
 ### 8.4 Resilience
 
 - All LLM calls wrapped in Resilience4j circuit breakers
-- Circuit breaker config: open after 5 failures in 60 seconds, half-open after 30 seconds
-- Timeout: 30 seconds per LLM call (local), 60 seconds (cloud)
-- Retry: 2 retries with exponential backoff
-- Fallback chain: local LLM → cloud LLM → graceful degradation (return no AI result)
+- Circuit breaker config: sliding window size 10, 50% failure threshold, 30s wait in open state
+- Timeout: 30 seconds per LLM call
+- Retry: 3 attempts with 1s wait, exponential backoff multiplier 2
+- Fallback: graceful degradation (return no AI result on complete failure)
 
 ### 8.5 Fine-Tuning Path (Future)
 
@@ -1120,8 +1124,8 @@ zuqi_ai_alerts_resolution_time_hours{alert_type}
 │                                                      │
 │  ┌─────────────────┐    ┌──────────────────────────┐ │
 │  │  Zuqi Spring     │    │  Ollama                  │ │
-│  │  Boot App        │───▶│  (Qwen 2.5 32B)         │ │
-│  │  (AI modules     │    │  GPU: NVIDIA A10G/L4     │ │
+│  │  Boot App        │───▶│  (qwen2.5-coder:32b)    │ │
+│  │  (AI modules     │    │  at 192.168.2.17:11434   │ │
 │  │   included)      │    └──────────────────────────┘ │
 │  │                  │                                 │
 │  │                  │───▶ PostgreSQL + pgvector        │
@@ -1135,11 +1139,6 @@ zuqi_ai_alerts_resolution_time_hours{alert_type}
 │  │  Grafana         │                                  │
 │  └─────────────────┘                                  │
 └───────────────────────────────────────────────────────┘
-          │
-          │ (fallback only)
-          ▼
-    Cloud LLM API
-    (GPT-4 / Claude)
 ```
 
 ### 12.2 Resource Estimates
@@ -1147,7 +1146,7 @@ zuqi_ai_alerts_resolution_time_hours{alert_type}
 | Component | CPU | RAM | GPU | Storage |
 |---|---|---|---|---|
 | Zuqi Spring Boot (with AI) | 4 vCPU | 16 GB | — | — |
-| Ollama (Qwen 2.5 32B) | 4 vCPU | 16 GB | 24 GB VRAM (A10G/L4) | 20 GB (model files) |
+| Ollama (qwen2.5-coder:32b) | 4 vCPU | 16 GB | 24 GB VRAM (A10G/L4) | 20 GB (model files) |
 | PostgreSQL + pgvector | 4 vCPU | 16 GB | — | 100 GB+ |
 | Redis | 2 vCPU | 8 GB | — | — |
 | GraphHopper | 2 vCPU | 4 GB | — | 2 GB (Kenya OSM) |
@@ -1162,8 +1161,9 @@ zuqi_ai_alerts_resolution_time_hours{alert_type}
 | PostgreSQL (managed) | $100-200/month |
 | Redis (managed) | $50-100/month |
 | Monitoring | $50-100/month |
-| Cloud LLM API (fallback/agent) | $100-300/month |
-| **Total** | **$850-1,400/month** |
+| **Total** | **$750-1,100/month** |
+
+**Note**: Local-only deployment eliminates cloud LLM API costs entirely.
 
 ---
 
@@ -1171,17 +1171,17 @@ zuqi_ai_alerts_resolution_time_hours{alert_type}
 
 ### 13.1 Data Protection
 
-- All merchant financial data processed locally (Ollama) — never sent to external LLM providers except for fallback/agent use
-- Cloud LLM calls: merchant data anonymized where possible (use category codes instead of names, aggregate metrics instead of raw transactions)
+- **All merchant financial data processed locally** (Ollama at http://192.168.2.17:11434) — **NEVER sent to external LLM providers**
+- **Local-only deployment**: Zero data leaving controlled infrastructure for AI processing
 - pgvector embeddings: contain derived features only, not raw PII
 - Model registry: model binaries encrypted at rest
 - Prediction audit log: retained for minimum 7 years (KCB compliance requirement)
 
 ### 13.2 Kenya Data Protection Act Compliance
 
-- Data processing occurs within controlled infrastructure
-- No cross-border data transfer for local LLM inference
-- Cloud LLM fallback: data processing agreement required with provider
+- **100% local data processing** within controlled infrastructure
+- **Zero cross-border data transfer** for AI operations
+- **No third-party LLM providers**: All AI processing on-premises
 - Merchant consent: credit scoring requires explicit consent (tracked in merchant profile)
 - Right to explanation: `CreditExplainer` provides human-readable reasoning for any AI decision affecting a merchant
 

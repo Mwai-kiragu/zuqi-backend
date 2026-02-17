@@ -76,17 +76,41 @@ casbin:
   model-path: casbin/model.conf
   use-database: true  # Use database-backed policies (casbin_rule table)
 
-# LangChain4j Ollama Configuration 
+# LangChain4j Ollama Configuration
 langchain4j:
   ollama:
     base-url: http://192.168.2.17:11434
     chat-model:
-      model-name: qwen2.5:32b
+      model-name: qwen2.5-coder:32b
       temperature: 0.1  # Low for consistency in credit scoring
       timeout: 30s
     embedding-model:
-      model-name: all-minilm-l6-v2
+      model-name: nomic-embed-text
       timeout: 30s
+
+# Zuqi AI Configuration
+zuqi:
+  ai:
+    credit-scoring:
+      mode: HYBRID  # Options: LLM_ONLY, ML_ONLY, HYBRID
+      hybrid-weights:
+        ml: 0.7   # ML primary (synthetic-trained XGBoost)
+        llm: 0.3  # LLM validation (deep reasoning for edge cases)
+      flag-discrepancy-threshold: 15  # Flag if ML vs LLM difference > 15 points
+      llm-validation-triggers:
+        high-value-limit: 500000  # KES - Always validate if limit > 500k
+        low-ml-confidence: 0.6    # Validate if ML confidence < 0.6
+        new-category-validation: true  # Validate new merchant categories
+        sample-rate: 0.3          # Random validation sample (30%)
+      retraining-enabled: false  # Enable weekly model retraining with real outcomes
+      retraining-cron: "0 0 2 ? * SUN"  # Every Sunday at 2:00 AM
+
+    demand-forecasting:
+      enabled: true
+      forecast-horizon-days: 7  # Predict 1 week ahead
+      min-confidence-threshold: 0.5  # Filter suggestions with confidence < 0.5
+      max-suggestions-per-merchant: 20  # Limit order suggestions
+      llm-enrichment-enabled: false  # Phase 5+ feature (sales tips from LLM)
 
 # OpenAPI/Swagger Configuration
 springdoc:

@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringBootTest
 @ActiveProfiles("test")
-@Disabled("Manual test - requires Ollama server running")
+// @Disabled("Manual test - requires Ollama server running")
 class CreditScoringManualTest {
 
     @Autowired
