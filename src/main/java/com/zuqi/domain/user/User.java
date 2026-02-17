@@ -90,6 +90,13 @@ public class User implements UserDetails {
     @Column(name = "last_login_at")
     private LocalDateTime lastLoginAt;
 
+    @Column(name = "password_changed_at")
+    private LocalDateTime passwordChangedAt;
+
+    @Column(name = "two_factor_enabled")
+    @Builder.Default
+    private boolean twoFactorEnabled = false;
+
     @Column(name = "deactivation_reason", length = 500)
     private String deactivationReason;
 

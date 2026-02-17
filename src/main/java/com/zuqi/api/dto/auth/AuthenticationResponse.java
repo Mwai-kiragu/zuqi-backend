@@ -36,4 +36,13 @@ public class AuthenticationResponse {
     private String fullName;
 
     private List<String> roles;
+
+    @JsonProperty("distributor_id")
+    private UUID distributorId;
+
+    @JsonProperty("merchant_id")
+    private UUID merchantId;
+
+    @JsonProperty("phone_number")
+    private String phoneNumber;
 }

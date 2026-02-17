@@ -148,7 +148,7 @@ public class InvoiceServiceImpl implements InvoiceService {
 
         return invoiceRepository.findByFilters(
                 effectiveDistributorId,
-                status,
+                status != null ? status.name() : null,
                 merchantId,
                 startDate,
                 endDate,

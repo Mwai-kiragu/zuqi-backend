@@ -109,9 +109,21 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     public List<RecentOrderResponse> getRecentOrders(UUID distributorId, UUID userId, int limit) {
-        log.debug("Getting recent orders for distributor: {}, limit: {}", distributorId, limit);
+        // Determine effective distributor ID for filtering
+        UUID effectiveDistributorId = distributorId;
+        if (effectiveDistributorId == null) {
+            effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
+        }
 
-        Page<Order> orders = orderRepository.findRecentOrders(distributorId, PageRequest.of(0, limit));
+        log.debug("Getting recent orders for distributor: {}, limit: {}", effectiveDistributorId, limit);
+
+        // SUPER_ADMIN/ADMIN get all orders when distributorId is null
+        Page<Order> orders;
+        if (effectiveDistributorId == null) {
+            orders = orderRepository.findRecentOrdersAll(PageRequest.of(0, limit));
+        } else {
+            orders = orderRepository.findRecentOrders(effectiveDistributorId, PageRequest.of(0, limit));
+        }
 
         return orders.getContent().stream()
                 .map(this::mapToRecentOrderResponse)
@@ -120,10 +132,21 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     public List<TopMerchantResponse> getTopMerchants(UUID distributorId, int limit) {
-        log.debug("Getting top merchants for distributor: {}, limit: {}", distributorId, limit);
+        // Determine effective distributor ID for filtering
+        UUID effectiveDistributorId = distributorId;
+        if (effectiveDistributorId == null) {
+            effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
+        }
+
+        log.debug("Getting top merchants for distributor: {}, limit: {}", effectiveDistributorId, limit);
+
+        // For admins without distributorId, return empty list (would need a global query)
+        if (effectiveDistributorId == null) {
+            return new ArrayList<>();
+        }
 
         List<Object[]> results = orderRepository.findTopMerchantsByRevenue(
-                distributorId, PageRequest.of(0, limit));
+                effectiveDistributorId, PageRequest.of(0, limit));
 
         return results.stream()
                 .map(row -> TopMerchantResponse.builder()
@@ -138,14 +161,29 @@ public class DashboardServiceImpl implements DashboardService {
 
     @Override
     public RevenueChartData getRevenueChart(UUID distributorId, LocalDate startDate, LocalDate endDate) {
+        // Determine effective distributor ID for filtering
+        UUID effectiveDistributorId = distributorId;
+        if (effectiveDistributorId == null) {
+            effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
+        }
+
         log.debug("Getting revenue chart for distributor: {} from {} to {}",
-                distributorId, startDate, endDate);
+                effectiveDistributorId, startDate, endDate);
+
+        // For admins without distributorId, return empty chart data (would need a global query)
+        if (effectiveDistributorId == null) {
+            return RevenueChartData.builder()
+                    .daily(new ArrayList<>())
+                    .totalPeriod(BigDecimal.ZERO)
+                    .averageDaily(BigDecimal.ZERO)
+                    .build();
+        }
 
         LocalDateTime startDateTime = startDate.atStartOfDay();
         LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
 
         List<Object[]> dailyData = orderRepository.findDailyRevenueData(
-                distributorId, startDateTime, endDateTime);
+                effectiveDistributorId, startDateTime, endDateTime);
 
         List<RevenueChartData.ChartDataPoint> dailyPoints = new ArrayList<>();
         BigDecimal totalPeriod = BigDecimal.ZERO;

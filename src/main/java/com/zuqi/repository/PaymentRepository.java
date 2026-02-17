@@ -29,15 +29,22 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
 
     Page<Payment> findByReconciled(boolean reconciled, Pageable pageable);
 
-    @Query("SELECT p FROM Payment p WHERE p.distributor.id = :distributorId " +
-            "AND (:status IS NULL OR p.status = :status) " +
-            "AND (:merchantId IS NULL OR p.merchant.id = :merchantId) " +
+    @Query(value = "SELECT * FROM payments p WHERE p.distributor_id = :distributorId " +
+            "AND (:status IS NULL OR p.status = CAST(:status AS VARCHAR)) " +
+            "AND (CAST(:merchantId AS UUID) IS NULL OR p.merchant_id = CAST(:merchantId AS UUID)) " +
             "AND (:reconciled IS NULL OR p.reconciled = :reconciled) " +
-            "AND (:startDate IS NULL OR p.createdAt >= :startDate) " +
-            "AND (:endDate IS NULL OR p.createdAt <= :endDate)")
+            "AND (CAST(:startDate AS TIMESTAMP) IS NULL OR p.created_at >= CAST(:startDate AS TIMESTAMP)) " +
+            "AND (CAST(:endDate AS TIMESTAMP) IS NULL OR p.created_at <= CAST(:endDate AS TIMESTAMP))",
+            countQuery = "SELECT COUNT(*) FROM payments p WHERE p.distributor_id = :distributorId " +
+            "AND (:status IS NULL OR p.status = CAST(:status AS VARCHAR)) " +
+            "AND (CAST(:merchantId AS UUID) IS NULL OR p.merchant_id = CAST(:merchantId AS UUID)) " +
+            "AND (:reconciled IS NULL OR p.reconciled = :reconciled) " +
+            "AND (CAST(:startDate AS TIMESTAMP) IS NULL OR p.created_at >= CAST(:startDate AS TIMESTAMP)) " +
+            "AND (CAST(:endDate AS TIMESTAMP) IS NULL OR p.created_at <= CAST(:endDate AS TIMESTAMP))",
+            nativeQuery = true)
     Page<Payment> findByFilters(
             @Param("distributorId") UUID distributorId,
-            @Param("status") PaymentStatus status,
+            @Param("status") String status,
             @Param("merchantId") UUID merchantId,
             @Param("reconciled") Boolean reconciled,
             @Param("startDate") LocalDateTime startDate,

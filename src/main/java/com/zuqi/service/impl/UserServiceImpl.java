@@ -333,6 +333,7 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", id.toString()));
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setPasswordChangedAt(java.time.LocalDateTime.now());
         userRepository.save(user);
 
         log.info("Password reset successfully for user: {}", id);
@@ -352,7 +353,11 @@ public class UserServiceImpl implements UserService {
         }
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        user.setPasswordChangedAt(java.time.LocalDateTime.now());
         userRepository.save(user);
+
+        // Send password changed notification email
+        emailService.sendPasswordChangedEmail(user);
 
         log.info("Password changed successfully for user: {}", id);
     }

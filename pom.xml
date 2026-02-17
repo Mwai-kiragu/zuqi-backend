@@ -210,6 +210,13 @@
             <version>2.2.0</version>
         </dependency>
 
+        <!-- TOTP for Two-Factor Authentication -->
+        <dependency>
+            <groupId>dev.samstevens.totp</groupId>
+            <artifactId>totp</artifactId>
+            <version>1.7.1</version>
+        </dependency>
+
         <!-- Casbin for authorization -->
         <dependency>
             <groupId>org.casbin</groupId>
