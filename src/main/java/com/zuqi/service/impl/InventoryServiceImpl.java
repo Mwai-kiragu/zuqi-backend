@@ -11,6 +11,7 @@ import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
 import com.zuqi.ai.event.StockAdjustedEvent;
+import com.zuqi.ai.feature.FeatureStore;
 import com.zuqi.service.InventoryService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,7 @@ public class InventoryServiceImpl implements InventoryService {
     private final UserRepository userRepository;
     private final SecurityUtils securityUtils;
     private final ApplicationEventPublisher eventPublisher;
+    private final FeatureStore featureStore;
 
 
     @Override
@@ -135,6 +137,10 @@ public class InventoryServiceImpl implements InventoryService {
         log.info("Stock adjusted - Warehouse: {}, Product: {}, Type: {}, Qty: {}, New Balance: {}",
                 warehouse.getName(), product.getName(), request.getMovementType(),
                 request.getQuantity(), newQuantity);
+
+        // Invalidate inventory feature cache for this warehouse (affects shrinkage detection)
+        featureStore.invalidateWarehouseCache(warehouse.getId());
+        log.debug("Invalidated feature cache for warehouse {} after stock adjustment", warehouse.getId());
 
         // Publish AI event for shrinkage detection and stockout prediction
         publishStockAdjustedEvent(savedStock, previousQuantity, request);

@@ -103,7 +103,7 @@ public class CreditScoringOrchestrator {
     /**
      * LLM-only evaluation (Phase 2 mode).
      */
-    private CreditEvaluation evaluateWithLlm(UUID merchantId) {
+    private CreditEvaluation evaluateWithLlm(UUID merchantId) throws Exception {
         log.debug("Evaluating with LLM only");
 
         // Build LLM-friendly credit profile
@@ -155,7 +155,7 @@ public class CreditScoringOrchestrator {
     /**
      * Hybrid evaluation (Phase 3-4 mode): ML primary + selective LLM validation.
      */
-    private CreditEvaluation evaluateHybrid(UUID merchantId) {
+    private CreditEvaluation evaluateHybrid(UUID merchantId) throws Exception {
         log.debug("Evaluating with HYBRID mode (ML 70% + LLM 30%)");
 
         // Step 1: ML scoring (always runs - fast path)

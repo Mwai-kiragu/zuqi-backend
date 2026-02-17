@@ -111,6 +111,9 @@ zuqi:
       min-confidence-threshold: 0.5  # Filter suggestions with confidence < 0.5
       max-suggestions-per-merchant: 20  # Limit order suggestions
       llm-enrichment-enabled: false  # Phase 5+ feature (sales tips from LLM)
+      training-enabled: false  # Enable weekly model training
+      training-cron: "0 0 2 ? * SUN"  # Every Sunday at 2:00 AM (before forecast job at 3:00 AM)
+      forecast-schedule: "0 0 3 * * *"  # Every day at 3:00 AM
 
 # OpenAPI/Swagger Configuration
 springdoc:

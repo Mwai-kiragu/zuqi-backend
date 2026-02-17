@@ -88,4 +88,9 @@ public interface MerchantRepository extends JpaRepository<Merchant, UUID>, JpaSp
      * Find all merchants for a distributor (for batch operations).
      */
     List<Merchant> findByDistributorId(UUID distributorId);
+
+    /**
+     * Find all active merchants for a distributor (for batch operations).
+     */
+    List<Merchant> findByDistributorIdAndActiveTrue(UUID distributorId);
 }

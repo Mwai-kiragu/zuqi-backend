@@ -1,10 +1,12 @@
 package com.zuqi.ai.model;
 
+import com.zuqi.ai.event.ModelPromotedEvent;
 import com.zuqi.domain.ai.AIModelRegistry;
 import com.zuqi.domain.ai.ModelStatus;
 import com.zuqi.repository.AIModelRegistryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +22,7 @@ import java.util.UUID;
 public class ModelRegistryService implements ModelRegistry {
 
     private final AIModelRegistryRepository modelRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     @Transactional
@@ -95,6 +98,15 @@ public class ModelRegistryService implements ModelRegistry {
         AIModelRegistry updated = modelRepository.save(model);
 
         log.info("Promoted model to ACTIVE: {} v{}", model.getModelName(), model.getModelVersion());
+
+        // Publish event for hot-swap (cache eviction)
+        eventPublisher.publishEvent(new ModelPromotedEvent(
+                this,
+                model.getId(),
+                model.getModelName(),
+                model.getModelVersion()
+        ));
+
         return updated;
     }
 

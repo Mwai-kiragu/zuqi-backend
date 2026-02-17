@@ -15,6 +15,7 @@ import com.zuqi.repository.MerchantCategoryRepository;
 import com.zuqi.repository.MerchantRepository;
 import com.zuqi.repository.UserRepository;
 import com.zuqi.ai.event.MerchantCreatedEvent;
+import com.zuqi.ai.feature.FeatureStore;
 import com.zuqi.service.MerchantService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +40,7 @@ public class MerchantServiceImpl implements MerchantService {
     private final UserRepository userRepository;
     private final SecurityUtils securityUtils;
     private final ApplicationEventPublisher eventPublisher;
+    private final FeatureStore featureStore;
 
     @Override
     @Transactional(readOnly = true)
@@ -227,6 +229,10 @@ public class MerchantServiceImpl implements MerchantService {
 
         Merchant updatedMerchant = merchantRepository.save(merchant);
         log.info("Merchant updated successfully: {}", id);
+
+        // Invalidate AI feature cache to ensure fresh data for ML models
+        featureStore.invalidateMerchantCache(id);
+        log.debug("Invalidated feature cache for merchant {}", id);
 
         return MerchantResponse.fromEntity(updatedMerchant);
     }

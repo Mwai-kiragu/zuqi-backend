@@ -11,6 +11,7 @@ import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
 import com.zuqi.ai.event.OrderCreatedEvent;
+import com.zuqi.ai.feature.FeatureStore;
 import com.zuqi.service.InvoiceService;
 import com.zuqi.service.OrderService;
 import com.zuqi.util.SecurityUtils;
@@ -46,6 +47,7 @@ public class OrderServiceImpl implements OrderService {
     private final SecurityUtils securityUtils;
     private final InvoiceService invoiceService;
     private final ApplicationEventPublisher eventPublisher;
+    private final FeatureStore featureStore;
 
     @Override
     public Page<OrderResponse> getAllOrders(Pageable pageable) {
@@ -219,6 +221,10 @@ public class OrderServiceImpl implements OrderService {
             log.error("Failed to create invoice for order {}: {}", order.getOrderNumber(), e.getMessage());
             // Don't fail the order creation if invoice creation fails
         }
+
+        // Invalidate demand feature cache for this merchant (order affects demand forecasting)
+        featureStore.invalidateMerchantCache(order.getMerchant().getId());
+        log.debug("Invalidated feature cache for merchant {} after order creation", order.getMerchant().getId());
 
         // Publish AI event for data quality validation and demand forecasting
         publishOrderCreatedEvent(order);

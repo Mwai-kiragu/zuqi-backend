@@ -11,6 +11,7 @@ import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.repository.*;
 import com.zuqi.ai.event.PaymentRecordedEvent;
+import com.zuqi.ai.feature.FeatureStore;
 import com.zuqi.service.PaymentService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +42,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final DistributorRepository distributorRepository;
     private final SecurityUtils securityUtils;
     private final ApplicationEventPublisher eventPublisher;
+    private final FeatureStore featureStore;
 
     @Override
     public Page<PaymentResponse> getAllPayments(Pageable pageable) {
@@ -174,6 +176,10 @@ public class PaymentServiceImpl implements PaymentService {
         if (order != null) {
             updateOrderPaidAmount(order);
         }
+
+        // Invalidate payment feature cache for this merchant (affects anomaly detection)
+        featureStore.invalidateMerchantCache(payment.getMerchant().getId());
+        log.debug("Invalidated feature cache for merchant {} after payment recording", payment.getMerchant().getId());
 
         // Publish AI event for payment anomaly detection
         publishPaymentRecordedEvent(payment);

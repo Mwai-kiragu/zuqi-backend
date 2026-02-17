@@ -52,4 +52,9 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
     List<Product> findByIdIn(List<UUID> ids);
 
     boolean existsByCategoryId(Long categoryId);
+
+    /**
+     * Find all active products for a distributor (for batch operations).
+     */
+    List<Product> findByDistributorIdAndActiveTrue(UUID distributorId);
 }

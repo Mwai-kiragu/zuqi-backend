@@ -115,7 +115,7 @@ public class OrderSuggestionService {
 
         // Calculate estimated value
         BigDecimal estimatedValue = forecast.predictedQuantity()
-                .multiply(product.getPrice());
+                .multiply(product.getUnitPrice());
 
         // Build suggestion
         return OrderSuggestion.builder()
@@ -123,7 +123,7 @@ public class OrderSuggestionService {
                 .productName(product.getName())
                 .productCategory(product.getCategory() != null ? product.getCategory().getName() : "Unknown")
                 .suggestedQuantity(forecast.predictedQuantity())
-                .unitPrice(product.getPrice())
+                .unitPrice(product.getUnitPrice())
                 .estimatedValue(estimatedValue)
                 .confidence(forecast.confidence())
                 .trendDirection(forecast.trendDirection())
