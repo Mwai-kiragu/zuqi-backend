@@ -1,47 +1,76 @@
 package com.zuqi.ai.event.handler;
 
+import com.zuqi.ai.anomaly.AlertService;
+import com.zuqi.ai.anomaly.ShrinkageDetector;
 import com.zuqi.ai.event.StockAdjustedEvent;
+import com.zuqi.domain.ai.AlertSeverity;
+import com.zuqi.domain.ai.AlertType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
+import java.util.Map;
+
 /**
  * Event handler for inventory-related AI operations.
  *
- * Triggered by StockAdjustedEvent to perform:
- * - Inventory shrinkage detection (Isolation Forest)
- * - Stockout prediction updates
- * - Demand forecasting adjustments
+ * Triggered by StockAdjustedEvent to run real-time shrinkage detection.
  *
- * Blueprint reference: plan.md Section 7.5 - Inventory Shrinkage Detection
+ * Blueprint reference: plan.md Section 6.3 - ShrinkageDetector
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class InventoryShrinkageEventHandler {
 
-    // TODO: Inject ShrinkageDetectionService when implemented in Phase 4
-    // TODO: Inject StockoutPredictionService when implemented in Phase 4
+    private final ShrinkageDetector shrinkageDetector;
+    private final AlertService      alertService;
 
     @Async
     @EventListener
     public void handleStockAdjusted(StockAdjustedEvent event) {
-        log.info("Received StockAdjustedEvent for stock {} (warehouse: {}, product: {}, adjustment: {})",
+        log.debug("StockAdjustedEvent: stock={} warehouse={} product={} adjustment={}",
                 event.stockId(), event.warehouseId(), event.productId(), event.adjustmentAmount());
 
         try {
-            // TODO Phase 4: Implement shrinkage detection
-            // shrinkageDetectionService.detectShrinkage(event);
+            ShrinkageDetector.ShrinkageResult result =
+                    shrinkageDetector.detect(event.warehouseId(), event.productId());
 
-            // TODO Phase 4: Update stockout predictions
-            // stockoutPredictionService.updatePredictions(event.warehouseId(), event.productId());
+            if (result.isAnomaly()) {
+                AlertSeverity severity = result.anomalyScore() > 0.7 ? AlertSeverity.CRITICAL
+                        : result.anomalyScore() > 0.5 ? AlertSeverity.HIGH
+                        : AlertSeverity.MEDIUM;
 
-            log.debug("Inventory AI processing completed for stock {}", event.stockId());
+                Map<String, Object> context = Map.of(
+                        "stockId",          event.stockId().toString(),
+                        "warehouseId",      event.warehouseId().toString(),
+                        "productId",        event.productId().toString(),
+                        "movementType",     event.movementType() != null ? event.movementType() : "UNKNOWN",
+                        "adjustmentAmount", String.valueOf(event.adjustmentAmount()),
+                        "anomalyScore",     result.anomalyScore(),
+                        "modelVersion",     result.modelVersion()
+                );
+
+                alertService.createAlert(
+                        AlertType.SHRINKAGE,
+                        severity,
+                        "STOCK",
+                        event.stockId(),
+                        event.distributorId(),
+                        result.anomalyScore(),
+                        "Inventory shrinkage detected: warehouse=" + event.warehouseId()
+                                + " product=" + event.productId(),
+                        context
+                );
+
+                log.info("Shrinkage alert raised for stock={} warehouse={} product={} score={}",
+                        event.stockId(), event.warehouseId(), event.productId(),
+                        String.format("%.3f", result.anomalyScore()));
+            }
         } catch (Exception e) {
-            log.error("Failed to process inventory AI operations for stock {}", event.stockId(), e);
-            // Don't rethrow - event processing failures should not break the transaction
+            log.error("Failed to process StockAdjustedEvent stock={}: {}", event.stockId(), e.getMessage(), e);
         }
     }
 }

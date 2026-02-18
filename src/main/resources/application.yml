@@ -116,6 +116,30 @@ zuqi:
       training-cron: "0 0 2 ? * SUN"  # Every Sunday at 2:00 AM (before forecast job at 3:00 AM)
       forecast-schedule: "0 0 3 * * *"  # Every day at 3:00 AM
 
+    anomaly-detection:
+      training-enabled: false            # Set true to enable weekly anomaly model retraining
+      shrinkage-training-cron: "0 0 2 ? * SUN"
+      payment-training-cron: "0 30 2 ? * SUN"
+      shrinkage-threshold: 0.5
+      payment-anomaly-threshold: 0.5
+
+    prediction:
+      training-enabled: false            # Set true to enable weekly prediction model retraining
+      stockout-training-cron: "0 0 3 ? * SUN"
+      rep-training-cron: "0 30 3 ? * SUN"
+      stockout-alert-threshold: 0.5
+      rep-performance-alert-threshold: 60.0
+
+    routing:
+      enabled: false                     # Set true to enable nightly route optimization job
+      optimization-cron: "0 0 18 * * *"  # 6 PM daily
+
+# Timefold Solver Configuration
+timefold:
+  solver:
+    termination:
+      spent-limit: 120s                  # Max 2 minutes per distributor per solve
+
 # OpenAPI/Swagger Configuration
 springdoc:
   api-docs:

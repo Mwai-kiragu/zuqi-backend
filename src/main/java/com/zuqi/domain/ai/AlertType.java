@@ -1,0 +1,13 @@
+package com.zuqi.domain.ai;
+
+public enum AlertType {
+    SHRINKAGE,
+    PAYMENT_ANOMALY,
+    PAYMENT_DISTRESS,
+    DATA_QUALITY,
+    FRAUD_DETECTION,
+    UNUSUAL_ORDER,
+    PRICE_ANOMALY,
+    STOCKOUT_RISK,
+    REP_UNDERPERFORMANCE
+}

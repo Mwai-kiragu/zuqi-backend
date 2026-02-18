@@ -1,5 +1,6 @@
 package com.zuqi.ai.event.handler;
 
+import com.zuqi.ai.anomaly.DataQualityDetector;
 import com.zuqi.ai.event.OrderCreatedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,39 +11,29 @@ import org.springframework.stereotype.Component;
 /**
  * Event handler for order-related AI operations.
  *
- * Triggered by OrderCreatedEvent to perform:
- * - Data quality validation (ML-based anomaly detection)
- * - Demand forecasting updates
- * - Sales rep performance tracking
- * - Order pattern analysis
+ * Triggered by OrderCreatedEvent to run Tier-1 data quality validation.
  *
- * Blueprint reference: plan.md Section 7.12 - Data Quality Detection
+ * Blueprint reference: plan.md Section 6.3 - DataQualityDetector
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class OrderDataQualityEventHandler {
 
-    // TODO: Inject DataQualityDetectionService when implemented in Phase 4
-    // TODO: Inject DemandForecastingService when implemented in Phase 3
+    private final DataQualityDetector dataQualityDetector;
 
     @Async
     @EventListener
     public void handleOrderCreated(OrderCreatedEvent event) {
-        log.info("Received OrderCreatedEvent for order {} (merchant: {}, items: {}, total: {})",
-                event.orderId(), event.merchantId(), event.items().size(), event.totalAmount());
+        log.debug("OrderCreatedEvent: order={} merchant={} items={} total={}",
+                event.orderId(), event.merchantId(),
+                event.items() != null ? event.items().size() : 0,
+                event.totalAmount());
 
         try {
-            // TODO Phase 4: Implement data quality validation
-            // dataQualityService.validateOrder(event);
-
-            // TODO Phase 3: Update demand forecasts
-            // demandForecastingService.updateForecasts(event.merchantId(), event.items());
-
-            log.debug("Order AI processing completed for order {}", event.orderId());
+            dataQualityDetector.detect(event);
         } catch (Exception e) {
-            log.error("Failed to process order AI operations for order {}", event.orderId(), e);
-            // Don't rethrow - event processing failures should not break the transaction
+            log.error("Failed to process OrderCreatedEvent order={}: {}", event.orderId(), e.getMessage(), e);
         }
     }
 }

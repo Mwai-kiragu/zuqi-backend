@@ -165,9 +165,53 @@ p, ADMIN, /v1/ai/credit/*, .*
 p, DISTRIBUTOR_ADMIN, /v1/ai/credit/evaluate/:id, POST
 p, DISTRIBUTOR_ADMIN, /v1/ai/credit/evaluations/:id, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/credit/score/:id, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/credit/adjust/:id, POST
 p, FINANCE, /v1/ai/credit/evaluate/:id, POST
 p, FINANCE, /v1/ai/credit/evaluations/:id, GET
 p, FINANCE, /v1/ai/credit/score/:id, GET
+p, FINANCE, /v1/ai/credit/adjust/:id, POST
+
+# AI Demand Forecasting - DISTRIBUTOR_ADMIN, SALES_REP, WAREHOUSE_MANAGER
+p, DISTRIBUTOR_ADMIN, /v1/ai/demand/forecast/:id, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/demand/forecast/warehouse/:id, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/demand/suggestions/:id, GET
+p, SALES_REP, /v1/ai/demand/suggestions/:id, GET
+p, WAREHOUSE_MANAGER, /v1/ai/demand/forecast/:id, GET
+p, WAREHOUSE_MANAGER, /v1/ai/demand/forecast/warehouse/:id, GET
+
+# AI Anomaly Detection - DISTRIBUTOR_ADMIN, WAREHOUSE_MANAGER, FINANCE
+p, DISTRIBUTOR_ADMIN, /v1/ai/anomaly/alerts, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/anomaly/alerts/:id, GET|PUT
+p, DISTRIBUTOR_ADMIN, /v1/ai/anomaly/alerts/summary, GET
+p, WAREHOUSE_MANAGER, /v1/ai/anomaly/alerts, GET
+p, WAREHOUSE_MANAGER, /v1/ai/anomaly/alerts/:id, GET|PUT
+p, WAREHOUSE_MANAGER, /v1/ai/anomaly/alerts/summary, GET
+p, FINANCE, /v1/ai/anomaly/alerts, GET
+p, FINANCE, /v1/ai/anomaly/alerts/:id, GET|PUT
+p, FINANCE, /v1/ai/anomaly/alerts/summary, GET
+
+# AI Predictions - DISTRIBUTOR_ADMIN, WAREHOUSE_MANAGER
+p, DISTRIBUTOR_ADMIN, /v1/ai/prediction/stockout/:id, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/prediction/rep-performance, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/prediction/rep-performance/:id, GET
+p, WAREHOUSE_MANAGER, /v1/ai/prediction/stockout/:id, GET
+
+# AI Route Optimization - DISTRIBUTOR_ADMIN, DRIVER
+p, DISTRIBUTOR_ADMIN, /v1/ai/routing/optimize, POST
+p, DISTRIBUTOR_ADMIN, /v1/ai/routing/reoptimize, POST
+p, DISTRIBUTOR_ADMIN, /v1/ai/routing/routes/:date, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/routing/routes/:id, GET
+p, DRIVER, /v1/ai/routing/routes/:date, GET
+p, DRIVER, /v1/ai/routing/routes/:id, GET
+
+# AI Recommendations - DISTRIBUTOR_ADMIN only
+p, DISTRIBUTOR_ADMIN, /v1/ai/recommendations/:id, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/recommendations/:id/accept, PUT
+p, DISTRIBUTOR_ADMIN, /v1/ai/recommendations/:id/reject, PUT
+
+# AI Compliance Reports - DISTRIBUTOR_ADMIN only
+p, DISTRIBUTOR_ADMIN, /v1/ai/reports/compliance/generate, POST
+p, DISTRIBUTOR_ADMIN, /v1/ai/reports/compliance/:id, GET
 
 # DRIVER - Delivery operations
 p, DRIVER, /v1/deliveries, GET

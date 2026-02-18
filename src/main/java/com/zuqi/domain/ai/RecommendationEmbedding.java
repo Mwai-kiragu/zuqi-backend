@@ -1,39 +1,32 @@
 package com.zuqi.domain.ai;
 
 import com.zuqi.domain.distributor.Distributor;
-import com.zuqi.domain.merchant.Merchant;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * pgvector embedding for merchant profile (RAG for credit scoring).
- *
- * Stores 768-dimensional vector embeddings of merchant features
- * to enable semantic similarity search during credit evaluation.
- *
- * Blueprint reference: plan.md Section 6.3, implementation_plan.md Task 2.3
- */
 @Entity
-@Table(name = "ai_merchant_embeddings")
+@Table(name = "ai_recommendation_embeddings", indexes = {
+        @Index(name = "idx_recommendation_embeddings_recommendation", columnList = "recommendation_id"),
+        @Index(name = "idx_recommendation_embeddings_distributor",    columnList = "distributor_id")
+})
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class MerchantEmbedding {
+public class RecommendationEmbedding {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "merchant_id", nullable = false)
-    private Merchant merchant;
+    @JoinColumn(name = "recommendation_id", nullable = false)
+    private Recommendation recommendation;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "distributor_id", nullable = false)
@@ -44,10 +37,10 @@ public class MerchantEmbedding {
      * Stored as pgvector type in PostgreSQL.
      */
     @Column(name = "embedding", nullable = false, columnDefinition = "vector(768)")
-    private String embedding;  // Stored as string representation: "[0.1, 0.2, ...]"
+    private String embedding;
 
-    @Column(name = "feature_summary", columnDefinition = "TEXT")
-    private String featureSummary;
+    @Column(name = "recommendation_summary", columnDefinition = "TEXT")
+    private String recommendationSummary;
 
     @Column(name = "model_version", length = 50)
     private String modelVersion;
@@ -55,8 +48,4 @@ public class MerchantEmbedding {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
-
-    @UpdateTimestamp
-    @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
 }
