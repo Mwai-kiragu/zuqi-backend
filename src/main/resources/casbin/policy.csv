@@ -205,12 +205,16 @@ p, DRIVER, /v1/ai/routing/routes/:date, GET
 p, DRIVER, /v1/ai/routing/routes/:id, GET
 
 # AI Recommendations - DISTRIBUTOR_ADMIN only
+p, DISTRIBUTOR_ADMIN, /v1/ai/recommendations/:distributorId, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/recommendations/:distributorId/generate, POST
+p, DISTRIBUTOR_ADMIN, /v1/ai/recommendations/single/:id, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/recommendations/:id, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/recommendations/:id/accept, PUT
 p, DISTRIBUTOR_ADMIN, /v1/ai/recommendations/:id/reject, PUT
 
 # AI Compliance Reports - DISTRIBUTOR_ADMIN only
 p, DISTRIBUTOR_ADMIN, /v1/ai/reports/compliance/generate, POST
+p, DISTRIBUTOR_ADMIN, /v1/ai/reports/compliance/templates, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/reports/compliance/:id, GET
 
 # DRIVER - Delivery operations

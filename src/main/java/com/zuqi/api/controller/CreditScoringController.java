@@ -1,6 +1,7 @@
 package com.zuqi.api.controller;
 
 import com.zuqi.ai.credit.CreditEvaluation;
+import com.zuqi.ai.credit.CreditLimitAdjustmentJob;
 import com.zuqi.ai.credit.CreditScoringOrchestrator;
 import com.zuqi.ai.monitoring.PredictionLogger;
 import com.zuqi.api.dto.ApiResponse;
@@ -34,6 +35,7 @@ public class CreditScoringController {
 
     private final CreditScoringOrchestrator creditScoringOrchestrator;
     private final PredictionLogger predictionLogger;
+    private final CreditLimitAdjustmentJob creditLimitAdjustmentJob;
 
     /**
      * Evaluate merchant credit risk using AI.
@@ -156,6 +158,48 @@ public class CreditScoringController {
             log.error("Failed to fetch current score for merchant {}: {}", merchantId, e.getMessage(), e);
             return ResponseEntity.internalServerError()
                     .body(ApiResponse.error("Failed to fetch current score: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Trigger dynamic credit limit adjustment for a merchant.
+     *
+     * Uses the ML credit limit regressor to predict the optimal credit limit
+     * and applies business guardrails (max 20% increase, min floor, requires human
+     * review for decreases).
+     *
+     * @param merchantId Merchant to adjust
+     * @return Adjustment result with previous/new limits and action taken
+     */
+    @PostMapping("/adjust/{merchantId}")
+    @Operation(
+            summary = "Adjust merchant credit limit using ML",
+            description = "Uses XGBoost regressor to predict optimal credit limit. " +
+                          "Applies business rules: max 20% increase per period, min floor of KES 50,000, " +
+                          "decreases require human review. " +
+                          "Authorization: DISTRIBUTOR_ADMIN, FINANCE."
+    )
+    public ResponseEntity<ApiResponse<CreditLimitAdjustmentJob.CreditAdjustmentResult>> adjustCreditLimit(
+            @PathVariable UUID merchantId) {
+
+        log.info("Credit limit adjustment requested for merchant {}", merchantId);
+
+        try {
+            CreditLimitAdjustmentJob.CreditAdjustmentResult result =
+                    creditLimitAdjustmentJob.adjustCreditLimit(merchantId);
+
+            log.info("Credit limit adjustment for merchant {}: {} {} → {} KES",
+                    merchantId, result.action(), result.previousLimitKes(), result.newLimitKes());
+
+            return ResponseEntity.ok(ApiResponse.success(result));
+
+        } catch (IllegalArgumentException e) {
+            log.warn("Adjustment rejected for merchant {}: {}", merchantId, e.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("Credit limit adjustment failed for merchant {}: {}", merchantId, e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("Credit limit adjustment failed: " + e.getMessage()));
         }
     }
 }

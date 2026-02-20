@@ -26,9 +26,9 @@ COMMENT ON COLUMN ai_merchant_embeddings.feature_summary IS 'Human-readable summ
 COMMENT ON COLUMN ai_merchant_embeddings.model_version IS 'Embedding model version identifier';
 
 -- Indexes for lookups (following existing migration patterns)
-CREATE INDEX idx_merchant_embeddings_merchant ON ai_merchant_embeddings(merchant_id);
-CREATE INDEX idx_merchant_embeddings_distributor ON ai_merchant_embeddings(distributor_id);
+CREATE INDEX IF NOT EXISTS idx_merchant_embeddings_merchant ON ai_merchant_embeddings(merchant_id);
+CREATE INDEX IF NOT EXISTS idx_merchant_embeddings_distributor ON ai_merchant_embeddings(distributor_id);
 
 -- pgvector index for similarity search (cosine distance)
-CREATE INDEX idx_merchant_embeddings_similarity ON ai_merchant_embeddings
+CREATE INDEX IF NOT EXISTS idx_merchant_embeddings_similarity ON ai_merchant_embeddings
     USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);

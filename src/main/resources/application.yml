@@ -134,6 +134,27 @@ zuqi:
       enabled: false                     # Set true to enable nightly route optimization job
       optimization-cron: "0 0 18 * * *"  # 6 PM daily
 
+    agent:
+      enabled: false                          # Set true to run weekly recommendation job
+      recommendation-cron: "0 0 8 ? * MON"   # Every Monday at 08:00
+
+    reporting:
+      compliance-cron: "0 0 4 1 * *"         # 1st of every month at 04:00
+
+    credit:
+      adjustment-enabled: false               # Set true to enable monthly credit limit adjustments
+      adjustment-cron: "0 0 1 1 * *"         # 1st of every month at 01:00
+      max-increase-pct: 20.0
+      min-limit-kes: 50000.0
+
+    monitoring:
+      drift-detection-enabled: false          # Set true to enable weekly drift detection
+      drift-check-cron: "0 0 6 ? * SUN"
+      performance-tracking-cron: "0 0 5 * * *"
+      psi-threshold: 0.2
+      reference-window-days: 90
+      current-window-days: 14
+
 # Timefold Solver Configuration
 timefold:
   solver:

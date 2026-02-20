@@ -2,6 +2,7 @@ package com.zuqi.ai.event.handler;
 
 import com.zuqi.ai.anomaly.AlertService;
 import com.zuqi.ai.anomaly.PaymentAnomalyDetector;
+import com.zuqi.ai.anomaly.PaymentDistressClassifier;
 import com.zuqi.ai.event.PaymentRecordedEvent;
 import com.zuqi.domain.ai.AlertSeverity;
 import com.zuqi.domain.ai.AlertType;
@@ -27,6 +28,7 @@ public class PaymentAnomalyEventHandler {
 
     private final PaymentAnomalyDetector paymentAnomalyDetector;
     private final AlertService           alertService;
+    private final PaymentDistressClassifier paymentDistressClassifier;
 
     @Async
     @EventListener
@@ -71,6 +73,35 @@ public class PaymentAnomalyEventHandler {
         } catch (Exception e) {
             log.error("Failed to process PaymentRecordedEvent payment={}: {}",
                     event.paymentId(), e.getMessage(), e);
+        }
+
+        // Run payment distress classification independently
+        try {
+            PaymentDistressClassifier.DistressResult distressResult =
+                    paymentDistressClassifier.classify(event.merchantId());
+            if (distressResult.isDistressed() && distressResult.distressProbability() > 0.5) {
+                AlertSeverity distressSeverity = distressResult.distressProbability() > 0.7
+                        ? AlertSeverity.HIGH : AlertSeverity.MEDIUM;
+                Map<String, Object> distressCtx = Map.of(
+                        "paymentId",          event.paymentId().toString(),
+                        "merchantId",         event.merchantId().toString(),
+                        "distressProbability", distressResult.distressProbability(),
+                        "modelVersion",       distressResult.modelVersion()
+                );
+                alertService.createAlert(
+                        AlertType.PAYMENT_DISTRESS,
+                        distressSeverity,
+                        "MERCHANT",
+                        event.merchantId(),
+                        event.distributorId(),
+                        distressResult.distressProbability(),
+                        String.format("Payment distress predicted for merchant %s (probability=%.2f)",
+                                event.merchantId(), distressResult.distressProbability()),
+                        distressCtx);
+            }
+        } catch (Exception distressEx) {
+            log.warn("Payment distress classification failed for merchant {}: {}",
+                    event.merchantId(), distressEx.getMessage());
         }
     }
 }
