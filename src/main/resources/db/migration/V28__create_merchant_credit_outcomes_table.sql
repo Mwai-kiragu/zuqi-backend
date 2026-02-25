@@ -1,4 +1,4 @@
--- V24: Create merchant_credit_outcomes table for real data tracking
+-- V28: Create merchant_credit_outcomes table for real data tracking
 -- Blueprint: ML_IMPLEMENTATION_PLAN.md - Phase 3, Task 8
 
 CREATE TABLE merchant_credit_outcomes (

@@ -25,9 +25,9 @@ COMMENT ON COLUMN ai_recommendation_embeddings.recommendation_summary IS 'Human-
 COMMENT ON COLUMN ai_recommendation_embeddings.model_version IS 'Embedding model version identifier';
 
 -- Indexes for lookups (following existing migration patterns)
-CREATE INDEX idx_recommendation_embeddings_recommendation ON ai_recommendation_embeddings(recommendation_id);
-CREATE INDEX idx_recommendation_embeddings_distributor ON ai_recommendation_embeddings(distributor_id);
+CREATE INDEX IF NOT EXISTS idx_recommendation_embeddings_recommendation ON ai_recommendation_embeddings(recommendation_id);
+CREATE INDEX IF NOT EXISTS idx_recommendation_embeddings_distributor ON ai_recommendation_embeddings(distributor_id);
 
 -- pgvector index for similarity search
-CREATE INDEX idx_recommendation_embeddings_similarity ON ai_recommendation_embeddings
+CREATE INDEX IF NOT EXISTS idx_recommendation_embeddings_similarity ON ai_recommendation_embeddings
     USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);

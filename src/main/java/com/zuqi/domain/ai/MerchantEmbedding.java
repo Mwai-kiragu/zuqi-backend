@@ -40,22 +40,15 @@ public class MerchantEmbedding {
     private Distributor distributor;
 
     /**
-     * 768-dimensional vector embedding (all-MiniLM-L6-v2 default dimension).
+     * 768-dimensional vector embedding from nomic-embed-text via Ollama.
      * Stored as pgvector type in PostgreSQL.
      */
     @Column(name = "embedding", nullable = false, columnDefinition = "vector(768)")
     private String embedding;  // Stored as string representation: "[0.1, 0.2, ...]"
 
-    /**
-     * Human-readable feature summary that was embedded.
-     * Used for debugging and audit trail.
-     */
     @Column(name = "feature_summary", columnDefinition = "TEXT")
     private String featureSummary;
 
-    /**
-     * Embedding model version identifier (e.g., "all-MiniLM-L6-v2").
-     */
     @Column(name = "model_version", length = 50)
     private String modelVersion;
 

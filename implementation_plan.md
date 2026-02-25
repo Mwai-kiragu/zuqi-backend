@@ -830,7 +830,7 @@ Each phase builds on the previous one. Within each phase, tasks are ordered by d
 
 ## Phase 5: Route Optimization
 
-**Goal:** Implement delivery route optimization using Timefold and GraphHopper.
+**Goal:** Implement delivery route optimization using edTimefold and GraphHopper.
 
 **Estimated Duration:** 2-3 weeks
 
