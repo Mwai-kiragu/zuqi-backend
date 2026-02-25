@@ -36,7 +36,20 @@ public interface MerchantRepository extends JpaRepository<Merchant, UUID>, JpaSp
 
     boolean existsByEmail(String email);
 
+    boolean existsByKraPin(String kraPin);
+
     boolean existsByCategoryId(Long categoryId);
+
+    Optional<Merchant> findByCustomerCode(String customerCode);
+
+    Optional<Merchant> findByKraPin(String kraPin);
+
+    Page<Merchant> findByBlacklistedTrue(Pageable pageable);
+
+    Page<Merchant> findByDistributorIdAndBlacklistedTrue(UUID distributorId, Pageable pageable);
+
+    @Query("SELECT COUNT(m) FROM Merchant m")
+    long countAll();
 
     @Query("SELECT m FROM Merchant m WHERE m.active = true AND " +
             "LOWER(m.businessName) LIKE LOWER(CONCAT('%', :searchTerm, '%'))")

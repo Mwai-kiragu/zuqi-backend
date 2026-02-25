@@ -1,0 +1,14 @@
+package com.zuqi.domain.gl;
+
+public enum AccountSubType {
+    CURRENT_ASSET,
+    FIXED_ASSET,
+    CURRENT_LIABILITY,
+    LONG_TERM_LIABILITY,
+    RETAINED_EARNINGS,
+    OPERATING_REVENUE,
+    OTHER_REVENUE,
+    COGS,
+    OPERATING_EXPENSE,
+    OTHER_EXPENSE
+}

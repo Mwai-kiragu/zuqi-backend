@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Approval Decision</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f4f4f4;">
+        <tr>
+            <td style="padding: 40px 0;">
+                <table role="presentation" width="600" cellspacing="0" cellpadding="0"
+                       style="margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+
+                    <!-- Header — green for approved, red for rejected -->
+                    <tr>
+                        <td th:style="${status == 'APPROVED'} ? 'background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%); padding: 30px 40px; border-radius: 8px 8px 0 0;' : 'background: linear-gradient(135deg, #c62828 0%, #b71c1c 100%); padding: 30px 40px; border-radius: 8px 8px 0 0;'">
+                            <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;"
+                                th:text="${companyName}">Company</h1>
+                            <p th:style="${status == 'APPROVED'} ? 'margin: 8px 0 0 0; color: #c8e6c9; font-size: 14px;' : 'margin: 8px 0 0 0; color: #ffcdd2; font-size: 14px;'"
+                               th:text="${status == 'APPROVED'} ? 'Your Request Has Been Approved ✓' : 'Your Request Has Been Rejected'">Status</p>
+                        </td>
+                    </tr>
+
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 40px;">
+                            <p style="margin: 0 0 24px 0; color: #666666; font-size: 15px; line-height: 1.6;"
+                               th:text="${status == 'APPROVED'} ? 'Good news! Your approval request has been approved.' : 'Your approval request has been reviewed and rejected.'">
+                                Message
+                            </p>
+
+                            <!-- Request Details -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+                                   style="background-color: #f8f9fa; border-radius: 8px; margin: 0 0 24px 0;">
+                                <tr>
+                                    <td style="padding: 24px;">
+                                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                            <tr>
+                                                <td style="padding: 6px 0; color: #888; font-size: 13px; width: 140px;">Request No.</td>
+                                                <td style="padding: 6px 0; color: #333; font-size: 14px; font-weight: 600;"
+                                                    th:text="${requestNumber}">APR-001</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 6px 0; color: #888; font-size: 13px;">Type</td>
+                                                <td style="padding: 6px 0; color: #333; font-size: 14px;"
+                                                    th:text="${workflowType}">Credit Limit Change</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 6px 0; color: #888; font-size: 13px;">Entity</td>
+                                                <td style="padding: 6px 0; color: #333; font-size: 14px;"
+                                                    th:text="${entityName}">Customer Name</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 6px 0; color: #888; font-size: 13px;">Decision By</td>
+                                                <td style="padding: 6px 0; color: #333; font-size: 14px;"
+                                                    th:text="${approverName}">Approver</td>
+                                            </tr>
+                                            <tr th:if="${status == 'REJECTED' and rejectionReason != null}">
+                                                <td style="padding: 6px 0; color: #888; font-size: 13px; vertical-align: top;">Reason</td>
+                                                <td style="padding: 6px 0; color: #c62828; font-size: 14px;"
+                                                    th:text="${rejectionReason}">Reason</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p style="margin: 0; color: #999; font-size: 13px;">
+                                Log in to the system to view the full details of this request.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f8f9fa; padding: 20px 40px; border-radius: 0 0 8px 8px; border-top: 1px solid #eeeeee;">
+                            <p style="margin: 0; color: #999999; font-size: 12px;">
+                                This is an automated notification from <span th:text="${companyName}">Company</span>. Do not reply to this email.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

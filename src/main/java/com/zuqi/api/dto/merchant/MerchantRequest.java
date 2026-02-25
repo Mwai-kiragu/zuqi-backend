@@ -2,6 +2,7 @@ package com.zuqi.api.dto.merchant;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -9,6 +10,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Data
@@ -35,6 +38,17 @@ public class MerchantRequest {
 
     @Size(max = 100, message = "City must not exceed 100 characters")
     private String city;
+
+    @Size(max = 100)
+    private String county;
+
+    @Size(max = 100)
+    private String subCounty;
+
+    @Pattern(regexp = "^[AP]\\d{9}[A-Z]$", message = "Invalid KRA PIN format (e.g. A123456789Z)")
+    private String kraPin;
+
+    private List<Map<String, Object>> contactPersons;
 
     private BigDecimal latitude;
 

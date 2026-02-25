@@ -1,0 +1,368 @@
+package com.zuqi.service.impl;
+
+import com.zuqi.api.dto.approval.ApprovalActionResponse;
+import com.zuqi.api.dto.approval.ApprovalRequestResponse;
+import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
+import com.zuqi.api.dto.approval.ProcessApprovalRequest;
+import com.zuqi.api.dto.common.PageResponse;
+import com.zuqi.config.EmailConfig;
+import com.zuqi.domain.approval.ApprovalAction;
+import com.zuqi.domain.approval.ApprovalDecision;
+import com.zuqi.domain.approval.ApprovalRequest;
+import com.zuqi.domain.approval.ApprovalStatus;
+import com.zuqi.domain.approval.ApprovalWorkflowType;
+import com.zuqi.domain.audit.ActivityAction;
+import com.zuqi.domain.user.User;
+import com.zuqi.exception.ResourceNotFoundException;
+import com.zuqi.exception.ValidationException;
+import com.zuqi.repository.ApprovalActionRepository;
+import com.zuqi.repository.ApprovalRequestRepository;
+import com.zuqi.repository.UserRepository;
+import com.zuqi.service.ActivityLogService;
+import com.zuqi.service.ApprovalService;
+import com.zuqi.service.EmailService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
+
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class ApprovalServiceImpl implements ApprovalService {
+
+    private final ApprovalRequestRepository approvalRequestRepository;
+    private final ApprovalActionRepository approvalActionRepository;
+    private final UserRepository userRepository;
+    private final ActivityLogService activityLogService;
+    private final EmailService emailService;
+    private final EmailConfig emailConfig;
+
+    private final AtomicLong sequenceCounter = new AtomicLong(0);
+
+    @Override
+    @Transactional
+    public ApprovalRequestResponse createRequest(UUID requesterId, CreateApprovalRequestDto dto) {
+        log.info("Creating approval request type={} entity={} requester={}",
+                dto.getWorkflowType(), dto.getEntityType(), requesterId);
+
+        User requester = userRepository.findById(requesterId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", requesterId.toString()));
+
+        int requiredApprovals = dto.getRequiredApprovals() != null ? dto.getRequiredApprovals() : 1;
+
+        ApprovalRequest request = ApprovalRequest.builder()
+                .requestNumber(generateRequestNumber(dto.getWorkflowType()))
+                .workflowType(dto.getWorkflowType())
+                .entityType(dto.getEntityType())
+                .entityId(dto.getEntityId())
+                .entityName(dto.getEntityName())
+                .requestedById(requesterId)
+                .requestedByEmail(requester.getEmail())
+                .requestedByName(requester.getFirstName() + " " + requester.getLastName())
+                .description(dto.getDescription())
+                .currentValues(dto.getCurrentValues() != null ? dto.getCurrentValues() : new HashMap<>())
+                .requestedValues(dto.getRequestedValues())
+                .requiredApprovals(requiredApprovals)
+                .amount(dto.getAmount())
+                .expiresAt(LocalDateTime.now().plusDays(7))
+                .build();
+
+        ApprovalRequest saved = approvalRequestRepository.save(request);
+
+        activityLogService.log(requesterId, requester.getEmail(),
+                requester.getFirstName() + " " + requester.getLastName(),
+                ActivityAction.CREATE, "APPROVAL_REQUEST", saved.getId(),
+                saved.getRequestNumber(), "APPROVAL",
+                "Created approval request: " + dto.getWorkflowType().name() + " for " + dto.getEntityName());
+
+        notifyApproversAsync(saved);
+
+        log.info("Approval request created: {}", saved.getRequestNumber());
+        return toResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public ApprovalRequestResponse processRequest(UUID requestId, UUID approverId, ProcessApprovalRequest dto) {
+        log.info("Processing approval request={} approver={} decision={}",
+                requestId, approverId, dto.getDecision());
+
+        ApprovalRequest request = approvalRequestRepository.findById(requestId)
+                .orElseThrow(() -> new ResourceNotFoundException("ApprovalRequest", "id", requestId.toString()));
+
+        if (!request.isPending()) {
+            throw new ValidationException("Approval request is not in PENDING status");
+        }
+
+        if (request.getExpiresAt() != null && request.getExpiresAt().isBefore(LocalDateTime.now())) {
+            request.setStatus(ApprovalStatus.EXPIRED);
+            approvalRequestRepository.save(request);
+            throw new ValidationException("Approval request has expired");
+        }
+
+        if (approvalActionRepository.existsByApprovalRequestIdAndApproverId(requestId, approverId)) {
+            throw new ValidationException("You have already acted on this request");
+        }
+
+        User approver = userRepository.findById(approverId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", approverId.toString()));
+
+        ApprovalAction action = ApprovalAction.builder()
+                .approvalRequest(request)
+                .approverId(approverId)
+                .approverEmail(approver.getEmail())
+                .approverName(approver.getFirstName() + " " + approver.getLastName())
+                .decision(dto.getDecision())
+                .approvalLevel(request.getReceivedApprovals() + 1)
+                .comments(dto.getComments())
+                .actionAt(LocalDateTime.now())
+                .build();
+
+        approvalActionRepository.save(action);
+        request.getActions().add(action);
+
+        if (dto.getDecision() == ApprovalDecision.APPROVED) {
+            request.setReceivedApprovals(request.getReceivedApprovals() + 1);
+            if (request.isFullyApproved()) {
+                request.setStatus(ApprovalStatus.APPROVED);
+                request.setApprovedAt(LocalDateTime.now());
+                log.info("Approval request {} fully approved", request.getRequestNumber());
+            }
+        } else {
+            request.setStatus(ApprovalStatus.REJECTED);
+            request.setRejectionReason(dto.getComments());
+            request.setRejectedAt(LocalDateTime.now());
+            log.info("Approval request {} rejected by {}", request.getRequestNumber(), approver.getEmail());
+        }
+
+        ApprovalRequest updated = approvalRequestRepository.save(request);
+
+        ActivityAction auditAction = dto.getDecision() == ApprovalDecision.APPROVED
+                ? ActivityAction.APPROVE : ActivityAction.REJECT;
+        activityLogService.log(approverId, approver.getEmail(),
+                approver.getFirstName() + " " + approver.getLastName(),
+                auditAction, "APPROVAL_REQUEST", requestId,
+                request.getRequestNumber(), "APPROVAL",
+                dto.getDecision().name() + " approval request: " + request.getRequestNumber());
+
+        notifyRequesterAsync(updated, approver);
+
+        return toResponse(updated);
+    }
+
+    @Override
+    @Transactional
+    public ApprovalRequestResponse cancelRequest(UUID requestId, UUID requesterId) {
+        ApprovalRequest request = approvalRequestRepository.findById(requestId)
+                .orElseThrow(() -> new ResourceNotFoundException("ApprovalRequest", "id", requestId.toString()));
+
+        if (!request.isPending()) {
+            throw new ValidationException("Only PENDING requests can be cancelled");
+        }
+
+        if (!request.getRequestedById().equals(requesterId)) {
+            throw new ValidationException("Only the requester can cancel the request");
+        }
+
+        request.setStatus(ApprovalStatus.CANCELLED);
+        request.setCancelledAt(LocalDateTime.now());
+        ApprovalRequest saved = approvalRequestRepository.save(request);
+
+        User requester = userRepository.findById(requesterId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", requesterId.toString()));
+
+        activityLogService.log(requesterId, requester.getEmail(),
+                requester.getFirstName() + " " + requester.getLastName(),
+                ActivityAction.CANCEL, "APPROVAL_REQUEST", requestId,
+                request.getRequestNumber(), "APPROVAL",
+                "Cancelled approval request: " + request.getRequestNumber());
+
+        return toResponse(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ApprovalRequestResponse getById(UUID requestId) {
+        ApprovalRequest request = approvalRequestRepository.findById(requestId)
+                .orElseThrow(() -> new ResourceNotFoundException("ApprovalRequest", "id", requestId.toString()));
+        return toResponse(request);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<ApprovalRequestResponse> getAll(ApprovalStatus status, ApprovalWorkflowType workflowType,
+                                                         String entityType, int page, int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Page<ApprovalRequest> result = approvalRequestRepository.findWithFilters(status, workflowType, entityType, pageable);
+        return toPageResponse(result);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<ApprovalRequestResponse> getMyRequests(UUID requesterId, ApprovalStatus status, int page, int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+        Page<ApprovalRequest> result = status != null
+                ? approvalRequestRepository.findByRequestedById(requesterId, pageable)
+                : approvalRequestRepository.findByRequestedById(requesterId, pageable);
+        return toPageResponse(result);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<ApprovalRequestResponse> getPendingForApprover(int page, int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").ascending());
+        Page<ApprovalRequest> result = approvalRequestRepository.findByStatus(ApprovalStatus.PENDING, pageable);
+        return toPageResponse(result);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countPending() {
+        return approvalRequestRepository.countByStatus(ApprovalStatus.PENDING);
+    }
+
+    @Override
+    @Transactional
+    @Scheduled(cron = "0 0 * * * *") // Run every hour
+    public void expireStaleRequests() {
+        List<ApprovalRequest> expired = approvalRequestRepository.findExpiredRequests(LocalDateTime.now());
+        if (expired.isEmpty()) return;
+
+        log.info("Expiring {} stale approval requests", expired.size());
+        expired.forEach(r -> {
+            r.setStatus(ApprovalStatus.EXPIRED);
+            activityLogService.log(null, "system", "System",
+                    ActivityAction.CANCEL, "APPROVAL_REQUEST", r.getId(),
+                    r.getRequestNumber(), "APPROVAL",
+                    "Auto-expired approval request: " + r.getRequestNumber());
+        });
+        approvalRequestRepository.saveAll(expired);
+    }
+
+    private void notifyApproversAsync(ApprovalRequest request) {
+        try {
+            // Notify all ADMIN/DISTRIBUTOR_ADMIN users — in production, query by role
+            // For now, log the intent; wired notification goes through email template
+            log.info("Notifying approvers for request: {}", request.getRequestNumber());
+        } catch (Exception e) {
+            log.error("Failed to notify approvers for request: {}", request.getRequestNumber(), e);
+        }
+    }
+
+    private void notifyRequesterAsync(ApprovalRequest request, User approver) {
+        try {
+            Map<String, Object> vars = new HashMap<>();
+            vars.put("requestNumber", request.getRequestNumber());
+            vars.put("workflowType", formatLabel(request.getWorkflowType().name()));
+            vars.put("entityName", request.getEntityName());
+            vars.put("status", request.getStatus().name());
+            vars.put("approverName", approver.getFirstName() + " " + approver.getLastName());
+            vars.put("rejectionReason", request.getRejectionReason());
+            vars.put("companyName", emailConfig.getFromName());
+
+            emailService.sendTemplatedEmail(
+                    request.getRequestedByEmail(),
+                    "Approval Request " + request.getStatus().name() + " - " + request.getRequestNumber(),
+                    "approval-decision",
+                    vars
+            );
+        } catch (Exception e) {
+            log.error("Failed to notify requester for request: {}", request.getRequestNumber(), e);
+        }
+    }
+
+    private String generateRequestNumber(ApprovalWorkflowType type) {
+        String prefix = switch (type) {
+            case CREDIT_LIMIT_CHANGE -> "CLM";
+            case PAYMENT_TERMS_CHANGE -> "PTM";
+            case BANK_DETAILS_UPDATE -> "BDU";
+            case SUPPLIER_CREATION -> "SUP";
+            case SUPPLIER_BANK_DETAILS_UPDATE -> "SBD";
+            case PRODUCT_PRICE_EDIT -> "PRE";
+            case PRODUCT_COST_EDIT -> "PCE";
+            case DISCOUNT_APPROVAL -> "DIS";
+            case STOCK_ADJUSTMENT -> "STK";
+            case STOCK_WRITE_OFF -> "SWO";
+            case PURCHASE_REQUISITION -> "PRQ";
+            case PURCHASE_ORDER -> "POA";
+            case PAYMENT_APPROVAL -> "PAY";
+            case CREDIT_NOTE -> "CRN";
+            case JOURNAL_ENTRY -> "JNL";
+            default -> "APR";
+        };
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyMMddHHmmss"));
+        return prefix + "-" + timestamp;
+    }
+
+    private String formatLabel(String name) {
+        return name.replace("_", " ");
+    }
+
+    private ApprovalRequestResponse toResponse(ApprovalRequest request) {
+        List<ApprovalActionResponse> actions = request.getActions().stream()
+                .map(a -> ApprovalActionResponse.builder()
+                        .id(a.getId())
+                        .approverId(a.getApproverId())
+                        .approverEmail(a.getApproverEmail())
+                        .approverName(a.getApproverName())
+                        .decision(a.getDecision())
+                        .approvalLevel(a.getApprovalLevel())
+                        .comments(a.getComments())
+                        .actionAt(a.getActionAt())
+                        .build())
+                .toList();
+
+        return ApprovalRequestResponse.builder()
+                .id(request.getId())
+                .requestNumber(request.getRequestNumber())
+                .workflowType(request.getWorkflowType())
+                .workflowTypeLabel(formatLabel(request.getWorkflowType().name()))
+                .entityType(request.getEntityType())
+                .entityId(request.getEntityId())
+                .entityName(request.getEntityName())
+                .requestedById(request.getRequestedById())
+                .requestedByEmail(request.getRequestedByEmail())
+                .requestedByName(request.getRequestedByName())
+                .status(request.getStatus())
+                .description(request.getDescription())
+                .currentValues(request.getCurrentValues())
+                .requestedValues(request.getRequestedValues())
+                .requiredApprovals(request.getRequiredApprovals())
+                .receivedApprovals(request.getReceivedApprovals())
+                .amount(request.getAmount())
+                .rejectionReason(request.getRejectionReason())
+                .approvedAt(request.getApprovedAt())
+                .rejectedAt(request.getRejectedAt())
+                .expiresAt(request.getExpiresAt())
+                .actions(actions)
+                .createdAt(request.getCreatedAt())
+                .updatedAt(request.getUpdatedAt())
+                .build();
+    }
+
+    private PageResponse<ApprovalRequestResponse> toPageResponse(Page<ApprovalRequest> page) {
+        return PageResponse.<ApprovalRequestResponse>builder()
+                .content(page.getContent().stream().map(this::toResponse).toList())
+                .number(page.getNumber())
+                .size(page.getSize())
+                .totalElements(page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .first(page.isFirst())
+                .last(page.isLast())
+                .empty(page.isEmpty())
+                .build();
+    }
+}

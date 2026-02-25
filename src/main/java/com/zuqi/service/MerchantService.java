@@ -41,6 +41,12 @@ public interface MerchantService {
 
     void activateMerchant(UUID id);
 
+    MerchantResponse blacklistMerchant(UUID id, String reason, User currentUser);
+
+    MerchantResponse unblacklistMerchant(UUID id);
+
+    Page<MerchantResponse> getBlacklistedMerchants(Pageable pageable);
+
     List<MerchantCategoryResponse> getAllCategories();
 
     MerchantCategoryResponse getCategoryById(Long id);

@@ -2,6 +2,7 @@ package com.zuqi.api.controller;
 
 import com.zuqi.api.dto.ApiResponse;
 import com.zuqi.api.dto.common.DeactivateRequest;
+import com.zuqi.api.dto.merchant.BlacklistRequest;
 import com.zuqi.api.dto.merchant.MerchantCategoryRequest;
 import com.zuqi.api.dto.merchant.MerchantCategoryResponse;
 import com.zuqi.api.dto.merchant.MerchantRequest;
@@ -135,6 +136,35 @@ public class MerchantController {
             @Parameter(description = "Merchant ID") @PathVariable UUID id) {
         merchantService.activateMerchant(id);
         return ResponseEntity.ok(ApiResponse.success("Merchant activated successfully"));
+    }
+
+    @PostMapping("/{id}/blacklist")
+    @Operation(summary = "Blacklist merchant", description = "Blacklists a merchant with a reason")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    public ResponseEntity<ApiResponse<MerchantResponse>> blacklistMerchant(
+            @Parameter(description = "Merchant ID") @PathVariable UUID id,
+            @Valid @RequestBody BlacklistRequest request,
+            @AuthenticationPrincipal User currentUser) {
+        MerchantResponse merchant = merchantService.blacklistMerchant(id, request.getReason(), currentUser);
+        return ResponseEntity.ok(ApiResponse.success("Merchant blacklisted successfully", merchant));
+    }
+
+    @PostMapping("/{id}/unblacklist")
+    @Operation(summary = "Remove merchant from blacklist", description = "Removes a merchant from the blacklist")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    public ResponseEntity<ApiResponse<MerchantResponse>> unblacklistMerchant(
+            @Parameter(description = "Merchant ID") @PathVariable UUID id) {
+        MerchantResponse merchant = merchantService.unblacklistMerchant(id);
+        return ResponseEntity.ok(ApiResponse.success("Merchant removed from blacklist", merchant));
+    }
+
+    @GetMapping("/blacklisted")
+    @Operation(summary = "Get blacklisted merchants", description = "Retrieves all blacklisted merchants")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    public ResponseEntity<ApiResponse<Page<MerchantResponse>>> getBlacklistedMerchants(
+            @PageableDefault(size = 20, sort = "businessName", direction = Sort.Direction.ASC) Pageable pageable) {
+        Page<MerchantResponse> merchants = merchantService.getBlacklistedMerchants(pageable);
+        return ResponseEntity.ok(ApiResponse.success(merchants));
     }
 
     @GetMapping("/categories")
