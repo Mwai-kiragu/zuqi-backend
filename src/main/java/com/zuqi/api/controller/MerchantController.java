@@ -2,6 +2,7 @@ package com.zuqi.api.controller;
 
 import com.zuqi.api.dto.ApiResponse;
 import com.zuqi.api.dto.common.DeactivateRequest;
+import com.zuqi.api.dto.merchant.BlacklistRequest;
 import com.zuqi.api.dto.merchant.MerchantCategoryRequest;
 import com.zuqi.api.dto.merchant.MerchantCategoryResponse;
 import com.zuqi.api.dto.merchant.MerchantRequest;
@@ -79,7 +80,7 @@ public class MerchantController {
 
     @PostMapping
     @Operation(summary = "Create merchant", description = "Creates a new merchant")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP')")
     public ResponseEntity<ApiResponse<MerchantResponse>> createMerchant(
             @Valid @RequestBody MerchantRequest request) {
         MerchantResponse merchant = merchantService.createMerchant(request);
@@ -90,7 +91,7 @@ public class MerchantController {
 
     @PutMapping("/{id}")
     @Operation(summary = "Update merchant", description = "Updates an existing merchant")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP')")
     public ResponseEntity<ApiResponse<MerchantResponse>> updateMerchant(
             @Parameter(description = "Merchant ID") @PathVariable UUID id,
             @Valid @RequestBody MerchantRequest request) {
@@ -100,7 +101,7 @@ public class MerchantController {
 
     @PatchMapping("/{id}/assign")
     @Operation(summary = "Assign sales rep", description = "Assigns a sales rep to a merchant")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<MerchantResponse>> assignSalesRep(
             @Parameter(description = "Merchant ID") @PathVariable UUID id,
             @Parameter(description = "Sales Rep ID") @RequestParam UUID salesRepId) {
@@ -110,7 +111,7 @@ public class MerchantController {
 
     @PatchMapping("/{id}/verify")
     @Operation(summary = "Verify merchant", description = "Marks a merchant as verified")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<MerchantResponse>> verifyMerchant(
             @Parameter(description = "Merchant ID") @PathVariable UUID id) {
         MerchantResponse merchant = merchantService.verifyMerchant(id);
@@ -119,7 +120,7 @@ public class MerchantController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Deactivate merchant", description = "Deactivates a merchant (soft delete) with reason")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deactivateMerchant(
             @Parameter(description = "Merchant ID") @PathVariable UUID id,
             @Valid @RequestBody DeactivateRequest request,
@@ -130,11 +131,40 @@ public class MerchantController {
 
     @PostMapping("/{id}/activate")
     @Operation(summary = "Activate merchant", description = "Reactivates a deactivated merchant")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> activateMerchant(
             @Parameter(description = "Merchant ID") @PathVariable UUID id) {
         merchantService.activateMerchant(id);
         return ResponseEntity.ok(ApiResponse.success("Merchant activated successfully"));
+    }
+
+    @PostMapping("/{id}/blacklist")
+    @Operation(summary = "Blacklist merchant", description = "Blacklists a merchant with a reason")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
+    public ResponseEntity<ApiResponse<MerchantResponse>> blacklistMerchant(
+            @Parameter(description = "Merchant ID") @PathVariable UUID id,
+            @Valid @RequestBody BlacklistRequest request,
+            @AuthenticationPrincipal User currentUser) {
+        MerchantResponse merchant = merchantService.blacklistMerchant(id, request.getReason(), currentUser);
+        return ResponseEntity.ok(ApiResponse.success("Merchant blacklisted successfully", merchant));
+    }
+
+    @PostMapping("/{id}/unblacklist")
+    @Operation(summary = "Remove merchant from blacklist", description = "Removes a merchant from the blacklist")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN')")
+    public ResponseEntity<ApiResponse<MerchantResponse>> unblacklistMerchant(
+            @Parameter(description = "Merchant ID") @PathVariable UUID id) {
+        MerchantResponse merchant = merchantService.unblacklistMerchant(id);
+        return ResponseEntity.ok(ApiResponse.success("Merchant removed from blacklist", merchant));
+    }
+
+    @GetMapping("/blacklisted")
+    @Operation(summary = "Get blacklisted merchants", description = "Retrieves all blacklisted merchants")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
+    public ResponseEntity<ApiResponse<Page<MerchantResponse>>> getBlacklistedMerchants(
+            @PageableDefault(size = 20, sort = "businessName", direction = Sort.Direction.ASC) Pageable pageable) {
+        Page<MerchantResponse> merchants = merchantService.getBlacklistedMerchants(pageable);
+        return ResponseEntity.ok(ApiResponse.success(merchants));
     }
 
     @GetMapping("/categories")
@@ -154,7 +184,7 @@ public class MerchantController {
 
     @PostMapping("/categories")
     @Operation(summary = "Create merchant category", description = "Creates a new merchant category")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<MerchantCategoryResponse>> createCategory(
             @Valid @RequestBody MerchantCategoryRequest request) {
         MerchantCategoryResponse category = merchantService.createCategory(request);
@@ -165,7 +195,7 @@ public class MerchantController {
 
     @PutMapping("/categories/{id}")
     @Operation(summary = "Update merchant category", description = "Updates an existing merchant category")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<MerchantCategoryResponse>> updateCategory(
             @Parameter(description = "Category ID") @PathVariable Long id,
             @Valid @RequestBody MerchantCategoryRequest request) {
@@ -175,7 +205,7 @@ public class MerchantController {
 
     @DeleteMapping("/categories/{id}")
     @Operation(summary = "Delete merchant category", description = "Deletes a merchant category (only if not in use)")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteCategory(
             @Parameter(description = "Category ID") @PathVariable Long id) {
         merchantService.deleteCategory(id);

@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Approval Required</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f4f4f4;">
+        <tr>
+            <td style="padding: 40px 0;">
+                <table role="presentation" width="600" cellspacing="0" cellpadding="0"
+                       style="margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+
+                    <!-- Header -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #e65100 0%, #bf360c 100%); padding: 30px 40px; border-radius: 8px 8px 0 0;">
+                            <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;"
+                                th:text="${companyName}">Company</h1>
+                            <p style="margin: 8px 0 0 0; color: #ffccbc; font-size: 14px;">Action Required: Approval Pending</p>
+                        </td>
+                    </tr>
+
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 40px;">
+                            <h2 style="margin: 0 0 16px 0; color: #333333; font-size: 20px;">
+                                New Approval Request
+                            </h2>
+
+                            <p style="margin: 0 0 24px 0; color: #666666; font-size: 15px; line-height: 1.6;">
+                                A new approval request requires your action.
+                            </p>
+
+                            <!-- Request Details -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0"
+                                   style="background-color: #fff8f6; border: 1px solid #ffccbc; border-radius: 8px; margin: 0 0 24px 0;">
+                                <tr>
+                                    <td style="padding: 24px;">
+                                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                            <tr>
+                                                <td style="padding: 6px 0; color: #888; font-size: 13px; width: 140px;">Request No.</td>
+                                                <td style="padding: 6px 0; color: #333; font-size: 14px; font-weight: 600;"
+                                                    th:text="${requestNumber}">APR-001</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 6px 0; color: #888; font-size: 13px;">Type</td>
+                                                <td style="padding: 6px 0; color: #333; font-size: 14px;"
+                                                    th:text="${workflowType}">Credit Limit Change</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 6px 0; color: #888; font-size: 13px;">Entity</td>
+                                                <td style="padding: 6px 0; color: #333; font-size: 14px;"
+                                                    th:text="${entityName}">Customer Name</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 6px 0; color: #888; font-size: 13px;">Requested By</td>
+                                                <td style="padding: 6px 0; color: #333; font-size: 14px;"
+                                                    th:text="${requesterName}">User Name</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 6px 0; color: #888; font-size: 13px;">Description</td>
+                                                <td style="padding: 6px 0; color: #555; font-size: 14px;"
+                                                    th:text="${description}">Reason for request</td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 6px 0; color: #888; font-size: 13px;">Expires</td>
+                                                <td style="padding: 6px 0; color: #e65100; font-size: 14px; font-weight: 600;"
+                                                    th:text="${expiresAt}">Date</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p style="margin: 0 0 16px 0; color: #666666; font-size: 14px;">
+                                Please log in to the system to review and act on this request before it expires.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f8f9fa; padding: 20px 40px; border-radius: 0 0 8px 8px; border-top: 1px solid #eeeeee;">
+                            <p style="margin: 0; color: #999999; font-size: 12px;">
+                                This is an automated notification from <span th:text="${companyName}">Company</span>. Do not reply to this email.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

@@ -58,7 +58,7 @@ public class UserServiceImpl implements UserService {
     public Page<UserResponse> getAllUsers(Pageable pageable, Boolean active) {
         log.info("Fetching all users with active filter: {}", active);
 
-        // SUPER_ADMIN and ADMIN can see all users
+        // SUPER_ADMIN can see all users
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
         if (distributorId != null) {
             return getUsersByDistributor(distributorId, pageable, active);
@@ -126,7 +126,7 @@ public class UserServiceImpl implements UserService {
         if (effectiveDistributorId != null) {
             allUsers = userRepository.findByDistributorIdAndActiveTrue(effectiveDistributorId);
         } else {
-            // SUPER_ADMIN/ADMIN can see all users
+            // SUPER_ADMIN can see all users
             allUsers = userRepository.findAll();
         }
 
@@ -170,11 +170,6 @@ public class UserServiceImpl implements UserService {
             throw new ValidationException("Invalid role: " + request.getRole());
         }
 
-        // Only ADMIN can create ADMIN users
-        if (roleName == RoleName.ADMIN && creatorDistributorId != null) {
-            throw new ValidationException("Only system administrators can create ADMIN users");
-        }
-
         Role role = roleRepository.findByName(roleName)
                 .orElseThrow(() -> new ResourceNotFoundException("Role", "name", request.getRole()));
 
@@ -189,7 +184,7 @@ public class UserServiceImpl implements UserService {
         }
 
         // Validate distributor exists if provided
-        if (finalDistributorId != null && roleName != RoleName.ADMIN && roleName != RoleName.MERCHANT) {
+        if (finalDistributorId != null && roleName != RoleName.SUPER_ADMIN && roleName != RoleName.MERCHANT) {
             distributorRepository.findById(finalDistributorId)
                     .orElseThrow(() -> new ResourceNotFoundException("Distributor", "id", finalDistributorId.toString()));
         }
@@ -426,17 +421,9 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public List<String> getAvailableRoles(boolean isAdmin) {
-        // SUPER_ADMIN can create all roles including ADMIN and SUPER_ADMIN
+        // SUPER_ADMIN can create all roles
         if (securityUtils.isSuperAdmin()) {
             return Arrays.stream(RoleName.values())
-                    .map(Enum::name)
-                    .collect(Collectors.toList());
-        }
-
-        // ADMIN can create all roles except SUPER_ADMIN
-        if (isAdmin) {
-            return Arrays.stream(RoleName.values())
-                    .filter(r -> r != RoleName.SUPER_ADMIN)
                     .map(Enum::name)
                     .collect(Collectors.toList());
         }

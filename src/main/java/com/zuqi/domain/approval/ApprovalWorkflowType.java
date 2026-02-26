@@ -1,0 +1,41 @@
+package com.zuqi.domain.approval;
+
+public enum ApprovalWorkflowType {
+    // Customer Master
+    CREDIT_LIMIT_CHANGE,
+    PAYMENT_TERMS_CHANGE,
+    BANK_DETAILS_UPDATE,
+    CUSTOMER_KYC_APPROVAL,
+    CUSTOMER_BLACKLIST,
+
+    // Supplier Master
+    SUPPLIER_CREATION,
+    SUPPLIER_BANK_DETAILS_UPDATE,
+    SUPPLIER_BLACKLIST,
+
+    // Product / Pricing
+    PRODUCT_PRICE_EDIT,
+    PRODUCT_COST_EDIT,
+    DISCOUNT_APPROVAL,
+
+    // Inventory
+    STOCK_ADJUSTMENT,
+    STOCK_WRITE_OFF,
+    STOCK_TAKE_POSTING,
+
+    // Procurement
+    PURCHASE_REQUISITION,
+    PURCHASE_ORDER,
+    GOODS_RECEIPT_NOTE,
+
+    // Finance
+    PAYMENT_APPROVAL,
+    CREDIT_NOTE,
+    WRITE_OFF_APPROVAL,
+    JOURNAL_ENTRY,
+
+    // User Management
+    USER_CREATION,
+    USER_DEACTIVATION,
+    USER_ROLE_CHANGE
+}

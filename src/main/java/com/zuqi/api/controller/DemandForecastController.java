@@ -42,7 +42,7 @@ public class DemandForecastController {
      * Get demand forecast for a specific merchant-product combination.
      */
     @GetMapping("/forecasts/{merchantId}/{productId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SALES_REP', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SALES_REP', 'DISTRIBUTOR_ADMIN')")
     @Operation(
             summary = "Get demand forecast for merchant-product",
             description = "Returns AI-predicted demand quantity for next week with confidence score"
@@ -81,7 +81,7 @@ public class DemandForecastController {
      * Get order suggestions for a merchant (for sales rep).
      */
     @GetMapping("/suggestions/{merchantId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SALES_REP')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SALES_REP')")
     @Operation(
             summary = "Get AI-powered order suggestions",
             description = "Returns ranked list of suggested products with quantities for sales rep"
@@ -116,7 +116,7 @@ public class DemandForecastController {
      * Trigger demand forecasting model training (admin only).
      */
     @PostMapping("/train")
-    @PreAuthorize("hasRole('ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(
             summary = "Train demand forecasting model",
             description = "Triggers model training pipeline with synthetic or real data. Admin only."
@@ -165,7 +165,7 @@ public class DemandForecastController {
      * Get demand forecasting model health status.
      */
     @GetMapping("/health")
-    @PreAuthorize("hasAnyRole('ADMIN', 'SALES_REP', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SALES_REP', 'DISTRIBUTOR_ADMIN')")
     @Operation(
             summary = "Check demand forecasting model health",
             description = "Returns model status and availability"

@@ -24,6 +24,7 @@ public class PaymentResponse {
     private UUID merchantId;
     private String merchantName;
     private UUID distributorId;
+    private String distributorName;
     private Long paymentMethodId;
     private String paymentMethodName;
     private BigDecimal amount;
@@ -49,6 +50,7 @@ public class PaymentResponse {
                 .merchantId(payment.getMerchant() != null ? payment.getMerchant().getId() : null)
                 .merchantName(payment.getMerchant() != null ? payment.getMerchant().getBusinessName() : null)
                 .distributorId(payment.getDistributor() != null ? payment.getDistributor().getId() : null)
+                .distributorName(payment.getDistributor() != null ? payment.getDistributor().getName() : null)
                 .paymentMethodId(payment.getPaymentMethod() != null ? payment.getPaymentMethod().getId() : null)
                 .paymentMethodName(payment.getPaymentMethod() != null ? payment.getPaymentMethod().getName() : null)
                 .amount(payment.getAmount())

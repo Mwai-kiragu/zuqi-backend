@@ -4,9 +4,13 @@ import com.zuqi.api.dto.auth.AuthenticationRequest;
 import com.zuqi.api.dto.auth.AuthenticationResponse;
 import com.zuqi.api.dto.auth.RefreshTokenRequest;
 import com.zuqi.api.dto.auth.RegisterRequest;
+import com.zuqi.api.dto.auth.DistributorRegisterRequest;
 import com.zuqi.api.dto.auth.ForgotPasswordRequest;
 import com.zuqi.api.dto.auth.ResetPasswordRequest;
 import com.zuqi.api.dto.auth.VerifyOtpRequest;
+import com.zuqi.api.dto.billing.AssignSubscriptionRequest;
+import com.zuqi.domain.billing.BillingPackageType;
+import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.user.PasswordResetToken;
 import com.zuqi.domain.user.RefreshToken;
 import com.zuqi.domain.user.Role;
@@ -16,12 +20,14 @@ import com.zuqi.exception.AuthenticationException;
 import com.zuqi.exception.DuplicateResourceException;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
+import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.PasswordResetTokenRepository;
 import com.zuqi.repository.RefreshTokenRepository;
 import com.zuqi.repository.RoleRepository;
 import com.zuqi.repository.UserRepository;
 import com.zuqi.security.JwtService;
 import com.zuqi.service.AuthenticationService;
+import com.zuqi.service.BillingService;
 import com.zuqi.service.EmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,12 +50,14 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
+    private final DistributorRepository distributorRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final EmailService emailService;
+    private final BillingService billingService;
 
     // OTP expires in 10 minutes
     private static final int OTP_EXPIRY_MINUTES = 10;
@@ -105,6 +113,87 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .roles(savedUser.getRoles().stream().map(r -> r.getName()).toList())
                 .distributorId(savedUser.getDistributorId())
                 .merchantId(savedUser.getMerchantId())
+                .phoneNumber(savedUser.getPhoneNumber())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public AuthenticationResponse registerDistributor(DistributorRegisterRequest request) {
+        log.info("Registering new distributor with email: {}", request.getEmail());
+
+        // Check if email already exists
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new DuplicateResourceException("User", "email", request.getEmail());
+        }
+
+        // Check if phone number already exists (if provided)
+        if (request.getPhoneNumber() != null && userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
+            throw new DuplicateResourceException("User", "phoneNumber", request.getPhoneNumber());
+        }
+
+        // Check if company name already exists
+        if (distributorRepository.existsByName(request.getCompanyName())) {
+            throw new DuplicateResourceException("Distributor", "name", request.getCompanyName());
+        }
+
+        // 1. Create Distributor record
+        Distributor distributor = Distributor.builder()
+                .name(request.getCompanyName())
+                .registrationNumber(request.getRegistrationNumber())
+                .email(request.getEmail())
+                .phone(request.getCompanyPhone())
+                .address(request.getAddress())
+                .city(request.getCity())
+                .country(request.getCountry() != null ? request.getCountry() : "Kenya")
+                .active(true)
+                .build();
+
+        Distributor savedDistributor = distributorRepository.save(distributor);
+
+        // 2. Get DISTRIBUTOR_ADMIN role
+        Set<Role> roles = new HashSet<>();
+        Role distributorAdminRole = roleRepository.findByName(RoleName.DISTRIBUTOR_ADMIN)
+                .orElseThrow(() -> new ResourceNotFoundException("Role", "name", "DISTRIBUTOR_ADMIN"));
+        roles.add(distributorAdminRole);
+
+        // 3. Create User linked to Distributor
+        User user = User.builder()
+                .firstName(request.getFirstName())
+                .lastName(request.getLastName())
+                .email(request.getEmail())
+                .phoneNumber(request.getPhoneNumber())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .roles(roles)
+                .distributorId(savedDistributor.getId())
+                .active(true)
+                .emailVerified(false)
+                .build();
+
+        User savedUser = userRepository.save(user);
+
+        // 4. Assign FREE_TRIAL subscription
+        AssignSubscriptionRequest subRequest = new AssignSubscriptionRequest();
+        subRequest.setDistributorId(savedDistributor.getId());
+        subRequest.setPackageType(BillingPackageType.FREE_TRIAL);
+        billingService.assign(subRequest, savedUser);
+
+        log.info("Distributor registered: {}, User: {}", savedDistributor.getId(), savedUser.getId());
+
+        // 5. Generate tokens
+        String accessToken = jwtService.generateAccessToken(savedUser);
+        String refreshToken = createRefreshToken(savedUser);
+
+        return AuthenticationResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .tokenType("Bearer")
+                .expiresIn(jwtService.getAccessTokenExpiration())
+                .userId(savedUser.getId())
+                .email(savedUser.getEmail())
+                .fullName(savedUser.getFullName())
+                .roles(savedUser.getRoles().stream().map(r -> r.getName()).toList())
+                .distributorId(savedDistributor.getId())
                 .phoneNumber(savedUser.getPhoneNumber())
                 .build();
     }

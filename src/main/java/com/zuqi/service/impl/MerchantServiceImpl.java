@@ -26,6 +26,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -113,6 +114,11 @@ public class MerchantServiceImpl implements MerchantService {
         return MerchantResponse.fromEntity(merchant);
     }
 
+    private String generateCustomerCode() {
+        long count = merchantRepository.countAll();
+        return String.format("CUST-%05d", count + 1);
+    }
+
     @Override
     @Transactional
     public MerchantResponse createMerchant(MerchantRequest request) {
@@ -128,13 +134,23 @@ public class MerchantServiceImpl implements MerchantService {
             throw new DuplicateResourceException("Merchant", "email", request.getEmail());
         }
 
+        // Check for duplicate KRA PIN if provided
+        if (request.getKraPin() != null && merchantRepository.existsByKraPin(request.getKraPin())) {
+            throw new DuplicateResourceException("Merchant", "kraPin", request.getKraPin());
+        }
+
         Merchant merchant = Merchant.builder()
+                .customerCode(generateCustomerCode())
                 .businessName(request.getBusinessName())
                 .ownerName(request.getOwnerName())
                 .email(request.getEmail())
                 .phone(request.getPhone())
                 .address(request.getAddress())
                 .city(request.getCity())
+                .county(request.getCounty())
+                .subCounty(request.getSubCounty())
+                .kraPin(request.getKraPin())
+                .contactPersons(request.getContactPersons() != null ? request.getContactPersons() : new java.util.ArrayList<>())
                 .latitude(request.getLatitude())
                 .longitude(request.getLongitude())
                 .creditLimit(request.getCreditLimit())
@@ -190,12 +206,24 @@ public class MerchantServiceImpl implements MerchantService {
             throw new DuplicateResourceException("Merchant", "email", request.getEmail());
         }
 
+        // Check for duplicate KRA PIN if changed
+        if (request.getKraPin() != null && !request.getKraPin().equals(merchant.getKraPin())
+                && merchantRepository.existsByKraPin(request.getKraPin())) {
+            throw new DuplicateResourceException("Merchant", "kraPin", request.getKraPin());
+        }
+
         merchant.setBusinessName(request.getBusinessName());
         merchant.setOwnerName(request.getOwnerName());
         merchant.setEmail(request.getEmail());
         merchant.setPhone(request.getPhone());
         merchant.setAddress(request.getAddress());
         merchant.setCity(request.getCity());
+        merchant.setCounty(request.getCounty());
+        merchant.setSubCounty(request.getSubCounty());
+        merchant.setKraPin(request.getKraPin());
+        if (request.getContactPersons() != null) {
+            merchant.setContactPersons(request.getContactPersons());
+        }
         merchant.setLatitude(request.getLatitude());
         merchant.setLongitude(request.getLongitude());
 
@@ -325,6 +353,59 @@ public class MerchantServiceImpl implements MerchantService {
         merchantRepository.save(merchant);
 
         log.info("Merchant activated successfully");
+    }
+
+    @Override
+    @Transactional
+    public MerchantResponse blacklistMerchant(UUID id, String reason, User currentUser) {
+        log.info("Blacklisting merchant: {} with reason: {}", id, reason);
+
+        Merchant merchant = merchantRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", id.toString()));
+
+        merchant.setBlacklisted(true);
+        merchant.setBlacklistedReason(reason);
+        merchant.setBlacklistedAt(LocalDateTime.now());
+        merchant.setBlacklistedBy(currentUser);
+        merchant.setActive(false);
+
+        Merchant saved = merchantRepository.save(merchant);
+        log.info("Merchant blacklisted successfully: {}", id);
+        return MerchantResponse.fromEntity(saved);
+    }
+
+    @Override
+    @Transactional
+    public MerchantResponse unblacklistMerchant(UUID id) {
+        log.info("Removing merchant from blacklist: {}", id);
+
+        Merchant merchant = merchantRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", id.toString()));
+
+        merchant.setBlacklisted(false);
+        merchant.setBlacklistedReason(null);
+        merchant.setBlacklistedAt(null);
+        merchant.setBlacklistedBy(null);
+        merchant.setActive(true);
+
+        Merchant saved = merchantRepository.save(merchant);
+        log.info("Merchant removed from blacklist: {}", id);
+        return MerchantResponse.fromEntity(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<MerchantResponse> getBlacklistedMerchants(Pageable pageable) {
+        log.debug("Fetching blacklisted merchants");
+
+        UUID distributorId = securityUtils.getDistributorIdForFiltering();
+        if (distributorId != null) {
+            return merchantRepository.findByDistributorIdAndBlacklistedTrue(distributorId, pageable)
+                    .map(MerchantResponse::fromEntity);
+        }
+
+        return merchantRepository.findByBlacklistedTrue(pageable)
+                .map(MerchantResponse::fromEntity);
     }
 
     @Override

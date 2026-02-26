@@ -5,6 +5,7 @@ import com.zuqi.api.dto.auth.AuthenticationRequest;
 import com.zuqi.api.dto.auth.AuthenticationResponse;
 import com.zuqi.api.dto.auth.RefreshTokenRequest;
 import com.zuqi.api.dto.auth.RegisterRequest;
+import com.zuqi.api.dto.auth.DistributorRegisterRequest;
 import com.zuqi.api.dto.auth.ForgotPasswordRequest;
 import com.zuqi.api.dto.auth.ResetPasswordRequest;
 import com.zuqi.api.dto.auth.VerifyOtpRequest;
@@ -33,6 +34,16 @@ public class AuthController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Registration successful", response));
+    }
+
+    @PostMapping("/register/distributor")
+    @Operation(summary = "Register a new distributor", description = "Creates a new distributor, admin user, and FREE_TRIAL subscription")
+    public ResponseEntity<ApiResponse<AuthenticationResponse>> registerDistributor(
+            @Valid @RequestBody DistributorRegisterRequest request) {
+        AuthenticationResponse response = authenticationService.registerDistributor(request);
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Distributor registration successful", response));
     }
 
     @PostMapping("/login")

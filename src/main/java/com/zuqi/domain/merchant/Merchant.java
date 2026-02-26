@@ -12,7 +12,9 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -21,7 +23,10 @@ import java.util.UUID;
         @Index(name = "idx_merchants_distributor", columnList = "distributor_id"),
         @Index(name = "idx_merchants_category", columnList = "category_id"),
         @Index(name = "idx_merchants_sales_rep", columnList = "assigned_sales_rep_id"),
-        @Index(name = "idx_merchants_active", columnList = "active")
+        @Index(name = "idx_merchants_active", columnList = "active"),
+        @Index(name = "idx_merchants_customer_code", columnList = "customer_code"),
+        @Index(name = "idx_merchants_kra_pin", columnList = "kra_pin"),
+        @Index(name = "idx_merchants_blacklisted", columnList = "blacklisted")
 })
 @EntityListeners(AuditingEntityListener.class)
 @Getter
@@ -34,6 +39,9 @@ public class Merchant {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
+
+    @Column(name = "customer_code", length = 20, unique = true)
+    private String customerCode;
 
     @Column(name = "business_name", nullable = false)
     private String businessName;
@@ -50,6 +58,20 @@ public class Merchant {
     private String address;
 
     private String city;
+
+    @Column(name = "county", length = 100)
+    private String county;
+
+    @Column(name = "sub_county", length = 100)
+    private String subCounty;
+
+    @Column(name = "kra_pin", length = 20, unique = true)
+    private String kraPin;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "contact_persons", columnDefinition = "jsonb")
+    @Builder.Default
+    private List<Map<String, Object>> contactPersons = new ArrayList<>();
 
     private BigDecimal latitude;
 
@@ -89,6 +111,30 @@ public class Merchant {
     @Column(nullable = false)
     @Builder.Default
     private boolean verified = false;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private boolean blacklisted = false;
+
+    @Column(name = "blacklisted_reason", length = 500)
+    private String blacklistedReason;
+
+    @Column(name = "blacklisted_at")
+    private LocalDateTime blacklistedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "blacklisted_by")
+    private User blacklistedBy;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "kyc_status", length = 20)
+    @Builder.Default
+    private KycStatus kycStatus = KycStatus.PENDING;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "kyc_documents", columnDefinition = "jsonb")
+    @Builder.Default
+    private Map<String, Object> kycDocuments = new HashMap<>();
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")

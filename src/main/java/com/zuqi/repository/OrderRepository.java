@@ -51,7 +51,8 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
             "AND (CAST(:salesRepId AS UUID) IS NULL OR o.sales_rep_id = CAST(:salesRepId AS UUID)) " +
             "AND (:paymentStatus IS NULL OR o.payment_status = CAST(:paymentStatus AS VARCHAR)) " +
             "AND (CAST(:startDate AS TIMESTAMP) IS NULL OR o.created_at >= CAST(:startDate AS TIMESTAMP)) " +
-            "AND (CAST(:endDate AS TIMESTAMP) IS NULL OR o.created_at <= CAST(:endDate AS TIMESTAMP))",
+            "AND (CAST(:endDate AS TIMESTAMP) IS NULL OR o.created_at <= CAST(:endDate AS TIMESTAMP)) " +
+            "ORDER BY o.created_at DESC",
             countQuery = "SELECT COUNT(*) FROM orders o WHERE o.distributor_id = :distributorId " +
             "AND (:status IS NULL OR o.status = CAST(:status AS VARCHAR)) " +
             "AND (CAST(:merchantId AS UUID) IS NULL OR o.merchant_id = CAST(:merchantId AS UUID)) " +

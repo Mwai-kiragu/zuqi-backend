@@ -24,6 +24,7 @@ public class OrderResponse {
     private UUID id;
     private String orderNumber;
     private UUID distributorId;
+    private String distributorName;
     private UUID merchantId;
     private String merchantName;
     private UUID salesRepId;
@@ -52,6 +53,7 @@ public class OrderResponse {
                 .id(order.getId())
                 .orderNumber(order.getOrderNumber())
                 .distributorId(order.getDistributor() != null ? order.getDistributor().getId() : null)
+                .distributorName(order.getDistributor() != null ? order.getDistributor().getName() : null)
                 .merchantId(order.getMerchant() != null ? order.getMerchant().getId() : null)
                 .merchantName(order.getMerchant() != null ? order.getMerchant().getBusinessName() : null)
                 .salesRepId(order.getSalesRep() != null ? order.getSalesRep().getId() : null)

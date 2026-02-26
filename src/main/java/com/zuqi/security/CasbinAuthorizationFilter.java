@@ -74,9 +74,9 @@ public class CasbinAuthorizationFilter extends OncePerRequestFilter {
         List<String> roles = getUserRoles(authentication);
         log.debug("User {} has roles: {}", authentication.getName(), roles);
 
-        // SUPER_ADMIN and ADMIN bypass - always allow full access
-        if (roles.contains("SUPER_ADMIN") || roles.contains("ADMIN")) {
-            log.debug("Admin bypass: user={}, roles={}, path={}, method={}",
+        // SUPER_ADMIN bypass - always allow full access
+        if (roles.contains("SUPER_ADMIN")) {
+            log.debug("Super admin bypass: user={}, roles={}, path={}, method={}",
                     authentication.getName(), roles, path, method);
             filterChain.doFilter(request, response);
             return;
