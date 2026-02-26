@@ -24,7 +24,7 @@ public class GlReportController {
     private final SecurityUtils securityUtils;
 
     @GetMapping("/trial-balance")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get trial balance for a period")
     public ResponseEntity<ApiResponse<TrialBalanceResponse>> getTrialBalance(
             @RequestParam UUID periodId,
@@ -34,7 +34,7 @@ public class GlReportController {
     }
 
     @GetMapping("/budget-variance")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get budget vs actual variance report")
     public ResponseEntity<ApiResponse<BudgetVarianceResponse>> getBudgetVariance(
             @RequestParam int year,

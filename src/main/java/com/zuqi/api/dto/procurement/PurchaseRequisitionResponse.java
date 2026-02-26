@@ -24,6 +24,7 @@ public class PurchaseRequisitionResponse {
     private UUID id;
     private String prNumber;
     private UUID distributorId;
+    private String distributorName;
     private UUID requestedById;
     private String requestedByName;
     private String requestedByEmail;
@@ -41,10 +42,15 @@ public class PurchaseRequisitionResponse {
     private LocalDateTime updatedAt;
 
     public static PurchaseRequisitionResponse fromEntity(PurchaseRequisition pr) {
+        return fromEntity(pr, null);
+    }
+
+    public static PurchaseRequisitionResponse fromEntity(PurchaseRequisition pr, String distributorName) {
         return PurchaseRequisitionResponse.builder()
                 .id(pr.getId())
                 .prNumber(pr.getPrNumber())
                 .distributorId(pr.getDistributorId())
+                .distributorName(distributorName)
                 .requestedById(pr.getRequestedBy() != null ? pr.getRequestedBy().getId() : null)
                 .requestedByName(pr.getRequestedBy() != null ? pr.getRequestedBy().getFullName() : null)
                 .requestedByEmail(pr.getRequestedBy() != null ? pr.getRequestedBy().getEmail() : null)

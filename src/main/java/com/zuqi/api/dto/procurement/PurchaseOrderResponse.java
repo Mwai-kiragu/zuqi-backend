@@ -26,6 +26,7 @@ public class PurchaseOrderResponse {
     private String supplierName;
     private String supplierCode;
     private UUID distributorId;
+    private String distributorName;
     private UUID purchaseRequisitionId;
     private String prNumber;
     private PoStatus status;
@@ -44,6 +45,10 @@ public class PurchaseOrderResponse {
     private LocalDateTime updatedAt;
 
     public static PurchaseOrderResponse fromEntity(PurchaseOrder po) {
+        return fromEntity(po, null);
+    }
+
+    public static PurchaseOrderResponse fromEntity(PurchaseOrder po, String distributorName) {
         return PurchaseOrderResponse.builder()
                 .id(po.getId())
                 .poNumber(po.getPoNumber())
@@ -51,6 +56,7 @@ public class PurchaseOrderResponse {
                 .supplierName(po.getSupplier() != null ? po.getSupplier().getName() : null)
                 .supplierCode(po.getSupplier() != null ? po.getSupplier().getSupplierCode() : null)
                 .distributorId(po.getDistributorId())
+                .distributorName(distributorName)
                 .purchaseRequisitionId(po.getPurchaseRequisition() != null ? po.getPurchaseRequisition().getId() : null)
                 .prNumber(po.getPurchaseRequisition() != null ? po.getPurchaseRequisition().getPrNumber() : null)
                 .status(po.getStatus())

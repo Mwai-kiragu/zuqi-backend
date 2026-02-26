@@ -84,7 +84,7 @@ public class PaymentController {
 
     @PostMapping
     @Operation(summary = "Create payment", description = "Records a new payment")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE', 'MERCHANT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE', 'MERCHANT')")
     public ResponseEntity<ApiResponse<PaymentResponse>> createPayment(
             @Valid @RequestBody PaymentRequest request) {
         PaymentResponse payment = paymentService.createPayment(request);
@@ -95,7 +95,7 @@ public class PaymentController {
 
     @PatchMapping("/{id}/status")
     @Operation(summary = "Update payment status", description = "Updates the status of a payment")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE')")
     public ResponseEntity<ApiResponse<PaymentResponse>> updatePaymentStatus(
             @Parameter(description = "Payment ID") @PathVariable UUID id,
             @Parameter(description = "New status") @RequestParam PaymentStatus status) {
@@ -105,7 +105,7 @@ public class PaymentController {
 
     @PostMapping("/{id}/reconcile")
     @Operation(summary = "Reconcile payment", description = "Marks a payment as reconciled")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'FINANCE')")
     public ResponseEntity<ApiResponse<PaymentResponse>> reconcilePayment(
             @Parameter(description = "Payment ID") @PathVariable UUID id,
             @RequestBody(required = false) ReconcileRequest request,
@@ -117,7 +117,7 @@ public class PaymentController {
 
     @GetMapping("/unreconciled")
     @Operation(summary = "Get unreconciled payments", description = "Gets all unreconciled payments")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE')")
     public ResponseEntity<ApiResponse<List<PaymentResponse>>> getUnreconciledPayments(
             @Parameter(description = "Distributor ID") @RequestParam UUID distributorId) {
         List<PaymentResponse> payments = paymentService.getUnreconciledPayments(distributorId);
@@ -126,7 +126,7 @@ public class PaymentController {
 
     @GetMapping("/unreconciled/count")
     @Operation(summary = "Count unreconciled payments", description = "Gets the count of unreconciled payments")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE')")
     public ResponseEntity<ApiResponse<Long>> countUnreconciledPayments(
             @Parameter(description = "Distributor ID") @RequestParam UUID distributorId) {
         long count = paymentService.countUnreconciledPayments(distributorId);

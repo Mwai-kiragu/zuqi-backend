@@ -35,7 +35,7 @@ public class JournalEntryController {
     private final SecurityUtils securityUtils;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get all journal entries with optional filters")
     public ResponseEntity<ApiResponse<Page<JournalEntryResponse>>> getAll(
             @RequestParam(required = false) UUID distributorId,
@@ -50,14 +50,14 @@ public class JournalEntryController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get journal entry by ID")
     public ResponseEntity<ApiResponse<JournalEntryResponse>> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(journalEntryService.getById(id)));
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE')")
     @Operation(summary = "Create a DRAFT journal entry")
     public ResponseEntity<ApiResponse<JournalEntryResponse>> create(
             @Valid @RequestBody JournalEntryRequest request,
@@ -69,7 +69,7 @@ public class JournalEntryController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE')")
     @Operation(summary = "Update a DRAFT journal entry")
     public ResponseEntity<ApiResponse<JournalEntryResponse>> update(
             @PathVariable UUID id,
@@ -79,7 +79,7 @@ public class JournalEntryController {
     }
 
     @PostMapping("/{id}/submit")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE')")
     @Operation(summary = "Submit journal entry for approval")
     public ResponseEntity<ApiResponse<JournalEntryResponse>> submit(
             @PathVariable UUID id,
@@ -88,7 +88,7 @@ public class JournalEntryController {
     }
 
     @PostMapping("/{id}/approve")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE')")
     @Operation(summary = "Approve and post a journal entry")
     public ResponseEntity<ApiResponse<JournalEntryResponse>> approve(
             @PathVariable UUID id,
@@ -99,7 +99,7 @@ public class JournalEntryController {
     }
 
     @PostMapping("/{id}/reject")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE')")
     @Operation(summary = "Reject a journal entry")
     public ResponseEntity<ApiResponse<JournalEntryResponse>> reject(
             @PathVariable UUID id,
@@ -109,7 +109,7 @@ public class JournalEntryController {
     }
 
     @PostMapping("/{id}/reverse")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE')")
     @Operation(summary = "Reverse a posted journal entry")
     public ResponseEntity<ApiResponse<JournalEntryResponse>> reverse(
             @PathVariable UUID id,

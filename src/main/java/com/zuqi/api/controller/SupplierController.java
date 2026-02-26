@@ -51,7 +51,7 @@ public class SupplierController {
 
     @PostMapping
     @Operation(summary = "Create supplier", description = "Creates a new supplier/vendor")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE')")
     public ResponseEntity<ApiResponse<SupplierResponse>> createSupplier(
             @Valid @RequestBody SupplierRequest request) {
         SupplierResponse supplier = supplierService.createSupplier(request);
@@ -61,7 +61,7 @@ public class SupplierController {
 
     @PutMapping("/{id}")
     @Operation(summary = "Update supplier", description = "Updates an existing supplier")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE')")
     public ResponseEntity<ApiResponse<SupplierResponse>> updateSupplier(
             @Parameter(description = "Supplier ID") @PathVariable UUID id,
             @Valid @RequestBody SupplierRequest request) {
@@ -70,7 +70,7 @@ public class SupplierController {
 
     @PatchMapping("/{id}/verify")
     @Operation(summary = "Verify supplier", description = "Marks a supplier as KYC-verified")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<SupplierResponse>> verifySupplier(
             @Parameter(description = "Supplier ID") @PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success("Supplier verified successfully", supplierService.verifySupplier(id)));
@@ -78,7 +78,7 @@ public class SupplierController {
 
     @PostMapping("/{id}/blacklist")
     @Operation(summary = "Blacklist supplier", description = "Blacklists a supplier with a reason")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<SupplierResponse>> blacklistSupplier(
             @Parameter(description = "Supplier ID") @PathVariable UUID id,
             @RequestBody @Valid BlacklistBody body,
@@ -89,7 +89,7 @@ public class SupplierController {
 
     @PostMapping("/{id}/unblacklist")
     @Operation(summary = "Remove supplier from blacklist")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<SupplierResponse>> unblacklistSupplier(
             @Parameter(description = "Supplier ID") @PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success("Supplier removed from blacklist", supplierService.unblacklistSupplier(id)));
@@ -97,7 +97,7 @@ public class SupplierController {
 
     @GetMapping("/blacklisted")
     @Operation(summary = "Get blacklisted suppliers")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<Page<SupplierResponse>>> getBlacklistedSuppliers(
             @PageableDefault(size = 20, sort = "name", direction = Sort.Direction.ASC) Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(supplierService.getBlacklistedSuppliers(pageable)));
@@ -105,7 +105,7 @@ public class SupplierController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Deactivate supplier", description = "Deactivates a supplier (soft delete)")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deactivateSupplier(
             @Parameter(description = "Supplier ID") @PathVariable UUID id,
             @Valid @RequestBody DeactivateRequest request,
@@ -116,7 +116,7 @@ public class SupplierController {
 
     @PostMapping("/{id}/activate")
     @Operation(summary = "Activate supplier", description = "Reactivates a deactivated supplier")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> activateSupplier(
             @Parameter(description = "Supplier ID") @PathVariable UUID id) {
         supplierService.activateSupplier(id);
@@ -133,7 +133,7 @@ public class SupplierController {
 
     @PostMapping("/categories")
     @Operation(summary = "Create supplier category")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<SupplierCategoryResponse>> createCategory(
             @Valid @RequestBody SupplierCategoryRequest request) {
         SupplierCategoryResponse category = supplierService.createCategory(request);
@@ -143,7 +143,7 @@ public class SupplierController {
 
     @PutMapping("/categories/{id}")
     @Operation(summary = "Update supplier category")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<SupplierCategoryResponse>> updateCategory(
             @Parameter(description = "Category ID") @PathVariable Long id,
             @Valid @RequestBody SupplierCategoryRequest request) {
@@ -152,7 +152,7 @@ public class SupplierController {
 
     @DeleteMapping("/categories/{id}")
     @Operation(summary = "Delete supplier category")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteCategory(
             @Parameter(description = "Category ID") @PathVariable Long id) {
         supplierService.deleteCategory(id);

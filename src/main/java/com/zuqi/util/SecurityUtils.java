@@ -11,7 +11,6 @@ import java.util.UUID;
 public class SecurityUtils {
 
     private static final String ROLE_SUPER_ADMIN = "SUPER_ADMIN";
-    private static final String ROLE_ADMIN = "ADMIN";
 
     public User getCurrentUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -31,17 +30,8 @@ public class SecurityUtils {
         return user != null && hasRole(user, ROLE_SUPER_ADMIN);
     }
 
-    public boolean isAdmin() {
-        User user = getCurrentUser();
-        return user != null && hasRole(user, ROLE_ADMIN);
-    }
-
-    public boolean isSuperAdminOrAdmin() {
-        return isSuperAdmin() || isAdmin();
-    }
-
     public boolean canAccessAllData() {
-        return isSuperAdminOrAdmin();
+        return isSuperAdmin();
     }
 
     public UUID getDistributorIdForFiltering() {
@@ -75,7 +65,7 @@ public class SecurityUtils {
     }
 
     public boolean canAccessDistributor(UUID distributorId) {
-        // SUPER_ADMIN and ADMIN can access all distributors
+        // SUPER_ADMIN can access all distributors
         if (canAccessAllData()) {
             return true;
         }

@@ -80,13 +80,13 @@ public class UserController {
     public ResponseEntity<ApiResponse<List<String>>> getAvailableRoles(
             @AuthenticationPrincipal User currentUser) {
 
-        boolean isAdmin = false;
+        boolean isSuperAdmin = false;
         if (currentUser != null && currentUser.getRoles() != null) {
-            isAdmin = currentUser.getRoles().stream()
-                    .anyMatch(r -> r.getName().equals("ADMIN"));
+            isSuperAdmin = currentUser.getRoles().stream()
+                    .anyMatch(r -> r.getName().equals("SUPER_ADMIN"));
         }
 
-        List<String> roles = userService.getAvailableRoles(isAdmin);
+        List<String> roles = userService.getAvailableRoles(isSuperAdmin);
         return ResponseEntity.ok(ApiResponse.success("Roles retrieved successfully", roles));
     }
 

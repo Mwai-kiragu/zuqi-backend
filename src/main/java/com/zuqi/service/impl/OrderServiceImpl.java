@@ -19,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -98,6 +99,9 @@ public class OrderServiceImpl implements OrderService {
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
+        // Use unsorted pageable since the native query has its own ORDER BY clause
+        Pageable unsortedPageable = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+
         return orderRepository.findByFilters(
                 effectiveDistributorId,
                 status != null ? status.name() : null,
@@ -106,7 +110,7 @@ public class OrderServiceImpl implements OrderService {
                 paymentStatus != null ? paymentStatus.name() : null,
                 startDateTime,
                 endDateTime,
-                pageable
+                unsortedPageable
         ).map(OrderResponse::fromEntity);
     }
 

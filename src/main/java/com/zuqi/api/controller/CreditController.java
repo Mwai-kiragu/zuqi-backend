@@ -70,7 +70,7 @@ public class CreditController {
 
     @PostMapping("/limits")
     @Operation(summary = "Create credit limit", description = "Creates a new credit limit for a merchant")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<CreditLimitResponse>> createCreditLimit(
             @Valid @RequestBody CreditLimitRequest request,
             @Parameter(description = "Approving user ID") @RequestParam UUID approvedById) {
@@ -83,7 +83,7 @@ public class CreditController {
 
     @PutMapping("/limits/{id}")
     @Operation(summary = "Update credit limit", description = "Updates an existing credit limit")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<CreditLimitResponse>> updateCreditLimit(
             @Parameter(description = "Credit limit ID") @PathVariable UUID id,
             @Valid @RequestBody CreditLimitRequest request) {
@@ -94,7 +94,7 @@ public class CreditController {
 
     @PatchMapping("/limits/{id}/suspend")
     @Operation(summary = "Suspend credit limit", description = "Suspends a credit limit")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<CreditLimitResponse>> suspendCreditLimit(
             @Parameter(description = "Credit limit ID") @PathVariable UUID id) {
 
@@ -104,7 +104,7 @@ public class CreditController {
 
     @PatchMapping("/limits/{id}/reactivate")
     @Operation(summary = "Reactivate credit limit", description = "Reactivates a suspended credit limit")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
     public ResponseEntity<ApiResponse<CreditLimitResponse>> reactivateCreditLimit(
             @Parameter(description = "Credit limit ID") @PathVariable UUID id) {
 

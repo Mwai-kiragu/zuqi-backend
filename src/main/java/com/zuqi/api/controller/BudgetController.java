@@ -28,7 +28,7 @@ public class BudgetController {
     private final SecurityUtils securityUtils;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get budgets by year and optional month")
     public ResponseEntity<ApiResponse<List<BudgetResponse>>> getBudgets(
             @RequestParam int year,
@@ -42,7 +42,7 @@ public class BudgetController {
     }
 
     @PostMapping("/bulk")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','ADMIN','FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','FINANCE')")
     @Operation(summary = "Bulk create or update budgets for a period")
     public ResponseEntity<ApiResponse<List<BudgetResponse>>> bulkUpsert(
             @Valid @RequestBody BudgetBulkRequest request,

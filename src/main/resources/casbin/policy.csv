@@ -23,6 +23,9 @@ p, SUPER_ADMIN, /v1/dashboard/products, .*
 p, SUPER_ADMIN, /v1/dashboard/revenue, .*
 p, SUPER_ADMIN, /v1/dashboard/top-products, .*
 p, SUPER_ADMIN, /v1/dashboard/top-merchants, .*
+p, SUPER_ADMIN, /v1/products/categories, .*
+p, SUPER_ADMIN, /v1/products/categories/:id, .*
+p, SUPER_ADMIN, /v1/products/categories/:id/activate, POST
 p, SUPER_ADMIN, /v1/distributors, .*
 p, SUPER_ADMIN, /v1/distributors/:id, .*
 p, SUPER_ADMIN, /v1/users, .*
@@ -33,38 +36,6 @@ p, SUPER_ADMIN, /v1/users/role/:role, .*
 p, SUPER_ADMIN, /v1/users/:id/reset-password, .*
 p, SUPER_ADMIN, /v1/users/:id/activate, .*
 p, SUPER_ADMIN, /v1/users/:id/deactivate, .*
-
-# ADMIN - Full access to all resources
-p, ADMIN, /*, .*
-p, ADMIN, /v1/roles, .*
-p, ADMIN, /v1/roles/:id, .*
-p, ADMIN, /v1/roles/:id/permissions, .*
-p, ADMIN, /v1/roles/system, .*
-p, ADMIN, /v1/roles/custom, .*
-p, ADMIN, /v1/roles/name/:name, .*
-p, ADMIN, /v1/permissions, .*
-p, ADMIN, /v1/permissions/:id, .*
-p, ADMIN, /v1/permissions/modules, .*
-p, ADMIN, /v1/permissions/module/:module, .*
-p, ADMIN, /v1/permissions/name/:name, .*
-p, ADMIN, /v1/dashboard, .*
-p, ADMIN, /v1/dashboard/stats, .*
-p, ADMIN, /v1/dashboard/orders, .*
-p, ADMIN, /v1/dashboard/merchants, .*
-p, ADMIN, /v1/dashboard/products, .*
-p, ADMIN, /v1/dashboard/revenue, .*
-p, ADMIN, /v1/dashboard/top-products, .*
-p, ADMIN, /v1/dashboard/top-merchants, .*
-p, ADMIN, /v1/distributors, .*
-p, ADMIN, /v1/distributors/:id, .*
-p, ADMIN, /v1/users, .*
-p, ADMIN, /v1/users/:id, .*
-p, ADMIN, /v1/users/roles, .*
-p, ADMIN, /v1/users/distributor/:id, .*
-p, ADMIN, /v1/users/role/:role, .*
-p, ADMIN, /v1/users/:id/reset-password, .*
-p, ADMIN, /v1/users/:id/activate, .*
-p, ADMIN, /v1/users/:id/deactivate, .*
 
 # DISTRIBUTOR_ADMIN - Manage their distributor's resources
 p, DISTRIBUTOR_ADMIN, /v1/dashboard, GET
@@ -98,6 +69,9 @@ p, DISTRIBUTOR_ADMIN, /v1/merchants/:id/blacklist, POST
 p, DISTRIBUTOR_ADMIN, /v1/merchants/:id/unblacklist, POST
 p, DISTRIBUTOR_ADMIN, /v1/products, .*
 p, DISTRIBUTOR_ADMIN, /v1/products/:id, .*
+p, DISTRIBUTOR_ADMIN, /v1/products/categories, .*
+p, DISTRIBUTOR_ADMIN, /v1/products/categories/:id, .*
+p, DISTRIBUTOR_ADMIN, /v1/products/categories/:id/activate, POST
 p, DISTRIBUTOR_ADMIN, /v1/inventory, .*
 p, DISTRIBUTOR_ADMIN, /v1/inventory/:id, .*
 p, DISTRIBUTOR_ADMIN, /v1/orders, .*
@@ -116,6 +90,8 @@ p, SALES_REP, /v1/orders, GET|POST
 p, SALES_REP, /v1/orders/:id, GET|PUT|PATCH
 p, SALES_REP, /v1/products, GET
 p, SALES_REP, /v1/products/:id, GET
+p, SALES_REP, /v1/products/categories, GET
+p, SALES_REP, /v1/products/categories/:id, GET
 p, SALES_REP, /v1/inventory, GET
 p, SALES_REP, /v1/credit/:id, GET
 p, SALES_REP, /v1/visits, .*
@@ -129,6 +105,8 @@ p, WAREHOUSE_MANAGER, /v1/inventory, .*
 p, WAREHOUSE_MANAGER, /v1/inventory/:id, .*
 p, WAREHOUSE_MANAGER, /v1/products, GET
 p, WAREHOUSE_MANAGER, /v1/products/:id, GET
+p, WAREHOUSE_MANAGER, /v1/products/categories, GET
+p, WAREHOUSE_MANAGER, /v1/products/categories/:id, GET
 p, WAREHOUSE_MANAGER, /v1/orders, GET
 p, WAREHOUSE_MANAGER, /v1/orders/:id, GET|PUT|PATCH
 p, WAREHOUSE_MANAGER, /v1/deliveries, .*
@@ -141,8 +119,18 @@ p, MERCHANT, /v1/orders, GET|POST
 p, MERCHANT, /v1/orders/:id, GET
 p, MERCHANT, /v1/products, GET
 p, MERCHANT, /v1/products/:id, GET
+p, MERCHANT, /v1/products/categories, GET
+p, MERCHANT, /v1/products/categories/:id, GET
 p, MERCHANT, /v1/payments, GET|POST
 p, MERCHANT, /v1/payments/:id, GET
+p, MERCHANT, /v1/invoices, GET
+p, MERCHANT, /v1/invoices/:id, GET
+p, MERCHANT, /v1/invoices/merchant/:merchantId, GET
+p, MERCHANT, /v1/invoices/order/:orderId, GET
+p, MERCHANT, /v1/invoices/status-counts, GET
+p, MERCHANT, /v1/invoices/count, GET
+p, MERCHANT, /v1/invoices/:id/viewed, POST
+p, MERCHANT, /v1/invoices/:id/payment, POST
 p, MERCHANT, /v1/credit, GET
 p, MERCHANT, /v1/profile, GET|PUT|PATCH
 
@@ -158,13 +146,11 @@ p, FINANCE, /v1/reports/:id, GET
 p, FINANCE, /v1/credit, GET
 p, FINANCE, /v1/credit/:id, GET
 
-# AI System Health - SUPER_ADMIN and ADMIN only
+# AI System Health - SUPER_ADMIN only
 p, SUPER_ADMIN, /v1/ai/system/*, .*
-p, ADMIN, /v1/ai/system/*, GET
 
-# AI Credit Scoring - SUPER_ADMIN, ADMIN, DISTRIBUTOR_ADMIN, FINANCE
+# AI Credit Scoring - SUPER_ADMIN, DISTRIBUTOR_ADMIN, FINANCE
 p, SUPER_ADMIN, /v1/ai/credit/*, .*
-p, ADMIN, /v1/ai/credit/*, .*
 p, DISTRIBUTOR_ADMIN, /v1/ai/credit/evaluate/:id, POST
 p, DISTRIBUTOR_ADMIN, /v1/ai/credit/evaluations/:id, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/credit/score/:id, GET
@@ -250,14 +236,6 @@ p, SUPER_ADMIN, /v1/approvals/my-requests, GET
 p, SUPER_ADMIN, /v1/approvals/pending, GET
 p, SUPER_ADMIN, /v1/approvals/pending/count, GET
 
-p, ADMIN, /v1/approvals, .*
-p, ADMIN, /v1/approvals/:id, .*
-p, ADMIN, /v1/approvals/:id/process, POST
-p, ADMIN, /v1/approvals/:id/cancel, POST
-p, ADMIN, /v1/approvals/my-requests, GET
-p, ADMIN, /v1/approvals/pending, GET
-p, ADMIN, /v1/approvals/pending/count, GET
-
 p, DISTRIBUTOR_ADMIN, /v1/approvals, GET|POST
 p, DISTRIBUTOR_ADMIN, /v1/approvals/:id, GET
 p, DISTRIBUTOR_ADMIN, /v1/approvals/:id/process, POST
@@ -287,11 +265,6 @@ p, SUPER_ADMIN, /v1/audit-logs, GET
 p, SUPER_ADMIN, /v1/audit-logs/:id, GET
 p, SUPER_ADMIN, /v1/audit-logs/entity/:entityType/:entityId, GET
 p, SUPER_ADMIN, /v1/audit-logs/user/:userId, GET
-
-p, ADMIN, /v1/audit-logs, GET
-p, ADMIN, /v1/audit-logs/:id, GET
-p, ADMIN, /v1/audit-logs/entity/:entityType/:entityId, GET
-p, ADMIN, /v1/audit-logs/user/:userId, GET
 
 p, DISTRIBUTOR_ADMIN, /v1/audit-logs, GET
 p, DISTRIBUTOR_ADMIN, /v1/audit-logs/:id, GET
@@ -400,8 +373,7 @@ p, FINANCE, /v1/gl/reports/trial-balance, GET
 p, FINANCE, /v1/gl/reports/budget-variance, GET
 
 # Role hierarchy - who inherits what
-g, SUPER_ADMIN, ADMIN
-g, ADMIN, DISTRIBUTOR_ADMIN
+g, SUPER_ADMIN, DISTRIBUTOR_ADMIN
 g, DISTRIBUTOR_ADMIN, FINANCE
 g, DISTRIBUTOR_ADMIN, WAREHOUSE_MANAGER
 g, DISTRIBUTOR_ADMIN, SALES_REP

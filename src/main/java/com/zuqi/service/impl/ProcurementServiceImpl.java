@@ -13,6 +13,7 @@ import com.zuqi.domain.procurement.PurchaseRequisition;
 import com.zuqi.domain.supplier.Supplier;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
+import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.PurchaseOrderRepository;
 import com.zuqi.repository.PurchaseRequisitionRepository;
 import com.zuqi.repository.SupplierRepository;
@@ -40,6 +41,7 @@ public class ProcurementServiceImpl implements ProcurementService {
     private final PurchaseRequisitionRepository prRepository;
     private final PurchaseOrderRepository poRepository;
     private final SupplierRepository supplierRepository;
+    private final DistributorRepository distributorRepository;
     private final SecurityUtils securityUtils;
     private final ObjectMapper objectMapper;
 
@@ -77,13 +79,14 @@ public class ProcurementServiceImpl implements ProcurementService {
     public Page<PurchaseRequisitionResponse> getPurchaseRequisitions(UUID distributorId, PrStatus status, UUID requestedById, Pageable pageable) {
         UUID effectiveDistributorId = distributorId != null ? distributorId : securityUtils.getDistributorIdForFiltering();
         return prRepository.findWithFilters(effectiveDistributorId, status, requestedById, pageable)
-                .map(PurchaseRequisitionResponse::fromEntity);
+                .map(pr -> PurchaseRequisitionResponse.fromEntity(pr, resolveDistributorName(pr.getDistributorId())));
     }
 
     @Override
     @Transactional(readOnly = true)
     public PurchaseRequisitionResponse getPurchaseRequisitionById(UUID id) {
-        return PurchaseRequisitionResponse.fromEntity(findPrById(id));
+        PurchaseRequisition pr = findPrById(id);
+        return PurchaseRequisitionResponse.fromEntity(pr, resolveDistributorName(pr.getDistributorId()));
     }
 
     @Override
@@ -106,7 +109,8 @@ public class ProcurementServiceImpl implements ProcurementService {
                 .estimatedTotalAmount(calculateTotal(request.getItems()))
                 .build();
 
-        return PurchaseRequisitionResponse.fromEntity(prRepository.save(pr));
+        PurchaseRequisition saved = prRepository.save(pr);
+        return PurchaseRequisitionResponse.fromEntity(saved, resolveDistributorName(saved.getDistributorId()));
     }
 
     @Override
@@ -118,7 +122,8 @@ public class ProcurementServiceImpl implements ProcurementService {
         }
         pr.setStatus(PrStatus.SUBMITTED);
         pr.setSubmittedAt(LocalDateTime.now());
-        return PurchaseRequisitionResponse.fromEntity(prRepository.save(pr));
+        PurchaseRequisition savedSub = prRepository.save(pr);
+        return PurchaseRequisitionResponse.fromEntity(savedSub, resolveDistributorName(savedSub.getDistributorId()));
     }
 
     @Override
@@ -131,7 +136,8 @@ public class ProcurementServiceImpl implements ProcurementService {
         pr.setStatus(PrStatus.APPROVED);
         pr.setApprovedAt(LocalDateTime.now());
         pr.setApprovedBy(currentUser);
-        return PurchaseRequisitionResponse.fromEntity(prRepository.save(pr));
+        PurchaseRequisition savedApp = prRepository.save(pr);
+        return PurchaseRequisitionResponse.fromEntity(savedApp, resolveDistributorName(savedApp.getDistributorId()));
     }
 
     @Override
@@ -143,7 +149,8 @@ public class ProcurementServiceImpl implements ProcurementService {
         }
         pr.setStatus(PrStatus.REJECTED);
         pr.setRejectionReason(reason);
-        return PurchaseRequisitionResponse.fromEntity(prRepository.save(pr));
+        PurchaseRequisition savedRej = prRepository.save(pr);
+        return PurchaseRequisitionResponse.fromEntity(savedRej, resolveDistributorName(savedRej.getDistributorId()));
     }
 
     @Override
@@ -154,7 +161,8 @@ public class ProcurementServiceImpl implements ProcurementService {
             throw new IllegalStateException("Cannot cancel a requisition that has been converted to a PO");
         }
         pr.setStatus(PrStatus.CANCELLED);
-        return PurchaseRequisitionResponse.fromEntity(prRepository.save(pr));
+        PurchaseRequisition savedCan = prRepository.save(pr);
+        return PurchaseRequisitionResponse.fromEntity(savedCan, resolveDistributorName(savedCan.getDistributorId()));
     }
 
     @Override
@@ -162,13 +170,14 @@ public class ProcurementServiceImpl implements ProcurementService {
     public Page<PurchaseOrderResponse> getPurchaseOrders(UUID distributorId, PoStatus status, UUID supplierId, Pageable pageable) {
         UUID effectiveDistributorId = distributorId != null ? distributorId : securityUtils.getDistributorIdForFiltering();
         return poRepository.findWithFilters(effectiveDistributorId, status, supplierId, pageable)
-                .map(PurchaseOrderResponse::fromEntity);
+                .map(po -> PurchaseOrderResponse.fromEntity(po, resolveDistributorName(po.getDistributorId())));
     }
 
     @Override
     @Transactional(readOnly = true)
     public PurchaseOrderResponse getPurchaseOrderById(UUID id) {
-        return PurchaseOrderResponse.fromEntity(findPoById(id));
+        PurchaseOrder po = findPoById(id);
+        return PurchaseOrderResponse.fromEntity(po, resolveDistributorName(po.getDistributorId()));
     }
 
     @Override
@@ -200,7 +209,8 @@ public class ProcurementServiceImpl implements ProcurementService {
             po.setPurchaseRequisition(pr);
         }
 
-        return PurchaseOrderResponse.fromEntity(poRepository.save(po));
+        PurchaseOrder savedPo = poRepository.save(po);
+        return PurchaseOrderResponse.fromEntity(savedPo, resolveDistributorName(savedPo.getDistributorId()));
     }
 
     @Override
@@ -212,7 +222,8 @@ public class ProcurementServiceImpl implements ProcurementService {
         }
         po.setStatus(PoStatus.SENT);
         po.setSentAt(LocalDateTime.now());
-        return PurchaseOrderResponse.fromEntity(poRepository.save(po));
+        PurchaseOrder sentPo = poRepository.save(po);
+        return PurchaseOrderResponse.fromEntity(sentPo, resolveDistributorName(sentPo.getDistributorId()));
     }
 
     @Override
@@ -224,7 +235,8 @@ public class ProcurementServiceImpl implements ProcurementService {
         }
         po.setStatus(PoStatus.CONFIRMED);
         po.setConfirmedAt(LocalDateTime.now());
-        return PurchaseOrderResponse.fromEntity(poRepository.save(po));
+        PurchaseOrder confirmedPo = poRepository.save(po);
+        return PurchaseOrderResponse.fromEntity(confirmedPo, resolveDistributorName(confirmedPo.getDistributorId()));
     }
 
     @Override
@@ -235,7 +247,8 @@ public class ProcurementServiceImpl implements ProcurementService {
             throw new IllegalStateException("Cannot cancel a received purchase order");
         }
         po.setStatus(PoStatus.CANCELLED);
-        return PurchaseOrderResponse.fromEntity(poRepository.save(po));
+        PurchaseOrder cancelledPo = poRepository.save(po);
+        return PurchaseOrderResponse.fromEntity(cancelledPo, resolveDistributorName(cancelledPo.getDistributorId()));
     }
 
     @Override
@@ -263,5 +276,12 @@ public class ProcurementServiceImpl implements ProcurementService {
     private PurchaseOrder findPoById(UUID id) {
         return poRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrder", "id", id.toString()));
+    }
+
+    private String resolveDistributorName(UUID distributorId) {
+        if (distributorId == null) return null;
+        return distributorRepository.findById(distributorId)
+                .map(d -> d.getName())
+                .orElse(null);
     }
 }
