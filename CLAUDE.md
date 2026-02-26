@@ -264,8 +264,8 @@ AI features use these **9 additional tables** (created via Flyway migrations V15
 ### AI Development Environment
 
 Additional environment variables for AI features:
-- `OLLAMA_BASE_URL` - Ollama API endpoint (default: http://localhost:11434)
-- `OLLAMA_MODEL` - Local LLM model name (default: qwen2.5:32b)
+- `OLLAMA_BASE_URL` - Ollama API endpoint (configured: http://192.168.2.17:11434 — network machine, not localhost)
+- `OLLAMA_MODEL` - Local LLM model name (configured: qwen2.5-coder:32b)
 - `OPENAI_API_KEY` - Cloud LLM fallback (already configured)
 - `ANTHROPIC_API_KEY` - Claude API fallback (optional)
 

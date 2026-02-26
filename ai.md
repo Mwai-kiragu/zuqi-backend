@@ -38,8 +38,8 @@ This plan replaces **Spring AI + OpenAI with Langchain4j + Ollama** (local LLMs 
 langchain4j:
   ollama:
     chat-model:
-      base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
-      model-name: ${OLLAMA_MODEL:llama3.1}
+      base-url: ${OLLAMA_BASE_URL:http://192.168.2.17:11434}
+      model-name: ${OLLAMA_MODEL:qwen2.5-coder:32b}
       temperature: 0.3
       timeout: PT60S
 

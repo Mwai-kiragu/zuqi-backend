@@ -68,6 +68,25 @@ public class AIModelRegistry {
     @Column(name = "feature_columns", columnDefinition = "jsonb")
     private Map<String, Object> featureColumns;
 
+    // -------------------------------------------------------------------------
+    // Synthetic data phase tracking (Phase 1.5)
+    // -------------------------------------------------------------------------
+
+    /** Data maturity phase at time of training: SYNTHETIC / HYBRID / REAL. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "data_phase", length = 20)
+    private DataPhase dataPhase;
+
+    /** Fraction of real records used in training (0.0–1.0). */
+    @Column(name = "real_data_ratio")
+    private Double realDataRatio;
+
+    @Column(name = "synthetic_records_used")
+    private Integer syntheticRecordsUsed;
+
+    @Column(name = "real_records_used")
+    private Integer realRecordsUsed;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
