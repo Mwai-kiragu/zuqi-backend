@@ -48,6 +48,7 @@ p, DISTRIBUTOR_ADMIN, /v1/dashboard/top-products, GET
 p, DISTRIBUTOR_ADMIN, /v1/dashboard/top-merchants, GET
 p, DISTRIBUTOR_ADMIN, /v1/roles, GET
 p, DISTRIBUTOR_ADMIN, /v1/roles/:id, GET
+p, DISTRIBUTOR_ADMIN, /v1/roles/name/:name, GET
 p, DISTRIBUTOR_ADMIN, /v1/permissions, GET
 p, DISTRIBUTOR_ADMIN, /v1/permissions/:id, GET
 p, DISTRIBUTOR_ADMIN, /v1/permissions/modules, GET
@@ -82,8 +83,12 @@ p, DISTRIBUTOR_ADMIN, /v1/credit, .*
 p, DISTRIBUTOR_ADMIN, /v1/credit/:id, .*
 p, DISTRIBUTOR_ADMIN, /v1/reports, GET
 p, DISTRIBUTOR_ADMIN, /v1/reports/:id, GET
+p, DISTRIBUTOR_ADMIN, /v1/kyc/distributor, POST
+p, DISTRIBUTOR_ADMIN, /v1/kyc/status, GET
+p, DISTRIBUTOR_ADMIN, /v1/files/upload, POST
 
 # SALES_REP - Field sales operations
+p, SALES_REP, /v1/roles/name/:name, GET
 p, SALES_REP, /v1/merchants, GET|POST
 p, SALES_REP, /v1/merchants/:id, GET|PUT|PATCH
 p, SALES_REP, /v1/orders, GET|POST
@@ -100,6 +105,7 @@ p, SALES_REP, /v1/routes, GET
 p, SALES_REP, /v1/routes/:id, GET
 
 # WAREHOUSE_MANAGER - Inventory and delivery operations
+p, WAREHOUSE_MANAGER, /v1/roles/name/:name, GET
 p, WAREHOUSE_MANAGER, /v1/distributors, GET
 p, WAREHOUSE_MANAGER, /v1/inventory, .*
 p, WAREHOUSE_MANAGER, /v1/inventory/:id, .*
@@ -115,6 +121,7 @@ p, WAREHOUSE_MANAGER, /v1/stock-movements, .*
 p, WAREHOUSE_MANAGER, /v1/stock-movements/:id, .*
 
 # MERCHANT - Customer/retailer access
+p, MERCHANT, /v1/roles/name/:name, GET
 p, MERCHANT, /v1/orders, GET|POST
 p, MERCHANT, /v1/orders/:id, GET
 p, MERCHANT, /v1/products, GET
@@ -133,8 +140,12 @@ p, MERCHANT, /v1/invoices/:id/viewed, POST
 p, MERCHANT, /v1/invoices/:id/payment, POST
 p, MERCHANT, /v1/credit, GET
 p, MERCHANT, /v1/profile, GET|PUT|PATCH
+p, MERCHANT, /v1/kyc/merchant, POST
+p, MERCHANT, /v1/kyc/status, GET
+p, MERCHANT, /v1/files/upload, POST
 
 # FINANCE - Payment and reconciliation
+p, FINANCE, /v1/roles/name/:name, GET
 p, FINANCE, /v1/payments, .*
 p, FINANCE, /v1/payments/:id, .*
 p, FINANCE, /v1/reconciliation, .*
@@ -207,6 +218,7 @@ p, DISTRIBUTOR_ADMIN, /v1/ai/reports/compliance/templates, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/reports/compliance/:id, GET
 
 # DRIVER - Delivery operations
+p, DRIVER, /v1/roles/name/:name, GET
 p, DRIVER, /v1/deliveries, GET
 p, DRIVER, /v1/deliveries/:id, GET|PUT|PATCH
 p, DRIVER, /v1/orders/:id, GET

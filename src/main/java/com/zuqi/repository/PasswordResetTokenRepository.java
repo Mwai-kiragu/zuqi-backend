@@ -32,4 +32,7 @@ public interface PasswordResetTokenRepository extends JpaRepository<PasswordRese
 
     @Query("SELECT t FROM PasswordResetToken t WHERE t.user.email = :email AND t.token = :otp AND t.used = false AND t.expiresAt > :now")
     Optional<PasswordResetToken> findValidOtpByEmailAndCode(@Param("email") String email, @Param("otp") String otp, @Param("now") LocalDateTime now);
+
+    @Query("SELECT t FROM PasswordResetToken t WHERE t.user.email = :email AND t.token = :otp AND t.used = false AND t.expiresAt > :now AND t.purpose = :purpose")
+    Optional<PasswordResetToken> findValidOtpByEmailAndCodeAndPurpose(@Param("email") String email, @Param("otp") String otp, @Param("now") LocalDateTime now, @Param("purpose") com.zuqi.domain.user.TokenPurpose purpose);
 }

@@ -8,6 +8,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import com.zuqi.domain.merchant.KycStatus;
 import com.zuqi.domain.user.User;
 
 import java.time.LocalDateTime;
@@ -61,6 +62,16 @@ public class Distributor {
     @Column(columnDefinition = "jsonb")
     @Builder.Default
     private Map<String, Object> settings = new HashMap<>();
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "kyc_status", length = 20)
+    @Builder.Default
+    private KycStatus kycStatus = KycStatus.PENDING;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "kyc_documents", columnDefinition = "jsonb")
+    @Builder.Default
+    private Map<String, Object> kycDocuments = new HashMap<>();
 
     @Version
     private Long version;

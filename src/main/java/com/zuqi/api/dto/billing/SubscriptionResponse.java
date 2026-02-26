@@ -11,7 +11,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
@@ -32,7 +32,7 @@ public class SubscriptionResponse {
     private LocalDate endDate;
     private boolean active;
     private String notes;
-    private OffsetDateTime createdAt;
+    private LocalDateTime createdAt;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 

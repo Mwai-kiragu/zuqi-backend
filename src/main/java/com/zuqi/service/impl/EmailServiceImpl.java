@@ -100,6 +100,28 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     @Async
+    public void sendEmailVerificationOtpEmail(User user, String otp) {
+        if (!emailConfig.isEnabled()) {
+            log.info("Email disabled. Would send email verification OTP to: {}", user.getEmail());
+            return;
+        }
+
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("userName", user.getFirstName() != null ? user.getFirstName() : user.getUsername());
+        variables.put("otp", otp);
+        variables.put("expiryMinutes", 10);
+        variables.put("companyName", emailConfig.getFromName());
+
+        sendTemplatedEmail(
+                user.getEmail(),
+                "Verify Your Email - " + emailConfig.getFromName(),
+                "email-verification-otp",
+                variables
+        );
+    }
+
+    @Override
+    @Async
     public void sendPasswordChangedEmail(User user) {
         if (!emailConfig.isEnabled()) {
             log.info("Email disabled. Would send password changed email to: {}", user.getEmail());

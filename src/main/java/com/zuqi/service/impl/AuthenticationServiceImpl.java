@@ -11,16 +11,19 @@ import com.zuqi.api.dto.auth.VerifyOtpRequest;
 import com.zuqi.api.dto.billing.AssignSubscriptionRequest;
 import com.zuqi.domain.billing.BillingPackageType;
 import com.zuqi.domain.distributor.Distributor;
+import com.zuqi.domain.merchant.Merchant;
 import com.zuqi.domain.user.PasswordResetToken;
 import com.zuqi.domain.user.RefreshToken;
 import com.zuqi.domain.user.Role;
 import com.zuqi.domain.user.RoleName;
+import com.zuqi.domain.user.TokenPurpose;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.AuthenticationException;
 import com.zuqi.exception.DuplicateResourceException;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.DistributorRepository;
+import com.zuqi.repository.MerchantRepository;
 import com.zuqi.repository.PasswordResetTokenRepository;
 import com.zuqi.repository.RefreshTokenRepository;
 import com.zuqi.repository.RoleRepository;
@@ -51,6 +54,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final DistributorRepository distributorRepository;
+    private final MerchantRepository merchantRepository;
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
@@ -61,6 +65,20 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     // OTP expires in 10 minutes
     private static final int OTP_EXPIRY_MINUTES = 10;
+
+    private String resolveKycStatus(User user) {
+        if (user.getMerchantId() != null) {
+            return merchantRepository.findById(user.getMerchantId())
+                    .map(m -> m.getKycStatus().name())
+                    .orElse("PENDING");
+        }
+        if (user.getDistributorId() != null) {
+            return distributorRepository.findById(user.getDistributorId())
+                    .map(d -> d.getKycStatus() != null ? d.getKycStatus().name() : "PENDING")
+                    .orElse("PENDING");
+        }
+        return null;
+    }
 
     @Override
     @Transactional
@@ -98,6 +116,19 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         User savedUser = userRepository.save(user);
         log.info("User registered successfully with ID: {}", savedUser.getId());
 
+        // Send email verification OTP
+        String otp = generateOtp();
+        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES);
+        PasswordResetToken verificationToken = PasswordResetToken.builder()
+                .token(otp)
+                .user(savedUser)
+                .expiresAt(expiresAt)
+                .used(false)
+                .purpose(TokenPurpose.EMAIL_VERIFICATION)
+                .build();
+        passwordResetTokenRepository.save(verificationToken);
+        emailService.sendEmailVerificationOtpEmail(savedUser, otp);
+
         // Generate tokens
         String accessToken = jwtService.generateAccessToken(savedUser);
         String refreshToken = createRefreshToken(savedUser);
@@ -114,6 +145,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .distributorId(savedUser.getDistributorId())
                 .merchantId(savedUser.getMerchantId())
                 .phoneNumber(savedUser.getPhoneNumber())
+                .emailVerified(savedUser.isEmailVerified())
+                .kycStatus(resolveKycStatus(savedUser))
                 .build();
     }
 
@@ -180,7 +213,20 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         log.info("Distributor registered: {}, User: {}", savedDistributor.getId(), savedUser.getId());
 
-        // 5. Generate tokens
+        // 5. Send email verification OTP
+        String otp = generateOtp();
+        LocalDateTime otpExpiry = LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES);
+        PasswordResetToken verificationToken = PasswordResetToken.builder()
+                .token(otp)
+                .user(savedUser)
+                .expiresAt(otpExpiry)
+                .used(false)
+                .purpose(TokenPurpose.EMAIL_VERIFICATION)
+                .build();
+        passwordResetTokenRepository.save(verificationToken);
+        emailService.sendEmailVerificationOtpEmail(savedUser, otp);
+
+        // 6. Generate tokens
         String accessToken = jwtService.generateAccessToken(savedUser);
         String refreshToken = createRefreshToken(savedUser);
 
@@ -195,6 +241,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .roles(savedUser.getRoles().stream().map(r -> r.getName()).toList())
                 .distributorId(savedDistributor.getId())
                 .phoneNumber(savedUser.getPhoneNumber())
+                .emailVerified(savedUser.isEmailVerified())
+                .kycStatus(resolveKycStatus(savedUser))
                 .build();
     }
 
@@ -237,6 +285,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .distributorId(user.getDistributorId())
                 .merchantId(user.getMerchantId())
                 .phoneNumber(user.getPhoneNumber())
+                .emailVerified(user.isEmailVerified())
+                .kycStatus(resolveKycStatus(user))
                 .build();
     }
 
@@ -277,6 +327,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .distributorId(user.getDistributorId())
                 .merchantId(user.getMerchantId())
                 .phoneNumber(user.getPhoneNumber())
+                .emailVerified(user.isEmailVerified())
+                .kycStatus(resolveKycStatus(user))
                 .build();
     }
 
@@ -391,6 +443,83 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         // Send password changed confirmation email
         emailService.sendPasswordChangedEmail(user);
         log.info("Password reset successful for user: {}", user.getEmail());
+    }
+
+    @Override
+    @Transactional
+    public AuthenticationResponse verifyEmail(VerifyOtpRequest request) {
+        log.info("Verifying email for: {}", request.getEmail());
+
+        PasswordResetToken token = passwordResetTokenRepository
+                .findValidOtpByEmailAndCodeAndPurpose(
+                        request.getEmail(), request.getOtp(), LocalDateTime.now(), TokenPurpose.EMAIL_VERIFICATION)
+                .orElseThrow(() -> new ValidationException("Invalid or expired verification code"));
+
+        // Mark token as used
+        token.setUsed(true);
+        token.setUsedAt(LocalDateTime.now());
+        passwordResetTokenRepository.save(token);
+
+        // Set user emailVerified = true
+        User user = token.getUser();
+        user.setEmailVerified(true);
+        userRepository.save(user);
+
+        log.info("Email verified successfully for: {}", user.getEmail());
+
+        // Generate fresh tokens
+        String accessToken = jwtService.generateAccessToken(user);
+        String refreshToken = createRefreshToken(user);
+
+        return AuthenticationResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .tokenType("Bearer")
+                .expiresIn(jwtService.getAccessTokenExpiration())
+                .userId(user.getId())
+                .email(user.getEmail())
+                .fullName(user.getFullName())
+                .roles(user.getRoles().stream().map(r -> r.getName()).toList())
+                .distributorId(user.getDistributorId())
+                .merchantId(user.getMerchantId())
+                .phoneNumber(user.getPhoneNumber())
+                .emailVerified(true)
+                .kycStatus(resolveKycStatus(user))
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public boolean resendEmailVerificationOtp(ForgotPasswordRequest request) {
+        log.info("Resending email verification OTP for: {}", request.getEmail());
+
+        Optional<User> userOptional = userRepository.findByEmail(request.getEmail());
+        if (userOptional.isEmpty()) {
+            log.warn("Resend verification requested for non-existent email: {}", request.getEmail());
+            return false;
+        }
+
+        User user = userOptional.get();
+        if (user.isEmailVerified()) {
+            log.info("Email already verified for: {}", request.getEmail());
+            return true;
+        }
+
+        String otp = generateOtp();
+        LocalDateTime expiresAt = LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES);
+
+        PasswordResetToken verificationToken = PasswordResetToken.builder()
+                .token(otp)
+                .user(user)
+                .expiresAt(expiresAt)
+                .used(false)
+                .purpose(TokenPurpose.EMAIL_VERIFICATION)
+                .build();
+        passwordResetTokenRepository.save(verificationToken);
+
+        emailService.sendEmailVerificationOtpEmail(user, otp);
+        log.info("Email verification OTP resent to: {}", user.getEmail());
+        return true;
     }
 
     private String generateOtp() {

@@ -109,4 +109,28 @@ public class AuthController {
         authenticationService.resetPassword(request);
         return ResponseEntity.ok(ApiResponse.success("Password reset successful. You can now login with your new password."));
     }
+
+    @PostMapping("/verify-email")
+    @Operation(summary = "Verify email", description = "Verifies user email using 6-digit OTP")
+    public ResponseEntity<ApiResponse<AuthenticationResponse>> verifyEmail(
+            @Valid @RequestBody VerifyOtpRequest request) {
+        AuthenticationResponse response = authenticationService.verifyEmail(request);
+        return ResponseEntity.ok(ApiResponse.success("Email verified successfully", response));
+    }
+
+    @PostMapping("/resend-verification-otp")
+    @Operation(summary = "Resend verification OTP", description = "Resends email verification OTP")
+    public ResponseEntity<ApiResponse<Boolean>> resendVerificationOtp(
+            @Valid @RequestBody ForgotPasswordRequest request) {
+        boolean sent = authenticationService.resendEmailVerificationOtp(request);
+        if (sent) {
+            return ResponseEntity.ok(ApiResponse.success("Verification code sent to your email.", true));
+        } else {
+            return ResponseEntity.ok(ApiResponse.<Boolean>builder()
+                    .success(false)
+                    .message("No account found with this email address")
+                    .data(false)
+                    .build());
+        }
+    }
 }

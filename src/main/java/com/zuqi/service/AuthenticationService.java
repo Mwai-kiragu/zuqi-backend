@@ -26,4 +26,8 @@ public interface AuthenticationService {
     boolean verifyOtp(VerifyOtpRequest request);
 
     void resetPassword(ResetPasswordRequest request);
+
+    AuthenticationResponse verifyEmail(VerifyOtpRequest request);
+
+    boolean resendEmailVerificationOtp(ForgotPasswordRequest request);
 }

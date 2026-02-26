@@ -45,4 +45,10 @@ public class AuthenticationResponse {
 
     @JsonProperty("phone_number")
     private String phoneNumber;
+
+    @JsonProperty("email_verified")
+    private boolean emailVerified;
+
+    @JsonProperty("kyc_status")
+    private String kycStatus;
 }

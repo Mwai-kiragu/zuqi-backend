@@ -1,5 +1,6 @@
 package com.zuqi.repository;
 
+import com.zuqi.domain.merchant.KycStatus;
 import com.zuqi.domain.merchant.Merchant;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -106,4 +107,8 @@ public interface MerchantRepository extends JpaRepository<Merchant, UUID>, JpaSp
      * Find all active merchants for a distributor (for batch operations).
      */
     List<Merchant> findByDistributorIdAndActiveTrue(UUID distributorId);
+
+    Page<Merchant> findByKycStatus(KycStatus status, Pageable pageable);
+
+    Page<Merchant> findByKycStatusNot(KycStatus status, Pageable pageable);
 }

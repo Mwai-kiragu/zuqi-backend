@@ -65,6 +65,9 @@ server:
   port: ${SERVER_PORT:8080}
   servlet:
     context-path: /api
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
 
 # JWT Configuration
 jwt:
