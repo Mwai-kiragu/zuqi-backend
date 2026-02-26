@@ -1,5 +1,8 @@
 -- V32: Create supplier categories and suppliers tables
 
+-- Required for trigram index (fuzzy text search on supplier name)
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 CREATE TABLE IF NOT EXISTS supplier_categories (
     id          BIGSERIAL PRIMARY KEY,
     name        VARCHAR(100) NOT NULL UNIQUE,
@@ -62,9 +65,9 @@ CREATE TABLE IF NOT EXISTS suppliers (
 );
 
 -- Indexes
-CREATE INDEX idx_suppliers_distributor_id    ON suppliers(distributor_id);
-CREATE INDEX idx_suppliers_category_id       ON suppliers(category_id);
-CREATE INDEX idx_suppliers_active            ON suppliers(active);
-CREATE INDEX idx_suppliers_blacklisted       ON suppliers(blacklisted);
-CREATE INDEX idx_suppliers_kyc_status        ON suppliers(kyc_status);
-CREATE INDEX idx_suppliers_name_trgm         ON suppliers USING gin(name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_suppliers_distributor_id    ON suppliers(distributor_id);
+CREATE INDEX IF NOT EXISTS idx_suppliers_category_id       ON suppliers(category_id);
+CREATE INDEX IF NOT EXISTS idx_suppliers_active            ON suppliers(active);
+CREATE INDEX IF NOT EXISTS idx_suppliers_blacklisted       ON suppliers(blacklisted);
+CREATE INDEX IF NOT EXISTS idx_suppliers_kyc_status        ON suppliers(kyc_status);
+CREATE INDEX IF NOT EXISTS idx_suppliers_name_trgm         ON suppliers USING gin(name gin_trgm_ops);

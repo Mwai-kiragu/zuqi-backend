@@ -13,7 +13,7 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- ===========================================
 
 -- Permissions table for fine-grained access control
-CREATE TABLE permissions (
+CREATE TABLE IF NOT EXISTS permissions (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
     description VARCHAR(255),
@@ -21,21 +21,21 @@ CREATE TABLE permissions (
 );
 
 -- Roles table
-CREATE TABLE roles (
+CREATE TABLE IF NOT EXISTS roles (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(50) NOT NULL UNIQUE,
     description VARCHAR(255)
 );
 
 -- Role-Permission mapping
-CREATE TABLE role_permissions (
+CREATE TABLE IF NOT EXISTS role_permissions (
     role_id BIGINT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
     permission_id BIGINT NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
     PRIMARY KEY (role_id, permission_id)
 );
 
 -- Users table
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
@@ -54,20 +54,20 @@ CREATE TABLE users (
     last_login_at TIMESTAMP
 );
 
-CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_phone ON users(phone_number);
-CREATE INDEX idx_users_active ON users(active);
-CREATE INDEX idx_users_distributor ON users(distributor_id);
+CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_phone ON users(phone_number);
+CREATE INDEX IF NOT EXISTS idx_users_active ON users(active);
+CREATE INDEX IF NOT EXISTS idx_users_distributor ON users(distributor_id);
 
 -- User-Role mapping
-CREATE TABLE user_roles (
+CREATE TABLE IF NOT EXISTS user_roles (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     role_id BIGINT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
     PRIMARY KEY (user_id, role_id)
 );
 
 -- Refresh tokens table
-CREATE TABLE refresh_tokens (
+CREATE TABLE IF NOT EXISTS refresh_tokens (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     token VARCHAR(500) NOT NULL UNIQUE,
@@ -76,15 +76,15 @@ CREATE TABLE refresh_tokens (
     revoked BOOLEAN NOT NULL DEFAULT false
 );
 
-CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
-CREATE INDEX idx_refresh_tokens_token ON refresh_tokens(token);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token);
 
 -- ===========================================
 -- DISTRIBUTOR & WAREHOUSE TABLES
 -- ===========================================
 
 -- Distributors table
-CREATE TABLE distributors (
+CREATE TABLE IF NOT EXISTS distributors (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
     registration_number VARCHAR(100),
@@ -102,10 +102,10 @@ CREATE TABLE distributors (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_distributors_active ON distributors(active);
+CREATE INDEX IF NOT EXISTS idx_distributors_active ON distributors(active);
 
 -- Warehouses table
-CREATE TABLE warehouses (
+CREATE TABLE IF NOT EXISTS warehouses (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     distributor_id UUID NOT NULL REFERENCES distributors(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
@@ -120,21 +120,21 @@ CREATE TABLE warehouses (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_warehouses_distributor ON warehouses(distributor_id);
+CREATE INDEX IF NOT EXISTS idx_warehouses_distributor ON warehouses(distributor_id);
 
 -- ===========================================
 -- MERCHANT TABLES
 -- ===========================================
 
 -- Merchant categories
-CREATE TABLE merchant_categories (
+CREATE TABLE IF NOT EXISTS merchant_categories (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
     description VARCHAR(255)
 );
 
 -- Merchants table (retail outlets)
-CREATE TABLE merchants (
+CREATE TABLE IF NOT EXISTS merchants (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     business_name VARCHAR(255) NOT NULL,
     owner_name VARCHAR(255),
@@ -159,17 +159,17 @@ CREATE TABLE merchants (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_merchants_distributor ON merchants(distributor_id);
-CREATE INDEX idx_merchants_category ON merchants(category_id);
-CREATE INDEX idx_merchants_sales_rep ON merchants(assigned_sales_rep_id);
-CREATE INDEX idx_merchants_active ON merchants(active);
+CREATE INDEX IF NOT EXISTS idx_merchants_distributor ON merchants(distributor_id);
+CREATE INDEX IF NOT EXISTS idx_merchants_category ON merchants(category_id);
+CREATE INDEX IF NOT EXISTS idx_merchants_sales_rep ON merchants(assigned_sales_rep_id);
+CREATE INDEX IF NOT EXISTS idx_merchants_active ON merchants(active);
 
 -- ===========================================
 -- PRODUCT & INVENTORY TABLES
 -- ===========================================
 
 -- Product categories
-CREATE TABLE product_categories (
+CREATE TABLE IF NOT EXISTS product_categories (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     parent_id BIGINT REFERENCES product_categories(id),
@@ -178,7 +178,7 @@ CREATE TABLE product_categories (
 );
 
 -- Products table
-CREATE TABLE products (
+CREATE TABLE IF NOT EXISTS products (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     distributor_id UUID NOT NULL REFERENCES distributors(id) ON DELETE CASCADE,
     sku VARCHAR(100) NOT NULL,
@@ -199,12 +199,12 @@ CREATE TABLE products (
     UNIQUE(distributor_id, sku)
 );
 
-CREATE INDEX idx_products_distributor ON products(distributor_id);
-CREATE INDEX idx_products_category ON products(category_id);
-CREATE INDEX idx_products_sku ON products(sku);
+CREATE INDEX IF NOT EXISTS idx_products_distributor ON products(distributor_id);
+CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
+CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku);
 
 -- Stock table (inventory per warehouse)
-CREATE TABLE stock (
+CREATE TABLE IF NOT EXISTS stock (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     warehouse_id UUID NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
     product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
@@ -217,11 +217,11 @@ CREATE TABLE stock (
     UNIQUE(warehouse_id, product_id)
 );
 
-CREATE INDEX idx_stock_warehouse ON stock(warehouse_id);
-CREATE INDEX idx_stock_product ON stock(product_id);
+CREATE INDEX IF NOT EXISTS idx_stock_warehouse ON stock(warehouse_id);
+CREATE INDEX IF NOT EXISTS idx_stock_product ON stock(product_id);
 
 -- Stock movements
-CREATE TABLE stock_movements (
+CREATE TABLE IF NOT EXISTS stock_movements (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     warehouse_id UUID NOT NULL REFERENCES warehouses(id),
     product_id UUID NOT NULL REFERENCES products(id),
@@ -234,16 +234,16 @@ CREATE TABLE stock_movements (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_stock_movements_warehouse ON stock_movements(warehouse_id);
-CREATE INDEX idx_stock_movements_product ON stock_movements(product_id);
-CREATE INDEX idx_stock_movements_type ON stock_movements(movement_type);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_warehouse ON stock_movements(warehouse_id);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_product ON stock_movements(product_id);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_type ON stock_movements(movement_type);
 
 -- ===========================================
 -- SALES & ORDER TABLES
 -- ===========================================
 
 -- Routes for sales reps
-CREATE TABLE routes (
+CREATE TABLE IF NOT EXISTS routes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     distributor_id UUID NOT NULL REFERENCES distributors(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
@@ -254,11 +254,11 @@ CREATE TABLE routes (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_routes_distributor ON routes(distributor_id);
-CREATE INDEX idx_routes_rep ON routes(assigned_rep_id);
+CREATE INDEX IF NOT EXISTS idx_routes_distributor ON routes(distributor_id);
+CREATE INDEX IF NOT EXISTS idx_routes_rep ON routes(assigned_rep_id);
 
 -- Orders table
-CREATE TABLE orders (
+CREATE TABLE IF NOT EXISTS orders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     order_number VARCHAR(50) NOT NULL UNIQUE,
     distributor_id UUID NOT NULL REFERENCES distributors(id),
@@ -285,15 +285,15 @@ CREATE TABLE orders (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_orders_distributor ON orders(distributor_id);
-CREATE INDEX idx_orders_merchant ON orders(merchant_id);
-CREATE INDEX idx_orders_sales_rep ON orders(sales_rep_id);
-CREATE INDEX idx_orders_status ON orders(status);
-CREATE INDEX idx_orders_payment_status ON orders(payment_status);
-CREATE INDEX idx_orders_created ON orders(created_at);
+CREATE INDEX IF NOT EXISTS idx_orders_distributor ON orders(distributor_id);
+CREATE INDEX IF NOT EXISTS idx_orders_merchant ON orders(merchant_id);
+CREATE INDEX IF NOT EXISTS idx_orders_sales_rep ON orders(sales_rep_id);
+CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+CREATE INDEX IF NOT EXISTS idx_orders_payment_status ON orders(payment_status);
+CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
 
 -- Order items
-CREATE TABLE order_items (
+CREATE TABLE IF NOT EXISTS order_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
     product_id UUID NOT NULL REFERENCES products(id),
@@ -304,10 +304,10 @@ CREATE TABLE order_items (
     total_amount DECIMAL(15, 2) NOT NULL
 );
 
-CREATE INDEX idx_order_items_order ON order_items(order_id);
+CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
 
 -- Order status history
-CREATE TABLE order_status_history (
+CREATE TABLE IF NOT EXISTS order_status_history (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
     status VARCHAR(50) NOT NULL,
@@ -316,10 +316,10 @@ CREATE TABLE order_status_history (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_order_status_history_order ON order_status_history(order_id);
+CREATE INDEX IF NOT EXISTS idx_order_status_history_order ON order_status_history(order_id);
 
 -- Deliveries
-CREATE TABLE deliveries (
+CREATE TABLE IF NOT EXISTS deliveries (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     order_id UUID NOT NULL REFERENCES orders(id),
     driver_id UUID REFERENCES users(id),
@@ -336,16 +336,16 @@ CREATE TABLE deliveries (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_deliveries_order ON deliveries(order_id);
-CREATE INDEX idx_deliveries_driver ON deliveries(driver_id);
-CREATE INDEX idx_deliveries_status ON deliveries(status);
+CREATE INDEX IF NOT EXISTS idx_deliveries_order ON deliveries(order_id);
+CREATE INDEX IF NOT EXISTS idx_deliveries_driver ON deliveries(driver_id);
+CREATE INDEX IF NOT EXISTS idx_deliveries_status ON deliveries(status);
 
 -- ===========================================
 -- PAYMENT TABLES
 -- ===========================================
 
 -- Payment methods
-CREATE TABLE payment_methods (
+CREATE TABLE IF NOT EXISTS payment_methods (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
     code VARCHAR(50) NOT NULL UNIQUE,
@@ -354,7 +354,7 @@ CREATE TABLE payment_methods (
 );
 
 -- Payments table
-CREATE TABLE payments (
+CREATE TABLE IF NOT EXISTS payments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     payment_number VARCHAR(50) NOT NULL UNIQUE,
     order_id UUID REFERENCES orders(id),
@@ -376,13 +376,13 @@ CREATE TABLE payments (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_payments_order ON payments(order_id);
-CREATE INDEX idx_payments_merchant ON payments(merchant_id);
-CREATE INDEX idx_payments_status ON payments(status);
-CREATE INDEX idx_payments_reconciled ON payments(reconciled);
+CREATE INDEX IF NOT EXISTS idx_payments_order ON payments(order_id);
+CREATE INDEX IF NOT EXISTS idx_payments_merchant ON payments(merchant_id);
+CREATE INDEX IF NOT EXISTS idx_payments_status ON payments(status);
+CREATE INDEX IF NOT EXISTS idx_payments_reconciled ON payments(reconciled);
 
 -- Payment transactions (detailed transaction log)
-CREATE TABLE payment_transactions (
+CREATE TABLE IF NOT EXISTS payment_transactions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     payment_id UUID NOT NULL REFERENCES payments(id),
     transaction_type VARCHAR(50) NOT NULL, -- INITIATE, CONFIRM, REVERSE, REFUND
@@ -393,14 +393,14 @@ CREATE TABLE payment_transactions (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_payment_transactions_payment ON payment_transactions(payment_id);
+CREATE INDEX IF NOT EXISTS idx_payment_transactions_payment ON payment_transactions(payment_id);
 
 -- ===========================================
 -- CREDIT MANAGEMENT TABLES
 -- ===========================================
 
 -- Credit scores
-CREATE TABLE credit_scores (
+CREATE TABLE IF NOT EXISTS credit_scores (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     merchant_id UUID NOT NULL REFERENCES merchants(id),
     score DECIMAL(5, 2) NOT NULL,
@@ -411,10 +411,10 @@ CREATE TABLE credit_scores (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_credit_scores_merchant ON credit_scores(merchant_id);
+CREATE INDEX IF NOT EXISTS idx_credit_scores_merchant ON credit_scores(merchant_id);
 
 -- Credit limits
-CREATE TABLE credit_limits (
+CREATE TABLE IF NOT EXISTS credit_limits (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     merchant_id UUID NOT NULL REFERENCES merchants(id),
     distributor_id UUID NOT NULL REFERENCES distributors(id),
@@ -430,11 +430,11 @@ CREATE TABLE credit_limits (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_credit_limits_merchant ON credit_limits(merchant_id);
-CREATE INDEX idx_credit_limits_distributor ON credit_limits(distributor_id);
+CREATE INDEX IF NOT EXISTS idx_credit_limits_merchant ON credit_limits(merchant_id);
+CREATE INDEX IF NOT EXISTS idx_credit_limits_distributor ON credit_limits(distributor_id);
 
 -- Credit applications
-CREATE TABLE credit_applications (
+CREATE TABLE IF NOT EXISTS credit_applications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     merchant_id UUID NOT NULL REFERENCES merchants(id),
     distributor_id UUID NOT NULL REFERENCES distributors(id),
@@ -449,15 +449,15 @@ CREATE TABLE credit_applications (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_credit_applications_merchant ON credit_applications(merchant_id);
-CREATE INDEX idx_credit_applications_status ON credit_applications(status);
+CREATE INDEX IF NOT EXISTS idx_credit_applications_merchant ON credit_applications(merchant_id);
+CREATE INDEX IF NOT EXISTS idx_credit_applications_status ON credit_applications(status);
 
 -- ===========================================
 -- INVOICE FINANCING TABLES
 -- ===========================================
 
 -- Invoices
-CREATE TABLE invoices (
+CREATE TABLE IF NOT EXISTS invoices (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     invoice_number VARCHAR(50) NOT NULL UNIQUE,
     distributor_id UUID NOT NULL REFERENCES distributors(id),
@@ -471,12 +471,12 @@ CREATE TABLE invoices (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_invoices_distributor ON invoices(distributor_id);
-CREATE INDEX idx_invoices_merchant ON invoices(merchant_id);
-CREATE INDEX idx_invoices_status ON invoices(status);
+CREATE INDEX IF NOT EXISTS idx_invoices_distributor ON invoices(distributor_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_merchant ON invoices(merchant_id);
+CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
 
 -- Invoice discounting requests
-CREATE TABLE invoice_discounting_requests (
+CREATE TABLE IF NOT EXISTS invoice_discounting_requests (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     distributor_id UUID NOT NULL REFERENCES distributors(id),
     total_invoice_amount DECIMAL(15, 2) NOT NULL,
@@ -491,10 +491,10 @@ CREATE TABLE invoice_discounting_requests (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_invoice_discounting_distributor ON invoice_discounting_requests(distributor_id);
+CREATE INDEX IF NOT EXISTS idx_invoice_discounting_distributor ON invoice_discounting_requests(distributor_id);
 
 -- Invoice discounting items
-CREATE TABLE invoice_discounting_items (
+CREATE TABLE IF NOT EXISTS invoice_discounting_items (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     request_id UUID NOT NULL REFERENCES invoice_discounting_requests(id) ON DELETE CASCADE,
     invoice_id UUID NOT NULL REFERENCES invoices(id),
@@ -506,7 +506,7 @@ CREATE TABLE invoice_discounting_items (
 -- ===========================================
 
 -- AI configurations
-CREATE TABLE ai_configurations (
+CREATE TABLE IF NOT EXISTS ai_configurations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     config_key VARCHAR(100) NOT NULL UNIQUE,
     config_value JSONB NOT NULL,
@@ -518,11 +518,11 @@ CREATE TABLE ai_configurations (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_ai_configurations_key ON ai_configurations(config_key);
-CREATE INDEX idx_ai_configurations_category ON ai_configurations(category);
+CREATE INDEX IF NOT EXISTS idx_ai_configurations_key ON ai_configurations(config_key);
+CREATE INDEX IF NOT EXISTS idx_ai_configurations_category ON ai_configurations(category);
 
 -- System configurations
-CREATE TABLE system_configurations (
+CREATE TABLE IF NOT EXISTS system_configurations (
     id BIGSERIAL PRIMARY KEY,
     config_key VARCHAR(100) NOT NULL UNIQUE,
     config_value TEXT NOT NULL,
@@ -542,7 +542,8 @@ INSERT INTO roles (name, description) VALUES
     ('WAREHOUSE_MANAGER', 'Warehouse manager responsible for inventory'),
     ('MERCHANT', 'Retail merchant/shop owner'),
     ('FINANCE', 'Finance team member for payment reconciliation'),
-    ('DRIVER', 'Delivery driver');
+    ('DRIVER', 'Delivery driver')
+ON CONFLICT (name) DO NOTHING;
 
 -- Insert default permissions
 INSERT INTO permissions (name, description, module) VALUES
@@ -565,12 +566,14 @@ INSERT INTO permissions (name, description, module) VALUES
     ('report:read', 'View reports', 'report'),
     ('report:export', 'Export reports', 'report'),
     ('settings:read', 'View settings', 'settings'),
-    ('settings:write', 'Manage settings', 'settings');
+    ('settings:write', 'Manage settings', 'settings')
+ON CONFLICT (name) DO NOTHING;
 
 -- Assign permissions to roles
 -- Admin gets all permissions
 INSERT INTO role_permissions (role_id, permission_id)
-SELECT r.id, p.id FROM roles r, permissions p WHERE r.name = 'ADMIN';
+SELECT r.id, p.id FROM roles r, permissions p WHERE r.name = 'ADMIN'
+ON CONFLICT DO NOTHING;
 
 -- Distributor Admin permissions
 INSERT INTO role_permissions (role_id, permission_id)
@@ -578,32 +581,37 @@ SELECT r.id, p.id FROM roles r, permissions p
 WHERE r.name = 'DISTRIBUTOR_ADMIN'
 AND p.name IN ('user:read', 'user:write', 'order:read', 'order:write', 'payment:read',
                'inventory:read', 'inventory:write', 'credit:read', 'credit:write',
-               'merchant:read', 'merchant:write', 'report:read', 'report:export');
+               'merchant:read', 'merchant:write', 'report:read', 'report:export')
+ON CONFLICT DO NOTHING;
 
 -- Sales Rep permissions
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id FROM roles r, permissions p
 WHERE r.name = 'SALES_REP'
 AND p.name IN ('order:read', 'order:write', 'merchant:read', 'merchant:write',
-               'inventory:read', 'credit:read');
+               'inventory:read', 'credit:read')
+ON CONFLICT DO NOTHING;
 
 -- Warehouse Manager permissions
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id FROM roles r, permissions p
 WHERE r.name = 'WAREHOUSE_MANAGER'
-AND p.name IN ('order:read', 'inventory:read', 'inventory:write', 'report:read');
+AND p.name IN ('order:read', 'inventory:read', 'inventory:write', 'report:read')
+ON CONFLICT DO NOTHING;
 
 -- Merchant permissions
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id FROM roles r, permissions p
 WHERE r.name = 'MERCHANT'
-AND p.name IN ('order:read', 'order:write', 'payment:read', 'credit:read');
+AND p.name IN ('order:read', 'order:write', 'payment:read', 'credit:read')
+ON CONFLICT DO NOTHING;
 
 -- Finance permissions
 INSERT INTO role_permissions (role_id, permission_id)
 SELECT r.id, p.id FROM roles r, permissions p
 WHERE r.name = 'FINANCE'
-AND p.name IN ('payment:read', 'payment:write', 'payment:reconcile', 'report:read', 'report:export');
+AND p.name IN ('payment:read', 'payment:write', 'payment:reconcile', 'report:read', 'report:export')
+ON CONFLICT DO NOTHING;
 
 -- Insert default payment methods
 INSERT INTO payment_methods (name, code, description) VALUES
@@ -611,7 +619,8 @@ INSERT INTO payment_methods (name, code, description) VALUES
     ('M-Pesa', 'MPESA', 'Safaricom M-Pesa mobile money'),
     ('KCB Bank Transfer', 'KCB_TRANSFER', 'KCB bank transfer'),
     ('KCB Vooma', 'KCB_VOOMA', 'KCB Vooma mobile money'),
-    ('Credit', 'CREDIT', 'Credit/trade terms');
+    ('Credit', 'CREDIT', 'Credit/trade terms')
+ON CONFLICT (name) DO NOTHING;
 
 -- Insert default merchant categories
 INSERT INTO merchant_categories (name, description) VALUES
@@ -621,11 +630,13 @@ INSERT INTO merchant_categories (name, description) VALUES
     ('Pharmacy', 'Pharmacy and medical supplies'),
     ('Hardware', 'Hardware and construction materials'),
     ('Restaurant/Hotel', 'Food service establishment'),
-    ('Other', 'Other business type');
+    ('Other', 'Other business type')
+ON CONFLICT (name) DO NOTHING;
 
 -- Insert default AI configurations
 INSERT INTO ai_configurations (config_key, config_value, category, description) VALUES
     ('credit.scoring.model', '{"provider": "openai", "model": "gpt-4", "temperature": 0.3, "maxTokens": 1000}', 'model', 'Credit scoring AI model configuration'),
     ('credit.scoring.weights', '{"orderHistory": 0.3, "paymentHistory": 0.35, "businessProfile": 0.2, "creditUtilization": 0.15}', 'model', 'Credit scoring factor weights'),
     ('rag.chunking', '{"chunkSize": 1000, "chunkOverlap": 200}', 'rag', 'RAG document chunking configuration'),
-    ('cache.embeddings.ttl', '{"hours": 24}', 'cache', 'Embedding cache TTL');
+    ('cache.embeddings.ttl', '{"hours": 24}', 'cache', 'Embedding cache TTL')
+ON CONFLICT (config_key) DO NOTHING;
