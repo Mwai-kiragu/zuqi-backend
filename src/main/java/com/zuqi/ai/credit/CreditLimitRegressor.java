@@ -3,6 +3,7 @@ package com.zuqi.ai.credit;
 import com.zuqi.ai.feature.MerchantFeatureService;
 import com.zuqi.ai.feature.MerchantFeatures;
 import com.zuqi.ai.model.ModelLoaderService;
+import com.zuqi.ai.model.ModelPhaseService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,7 @@ public class CreditLimitRegressor {
     private final ModelLoaderService modelLoader;
     private final MerchantFeatureService merchantFeatureService;
     private final CreditMlFeatureBuilder featureBuilder;
+    private final ModelPhaseService phaseService;
 
     private static final String MODEL_NAME = "credit_limit_regressor";
     private static final BigDecimal MIN_LIMIT = BigDecimal.valueOf(50_000);   // 50k KES
@@ -77,7 +79,10 @@ public class CreditLimitRegressor {
             long rounded = (limitLong / 10_000) * 10_000;
             creditLimit = BigDecimal.valueOf(rounded);
 
-            log.debug("ML credit limit prediction for merchant {}: {} KES",
+            // Apply SYNTHETIC-phase confidence modifier — conservative limits when trained on generated data
+            creditLimit = phaseService.applyModifier(creditLimit, MODEL_NAME);
+
+            log.debug("ML credit limit prediction for merchant {}: {} KES (phase-adjusted)",
                     merchantId, creditLimit);
 
             return creditLimit;

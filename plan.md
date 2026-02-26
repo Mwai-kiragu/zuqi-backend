@@ -1,6 +1,6 @@
 # Zuqi AI Integration — System Architecture Blueprint
 
-**Version:** 1.0
+**Version:** 2.1
 **Date:** February 2026
 **Classification:** Internal Technical Architecture Document
 
@@ -17,25 +17,26 @@ This document defines the complete system architecture for integrating AI capabi
 - **Java-native.** The entire production runtime is Java. No Python microservices, no cross-language communication overhead, single deployment pipeline.
 - **Modular.** Each AI capability is an independent module. Modules can be developed, deployed, and scaled independently.
 - **Data-driven.** All AI features consume data already captured by existing Zuqi workflows. No new data collection required at launch.
-- **Auditable.** Every AI decision is logged with inputs, outputs, model version, and confidence score. Required for the KCB banking partnership.
-- **Evolvable.** Architecture supports migrating from LLM-based solutions to trained ML models as data accumulates.
+- **Day-one ready.** Synthetic data generated in-memory bootstraps all ML models at launch. Models improve progressively as real data replaces synthetic data through a managed SYNTHETIC → HYBRID → REAL transition.
+- **Auditable.** Every AI decision is logged with inputs, outputs, model version, confidence score, and data composition (synthetic vs real ratio). Required for the KCB banking partnership.
+- **Evolvable.** Architecture supports migrating from LLM-based solutions to trained ML models as data accumulates, and from synthetic-trained models to real-data-trained models as operational history grows.
 
 ### 1.3 AI Capability Summary
 
-| # | Capability | AI Type | Primary Technology |
-|---|---|---|---|
-| 1 | Credit Risk Scoring | LLM Chain → ML Classifier | LangChain4j → Tribuo |
-| 2 | AI-Powered Order Suggestions | ML Regression + optional LLM | Tribuo + LangChain4j |
-| 3 | Demand Forecasting | ML Regression | Tribuo (XGBoost) |
-| 4 | Dynamic Route Optimization | Constraint Solver | Timefold + GraphHopper |
-| 5 | Inventory Shrinkage Detection | ML Anomaly Detection | Tribuo (Isolation Forest) |
-| 6 | Payment Anomaly Detection | ML Anomaly + Classification | Tribuo |
-| 7 | Stockout Prediction | ML Classification | Tribuo (XGBoost) |
-| 8 | Sales Rep Underperformance | ML Regression | Tribuo (XGBoost) |
-| 9 | Dynamic Credit Limit Adjustment | ML Regression + Rules | Tribuo (XGBoost) |
-| 10 | Operational Recommendations | AI Agent | LangChain4j Agent |
-| 11 | Compliance Reporting | LLM Chain | LangChain4j AI Service |
-| 12 | Data Quality Detection | Rules + ML | Java Rules + Tribuo |
+| # | Capability | AI Type | Primary Technology | Day-One Ready |
+|---|---|---|---|---|
+| 1 | Credit Risk Scoring | LLM Chain → ML Classifier | LangChain4j → Tribuo | ✅ LLM + synthetic ML |
+| 2 | AI-Powered Order Suggestions | ML Regression + optional LLM | Tribuo + LangChain4j | ✅ Synthetic-trained |
+| 3 | Demand Forecasting | ML Regression | Tribuo (XGBoost) | ✅ Synthetic-trained |
+| 4 | Dynamic Route Optimization | Constraint Solver | Timefold + GraphHopper | ✅ No training needed |
+| 5 | Inventory Shrinkage Detection | ML Anomaly Detection | Tribuo (Isolation Forest) | ✅ Synthetic patterns |
+| 6 | Payment Anomaly Detection | ML Anomaly + Classification | Tribuo | ✅ Synthetic patterns |
+| 7 | Stockout Prediction | ML Classification | Tribuo (XGBoost) | ✅ Synthetic-trained |
+| 8 | Sales Rep Underperformance | ML Regression | Tribuo (XGBoost) | ✅ Synthetic baselines |
+| 9 | Dynamic Credit Limit Adjustment | ML Regression + Rules | Tribuo (XGBoost) | ✅ Synthetic-trained |
+| 10 | Operational Recommendations | AI Agent | LangChain4j Agent | ✅ LLM-based |
+| 11 | Compliance Reporting | LLM Chain | LangChain4j AI Service | ✅ LLM-based |
+| 12 | Data Quality Detection | Rules + ML | Java Rules + Tribuo | ✅ Rules + synthetic ML |
 
 ---
 
@@ -64,7 +65,8 @@ This document defines the complete system architecture for integrating AI capabi
 | Batch Scheduling | Spring Batch + @Scheduled | Training pipelines, nightly forecasts, re-evaluations |
 | Event Bus | Spring ApplicationEventPublisher (initial) → RabbitMQ/Kafka (at scale) | Real-time scoring triggers |
 | Model Registry | PostgreSQL (custom tables) | Model versioning, performance tracking, audit trails |
-| Monitoring | Prometheus + Grafana | Model performance, drift detection, system health |
+| Synthetic Data | In-memory generators + DataMixer | Day-one model bootstrap, managed transition to real data |
+| Monitoring | Prometheus + Grafana | Model performance, drift detection, data maturity tracking |
 | GPU Infrastructure | NVIDIA A10G or L4 (24GB VRAM) | Local LLM inference |
 
 ### 2.3 Integration with Existing Project
@@ -97,6 +99,7 @@ zuqi-backend/
         ├── routing/
         ├── agent/
         ├── reporting/
+        ├── synthetic/                   (NEW — in-memory generation & transition)
         ├── pipeline/
         └── monitoring/
 ```
@@ -137,7 +140,8 @@ com.zuqi/
 │   │   ├── PaymentFeatureService    # Computes payment behavior features
 │   │   ├── InventoryFeatureService  # Computes inventory/stock features
 │   │   ├── SalesRepFeatureService   # Computes sales rep performance features
-│   │   └── FeatureStore             # Centralized feature access and caching
+│   │   ├── FeatureStore             # Centralized feature access and caching
+│   │   └── FeatureComputer          # Shared computation logic (stateless, data-source agnostic)
 │   │
 │   ├── model/                      # ML model management
 │   │   ├── ModelRegistry            # Model versioning and metadata
@@ -147,7 +151,7 @@ com.zuqi/
 │   │
 │   ├── credit/                     # Credit risk AI module
 │   │   ├── CreditScoringAiService   # LangChain4j AI Service interface
-│   │   ├── CreditClassifier         # Tribuo XGBoost classifier (Phase 2+)
+│   │   ├── CreditClassifier         # Tribuo XGBoost classifier (synthetic → real)
 │   │   ├── CreditFeatureBuilder     # Builds credit-specific feature vectors
 │   │   ├── CreditExplainer          # LLM-based explanation generator
 │   │   └── CreditLimitAdjuster      # Dynamic limit adjustment logic
@@ -161,7 +165,7 @@ com.zuqi/
 │   ├── anomaly/                    # Anomaly detection module
 │   │   ├── ShrinkageDetector        # Tribuo Isolation Forest for inventory
 │   │   ├── PaymentAnomalyDetector   # Tribuo Isolation Forest for payments
-│   │   ├── PaymentDistressClassifier # Tribuo XGBoost for distress (Phase 2+)
+│   │   ├── PaymentDistressClassifier # Tribuo XGBoost for distress (synthetic → real)
 │   │   ├── DataQualityDetector      # Rules + Tribuo for data quality
 │   │   ├── AnomalyFeatureBuilder    # Builds anomaly-specific features
 │   │   └── AlertService             # Alert generation, deduplication, delivery
@@ -176,9 +180,9 @@ com.zuqi/
 │   │   ├── DistanceMatrixService    # GraphHopper distance/time computation
 │   │   ├── RouteOptimizationJob     # Evening batch route planning
 │   │   └── domain/                  # Timefold planning entities
-│   │       ├── Vehicle               # Planning entity: delivery vehicle
-│   │       ├── DeliveryStop           # Planning entity: merchant delivery
-│   │       └── RoutePlan              # Planning solution
+│   │       ├── Vehicle
+│   │       ├── DeliveryStop
+│   │       └── RoutePlan
 │   │
 │   ├── agent/                      # AI Agent module
 │   │   ├── RecommendationAgent      # LangChain4j Agent for operational insights
@@ -197,12 +201,33 @@ com.zuqi/
 │   │   ├── ReportTemplateRegistry    # Principal-specific prompt templates
 │   │   └── ComplianceReportJob       # Scheduled report generation
 │   │
+│   ├── synthetic/                  # In-memory synthetic data generation & transition
+│   │   ├── SyntheticDataConfig      # Volumes, archetype ratios, seed values
+│   │   ├── SyntheticDatasetBuilder  # Builds complete in-memory synthetic datasets
+│   │   ├── DataPhaseTracker         # Tracks SYNTHETIC/HYBRID/REAL per model
+│   │   ├── DataMixer                # Blends synthetic + real Tribuo datasets
+│   │   ├── TransitionEvaluator      # Evaluates readiness to phase out synthetic
+│   │   ├── generators/              # Domain-specific in-memory generators
+│   │   │   ├── MerchantProfileGenerator    # → List<SyntheticMerchant>
+│   │   │   ├── OrderHistoryGenerator       # → List<SyntheticOrder>
+│   │   │   ├── PaymentBehaviorGenerator    # → List<SyntheticPayment>
+│   │   │   ├── InventoryMovementGenerator  # → List<SyntheticMovement>
+│   │   │   ├── SalesRepActivityGenerator   # → List<SyntheticRepActivity>
+│   │   │   └── CreditHistoryGenerator      # → List<SyntheticCreditEvent>
+│   │   └── profiles/                # Behavioral archetypes
+│   │       ├── MerchantArchetypes
+│   │       ├── SeasonalityPatterns
+│   │       └── AnomalyPatterns
+│   │
 │   ├── pipeline/                   # Training pipeline orchestration
 │   │   ├── TrainingPipelineJob      # Spring Batch master training job
-│   │   ├── FeatureComputationStep   # Batch step: compute all features
+│   │   ├── FeatureComputationStep   # Batch step: compute features from real data
+│   │   ├── SyntheticDatasetStep     # Batch step: generate synthetic dataset in-memory
+│   │   ├── DataMixingStep           # Batch step: blend synthetic + real datasets
 │   │   ├── ModelTrainingStep        # Batch step: train models
 │   │   ├── ModelEvaluationStep      # Batch step: evaluate on test set
 │   │   ├── ModelPromotionStep       # Batch step: promote if metrics pass
+│   │   ├── PhaseEvaluationStep      # Batch step: evaluate data phase transition
 │   │   └── DriftDetectionStep       # Batch step: check for data drift
 │   │
 │   └── monitoring/                 # AI system monitoring
@@ -217,19 +242,24 @@ com.zuqi/
 ```
 Feature Engineering Layer (foundation — all modules depend on this)
     │
-    ├── credit/        ← feature/, model/
-    ├── demand/        ← feature/, model/
-    ├── anomaly/       ← feature/, model/
-    ├── prediction/    ← feature/, model/, demand/ (stockout depends on forecasts)
-    ├── routing/       ← (independent — uses order data directly)
+    ├── synthetic/     ← feature/ (FeatureComputer provides shared computation logic)
+    ├── credit/        ← feature/, model/, synthetic/
+    ├── demand/        ← feature/, model/, synthetic/
+    ├── anomaly/       ← feature/, model/, synthetic/
+    ├── prediction/    ← feature/, model/, demand/, synthetic/
+    ├── routing/       ← (independent — uses order data directly, no synthetic needed)
     ├── agent/         ← credit/, demand/, anomaly/, prediction/ (reads from all)
     ├── reporting/     ← (independent — uses operational data directly)
     │
     Model Registry (model/) ← all ML modules register and load models through this
     │
-    Training Pipeline (pipeline/) ← orchestrates feature/, model/, and all ML modules
+    DataMixer (synthetic/) ← all training pipelines blend datasets through this
     │
-    Monitoring (monitoring/) ← observes all modules
+    DataPhaseTracker (synthetic/) ← all training pipelines evaluate transitions through this
+    │
+    Training Pipeline (pipeline/) ← orchestrates feature/, model/, synthetic/, and all ML modules
+    │
+    Monitoring (monitoring/) ← observes all modules including data maturity
 ```
 
 ---
@@ -240,11 +270,38 @@ Feature Engineering Layer (foundation — all modules depend on this)
 
 The feature engineering layer is the foundation of the entire AI system. It computes derived features from raw operational data that all ML models and LLM prompts consume. Centralizing feature logic ensures consistency between training and inference — the single most important requirement for reliable ML.
 
-### 4.2 Feature Services
+### 4.2 Shared Computation via FeatureComputer
+
+Feature computation logic is extracted into a stateless `FeatureComputer` utility class. This class accepts raw data (as lists of records/DTOs) and returns computed features. Both real feature services and synthetic generators call the same `FeatureComputer` methods — **only the data source differs, not the computation.**
+
+```java
+// Stateless — accepts raw data, returns computed features
+public class FeatureComputer {
+
+    // Called by MerchantFeatureService (real data from JPA)
+    // AND by SyntheticDatasetBuilder (in-memory synthetic data)
+    public MerchantFeatures computeMerchantFeatures(
+        List<OrderRecord> orders,
+        List<PaymentRecord> payments,
+        MerchantProfile merchant,
+        CreditInfo credit) { ... }
+
+    public DemandFeatures computeDemandFeatures(
+        List<OrderItemRecord> orderHistory,
+        MerchantProfile merchant,
+        ProductInfo product,
+        LocalDate asOfDate) { ... }
+
+    // ... same pattern for all feature types
+}
+```
+
+This guarantees zero drift between real and synthetic feature pipelines.
+
+### 4.3 Feature Services (Real Data)
 
 #### MerchantFeatureService
-
-Computes features for a single merchant from existing domain entities:
+Queries JPA repositories → passes data to `FeatureComputer.computeMerchantFeatures()`.
 
 **Order features:** total_orders, order_frequency_per_week, avg_order_value, order_value_trend_slope_12w, order_consistency_stddev, cancellation_rate, return_rate, days_since_last_order, unique_skus_ordered, top_sku_concentration
 
@@ -254,13 +311,10 @@ Computes features for a single merchant from existing domain entities:
 
 **Profile features:** business_category (encoded), relationship_tenure_days, verification_status, geographic_cluster
 
-**Data sources:** Order entity, Payment entity, Merchant entity, CreditLimit entity — all existing JPA entities
-
 #### OrderFeatureService (Demand Features)
+Queries JPA repositories → passes data to `FeatureComputer.computeDemandFeatures()`.
 
-Computes features for a merchant-SKU combination:
-
-**Lag features:** qty_1w_ago, qty_2w_ago, qty_3w_ago, qty_4w_ago, rolling_avg_4w, rolling_avg_12w, trend_direction (short_avg - long_avg)
+**Lag features:** qty_1w_ago, qty_2w_ago, qty_3w_ago, qty_4w_ago, rolling_avg_4w, rolling_avg_12w, trend_direction
 
 **Temporal features:** day_of_week, week_of_month, month_of_year, is_holiday, is_payday_week, is_ramadan, is_christmas_season
 
@@ -268,43 +322,26 @@ Computes features for a merchant-SKU combination:
 
 **SKU context:** product_category, price_tier, is_promotional, typical_shelf_life
 
-**Data sources:** Order entity, OrderItem entity, Product entity, Merchant entity
-
 #### PaymentFeatureService
-
-Computes features for payment anomaly detection:
-
 **Per-payment features:** days_to_payment_vs_merchant_avg, amount_vs_invoice_amount_ratio, payment_method_encoded, hour_of_day, is_partial, gap_since_last_payment_days
 
 **Merchant trend features:** days_to_pay_trend_3m, order_frequency_trend_3m, credit_utilization_trajectory, partial_payment_freq_trend, avg_order_value_trend
 
-**Data sources:** Payment entity, Invoice entity, Order entity, Merchant entity
-
 #### InventoryFeatureService
-
-Computes features for shrinkage and stockout detection:
-
-**Per warehouse-SKU:** current_stock, expected_stock (opening + in - out), discrepancy, discrepancy_pct, manual_adjustment_count_7d, adjustment_time_distribution, adjusting_user_ids, consumption_rate_7d, consumption_rate_30d, consumption_trend, pending_reserved_qty, expected_incoming_qty
-
-**Data sources:** StockMovement entity, Inventory entity, Warehouse entity, Order entity
+**Per warehouse-SKU:** current_stock, expected_stock, discrepancy, discrepancy_pct, manual_adjustment_count_7d, adjustment_time_distribution, adjusting_user_ids, consumption_rate_7d, consumption_rate_30d, consumption_trend, pending_reserved_qty, expected_incoming_qty
 
 #### SalesRepFeatureService
-
-Computes features for rep performance prediction:
-
 **Per-rep per-period:** visit_count_vs_target, order_conversion_rate, total_order_value, avg_order_value, new_merchants_acquired, collection_rate, route_adherence_pct, territory_penetration_pct
 
-**Data sources:** Order entity, Merchant entity, User entity (sales rep), Visit entity (if tracked)
+### 4.4 FeatureStore
 
-### 4.3 FeatureStore
-
-Centralized access point for all features with caching:
+Centralized access for real-time inference and real-data training:
 
 - **Computes or retrieves** cached features via Redis
-- **TTL-based caching** — merchant features cached for 24 hours, demand features refreshed nightly, payment features refreshed on each payment event
-- **Training mode** — computes historical features for a date range (for model training)
-- **Inference mode** — computes current features for a single entity (for real-time scoring)
-- **Consistency guarantee** — both training and inference code paths call the same feature computation methods
+- **TTL-based caching** — merchant features 24h, demand nightly, payment per event
+- **Training mode** — computes historical features for a date range
+- **Inference mode** — computes current features for a single entity
+- **Does NOT handle synthetic data** — synthetic features are computed in-memory by `SyntheticDatasetBuilder` using `FeatureComputer` directly
 
 ---
 
@@ -316,28 +353,31 @@ Centralized access point for all features with caching:
 -- Model metadata and versioning
 CREATE TABLE ai_model_registry (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    model_name      VARCHAR(100) NOT NULL,     -- e.g., 'demand_forecaster', 'shrinkage_detector'
+    model_name      VARCHAR(100) NOT NULL,
     model_version   INTEGER NOT NULL,
-    algorithm       VARCHAR(50) NOT NULL,       -- e.g., 'xgboost_regression', 'isolation_forest'
+    algorithm       VARCHAR(50) NOT NULL,
     status          VARCHAR(20) NOT NULL,       -- TRAINING, EVALUATING, ACTIVE, RETIRED
-    distributor_id  UUID REFERENCES distributors(id) ON DELETE CASCADE,  -- Models can be distributor-specific
+    distributor_id  UUID REFERENCES distributors(id) ON DELETE CASCADE,
+    data_phase      VARCHAR(20),                -- SYNTHETIC, HYBRID, REAL
+    real_data_ratio DOUBLE PRECISION,           -- 0.0 to 1.0
+    synthetic_records_used INTEGER,
+    real_records_used INTEGER,
     training_data_start TIMESTAMP,
     training_data_end   TIMESTAMP,
     training_record_count INTEGER,
-    performance_metrics JSONB,                  -- {"mae": 2.3, "rmse": 4.1, "mape": 0.12}
-    hyperparameters     JSONB,                  -- {"max_depth": 6, "learning_rate": 0.1}
-    model_binary        BYTEA,                  -- Serialized Tribuo model
+    performance_metrics JSONB,
+    hyperparameters     JSONB,
+    model_binary        BYTEA,
     model_size_bytes    BIGINT,
-    feature_columns     JSONB,                  -- Ordered list of feature names
+    feature_columns     JSONB,
     created_at      TIMESTAMP DEFAULT NOW(),
     created_by      VARCHAR(100),
-    promoted_at     TIMESTAMP,                  -- When moved to ACTIVE
+    promoted_at     TIMESTAMP,
     retired_at      TIMESTAMP,
     updated_at      TIMESTAMP DEFAULT NOW(),
     UNIQUE(model_name, model_version)
 );
 
--- Indexes for quick model lookup
 CREATE INDEX idx_model_active ON ai_model_registry(model_name, status)
     WHERE status = 'ACTIVE';
 CREATE INDEX idx_model_registry_created ON ai_model_registry(created_at DESC);
@@ -348,21 +388,22 @@ CREATE TABLE ai_predictions (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     model_name      VARCHAR(100) NOT NULL,
     model_version   INTEGER NOT NULL,
-    entity_type     VARCHAR(50) NOT NULL,       -- 'merchant', 'warehouse_sku', 'sales_rep'
+    entity_type     VARCHAR(50) NOT NULL,
     entity_id       UUID NOT NULL,
-    distributor_id  UUID REFERENCES distributors(id) ON DELETE CASCADE,  -- Multi-tenant filtering
-    input_features_hash VARCHAR(64),            -- SHA-256 of input features
-    prediction_value    JSONB NOT NULL,          -- {"grade": "B", "limit": 85000} or {"quantity": 24}
-    confidence_score    DOUBLE PRECISION,
+    distributor_id  UUID REFERENCES distributors(id) ON DELETE CASCADE,
+    input_features_hash VARCHAR(64),
+    prediction_value    JSONB NOT NULL,
+    confidence_score    DOUBLE PRECISION,       -- Phase-adjusted confidence
+    raw_confidence      DOUBLE PRECISION,       -- Pre-adjustment confidence
+    data_phase          VARCHAR(20),            -- Phase at time of prediction
     was_overridden      BOOLEAN DEFAULT FALSE,
     override_value      JSONB,
     override_by         VARCHAR(100),
     override_reason     TEXT,
-    expires_at      TIMESTAMP,                  -- Data retention / GDPR compliance
+    expires_at      TIMESTAMP,
     created_at      TIMESTAMP DEFAULT NOW()
 );
 
--- Indexes for prediction lookups
 CREATE INDEX idx_predictions_entity ON ai_predictions(entity_type, entity_id, created_at DESC);
 CREATE INDEX idx_predictions_model ON ai_predictions(model_name, model_version);
 CREATE INDEX idx_predictions_distributor ON ai_predictions(distributor_id);
@@ -374,18 +415,17 @@ CREATE TABLE ai_model_performance (
     model_name      VARCHAR(100) NOT NULL,
     model_version   INTEGER NOT NULL,
     evaluation_date DATE NOT NULL,
-    metric_name     VARCHAR(50) NOT NULL,       -- 'accuracy', 'precision', 'recall', 'mae', 'rmse'
+    metric_name     VARCHAR(50) NOT NULL,
     metric_value    DOUBLE PRECISION NOT NULL,
     sample_size     INTEGER,
+    data_phase      VARCHAR(20),
     created_at      TIMESTAMP DEFAULT NOW(),
-    UNIQUE(model_name, model_version, evaluation_date, metric_name)  -- Prevent duplicate metrics
+    UNIQUE(model_name, model_version, evaluation_date, metric_name)
 );
 
--- Indexes for performance tracking
 CREATE INDEX idx_model_performance_lookup ON ai_model_performance(model_name, model_version, evaluation_date);
-CREATE INDEX idx_model_performance_metric ON ai_model_performance(metric_name);
 
--- Demand forecasts (consumed by stockout prediction and order suggestions)
+-- Demand forecasts
 CREATE TABLE ai_demand_forecasts (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id     UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
@@ -396,12 +436,12 @@ CREATE TABLE ai_demand_forecasts (
     confidence_lower DOUBLE PRECISION,
     confidence_upper DOUBLE PRECISION,
     model_version   INTEGER NOT NULL,
-    expires_at      TIMESTAMP,                  -- Data retention
+    data_phase      VARCHAR(20),
+    expires_at      TIMESTAMP,
     created_at      TIMESTAMP DEFAULT NOW(),
     UNIQUE(merchant_id, sku_id, forecast_date)
 );
 
--- Indexes for forecast lookups
 CREATE INDEX idx_demand_forecasts_merchant ON ai_demand_forecasts(merchant_id);
 CREATE INDEX idx_demand_forecasts_date ON ai_demand_forecasts(forecast_date);
 CREATE INDEX idx_demand_forecasts_distributor ON ai_demand_forecasts(distributor_id);
@@ -409,22 +449,22 @@ CREATE INDEX idx_demand_forecasts_distributor ON ai_demand_forecasts(distributor
 -- Anomaly alerts
 CREATE TABLE ai_anomaly_alerts (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    alert_type      VARCHAR(50) NOT NULL,       -- 'shrinkage', 'payment_anomaly', 'data_quality'
-    severity        VARCHAR(20) NOT NULL,       -- 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'
+    alert_type      VARCHAR(50) NOT NULL,
+    severity        VARCHAR(20) NOT NULL,
     entity_type     VARCHAR(50) NOT NULL,
     entity_id       UUID NOT NULL,
     distributor_id  UUID NOT NULL REFERENCES distributors(id) ON DELETE CASCADE,
     anomaly_score   DOUBLE PRECISION,
     description     TEXT NOT NULL,
-    context         JSONB,                      -- Supporting data for investigation
-    status          VARCHAR(20) DEFAULT 'OPEN', -- 'OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'DISMISSED'
+    context         JSONB,
+    data_phase      VARCHAR(20),
+    status          VARCHAR(20) DEFAULT 'OPEN',
     resolved_by     VARCHAR(100),
     resolved_at     TIMESTAMP,
     created_at      TIMESTAMP DEFAULT NOW(),
     updated_at      TIMESTAMP DEFAULT NOW()
 );
 
--- Indexes for alert management
 CREATE INDEX idx_anomaly_alerts_distributor ON ai_anomaly_alerts(distributor_id);
 CREATE INDEX idx_anomaly_alerts_status ON ai_anomaly_alerts(status);
 CREATE INDEX idx_anomaly_alerts_severity ON ai_anomaly_alerts(severity);
@@ -441,8 +481,8 @@ CREATE TABLE ai_recommendations (
     evidence        JSONB NOT NULL,
     recommendation  TEXT NOT NULL,
     expected_impact TEXT,
-    priority        VARCHAR(20) NOT NULL,       -- 'LOW', 'MEDIUM', 'HIGH'
-    status          VARCHAR(20) DEFAULT 'PENDING', -- 'PENDING', 'ACCEPTED', 'REJECTED', 'COMPLETED'
+    priority        VARCHAR(20) NOT NULL,
+    status          VARCHAR(20) DEFAULT 'PENDING',
     acted_on_at     TIMESTAMP,
     outcome         TEXT,
     model_version   VARCHAR(50),
@@ -450,11 +490,8 @@ CREATE TABLE ai_recommendations (
     updated_at      TIMESTAMP DEFAULT NOW()
 );
 
--- Indexes for recommendation management
 CREATE INDEX idx_recommendations_distributor ON ai_recommendations(distributor_id);
 CREATE INDEX idx_recommendations_status ON ai_recommendations(status);
-CREATE INDEX idx_recommendations_priority ON ai_recommendations(priority);
-CREATE INDEX idx_recommendations_type ON ai_recommendations(recommendation_type);
 CREATE INDEX idx_recommendations_created ON ai_recommendations(created_at DESC);
 
 -- Delivery routes
@@ -462,46 +499,43 @@ CREATE TABLE ai_delivery_routes (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     distributor_id  UUID NOT NULL REFERENCES distributors(id) ON DELETE CASCADE,
     route_date      DATE NOT NULL,
-    vehicle_id      UUID,                       -- Vehicle info stored in metadata for now (vehicles table TBD)
-    vehicle_info    JSONB,                      -- {capacity_kg, capacity_volume, registration, type}
+    vehicle_id      UUID,
+    vehicle_info    JSONB,
     driver_id       UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    stop_sequence   JSONB NOT NULL,             -- Ordered list of {merchant_id, eta, order_ids}
+    stop_sequence   JSONB NOT NULL,
     total_distance_km   DOUBLE PRECISION,
     total_duration_min  DOUBLE PRECISION,
     load_utilization_pct DOUBLE PRECISION,
     solver_time_ms      INTEGER,
-    status          VARCHAR(20) DEFAULT 'PLANNED', -- 'PLANNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'
-    actual_distance_km  DOUBLE PRECISION,       -- Filled after completion
+    status          VARCHAR(20) DEFAULT 'PLANNED',
+    actual_distance_km  DOUBLE PRECISION,
     actual_duration_min DOUBLE PRECISION,
     created_at      TIMESTAMP DEFAULT NOW(),
     updated_at      TIMESTAMP DEFAULT NOW()
 );
 
--- Indexes for route management
 CREATE INDEX idx_delivery_routes_distributor ON ai_delivery_routes(distributor_id);
 CREATE INDEX idx_delivery_routes_date ON ai_delivery_routes(route_date);
 CREATE INDEX idx_delivery_routes_driver ON ai_delivery_routes(driver_id);
 CREATE INDEX idx_delivery_routes_status ON ai_delivery_routes(status);
-CREATE INDEX idx_delivery_routes_created ON ai_delivery_routes(created_at DESC);
 
--- Merchant embeddings for RAG (credit scoring similarity)
+-- Merchant embeddings for RAG
 CREATE TABLE ai_merchant_embeddings (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id     UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
     distributor_id  UUID NOT NULL REFERENCES distributors(id) ON DELETE CASCADE,
-    embedding       vector(768),                -- Dimension depends on embedding model
-    feature_summary TEXT,                       -- Human-readable summary used for embedding
+    embedding       vector(768),
+    feature_summary TEXT,
     model_version   VARCHAR(50),
     created_at      TIMESTAMP DEFAULT NOW(),
     updated_at      TIMESTAMP DEFAULT NOW(),
     UNIQUE(merchant_id)
 );
 
--- pgvector index for similarity search (cosine distance)
 CREATE INDEX idx_merchant_embeddings_similarity ON ai_merchant_embeddings
     USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
 
--- Recommendation embeddings for RAG (agent context)
+-- Recommendation embeddings for RAG
 CREATE TABLE ai_recommendation_embeddings (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     recommendation_id UUID NOT NULL REFERENCES ai_recommendations(id) ON DELETE CASCADE,
@@ -513,9 +547,39 @@ CREATE TABLE ai_recommendation_embeddings (
     UNIQUE(recommendation_id)
 );
 
--- pgvector index for similarity search
 CREATE INDEX idx_recommendation_embeddings_similarity ON ai_recommendation_embeddings
     USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+-- Data phase tracking (lightweight — only metadata, no raw data)
+CREATE TABLE ai_data_phase (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    model_name      VARCHAR(100) NOT NULL,
+    distributor_id  UUID NOT NULL REFERENCES distributors(id) ON DELETE CASCADE,
+    current_phase   VARCHAR(20) NOT NULL DEFAULT 'SYNTHETIC',
+    real_data_count BIGINT DEFAULT 0,
+    real_data_ratio DOUBLE PRECISION DEFAULT 0.0,
+    phase_changed_at TIMESTAMP,
+    last_evaluated_at TIMESTAMP,
+    created_at      TIMESTAMP DEFAULT NOW(),
+    updated_at      TIMESTAMP DEFAULT NOW(),
+    UNIQUE(model_name, distributor_id)
+);
+
+CREATE INDEX idx_data_phase_lookup ON ai_data_phase(model_name, distributor_id);
+
+-- Synthetic generation run audit log
+CREATE TABLE ai_synthetic_runs (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    distributor_id  UUID NOT NULL REFERENCES distributors(id) ON DELETE CASCADE,
+    run_type        VARCHAR(50) NOT NULL,       -- INITIAL_SEED, RETRAINING
+    seed_value      BIGINT,                     -- For reproducibility
+    archetype_config JSONB,                     -- Archetype ratios used
+    records_generated JSONB,                    -- {orders: 150000, payments: 160000, ...}
+    duration_ms     BIGINT,
+    created_at      TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX idx_synthetic_runs_distributor ON ai_synthetic_runs(distributor_id);
 ```
 
 ### 5.2 Model Lifecycle
@@ -523,514 +587,425 @@ CREATE INDEX idx_recommendation_embeddings_similarity ON ai_recommendation_embed
 ```
 TRAINING → EVALUATING → ACTIVE → RETIRED
 
-1. TRAINING:   Model is being trained on latest data
-2. EVALUATING: Model is evaluated against held-out test set
-3. ACTIVE:     Model passed quality gates, serving predictions
-               (only one ACTIVE version per model_name at a time)
-4. RETIRED:    Replaced by newer version, kept for audit purposes
+1. TRAINING:   Model is being trained on latest data (synthetic, hybrid, or real)
+2. EVALUATING: Model evaluated against held-out test set
+3. ACTIVE:     Passed quality gates, serving predictions (one ACTIVE per model_name)
+4. RETIRED:    Replaced by newer version, kept for audit
+
+Each transition records: data_phase, real_data_ratio, synthetic_records_used, real_records_used
 ```
 
 ### 5.3 ModelLoader
 
-- On application startup, loads all ACTIVE models from the registry into memory
-- Models are held as Tribuo `Model<>` objects in a `ConcurrentHashMap<String, Model<?>>`
-- When a new model is promoted to ACTIVE, it's hot-swapped without application restart
-- Fallback: if no ACTIVE model exists for a given name, the module gracefully degrades (returns no prediction rather than failing)
+- On startup, loads all ACTIVE models into `ConcurrentHashMap<String, Model<?>>`
+- Hot-swaps on new promotion without restart
+- Graceful degradation: returns null if no model exists
 
 ---
 
-## 6. Detailed Module Specifications
+## 6. Synthetic Data Layer
 
-### 6.1 Credit Risk Module (`ai/credit/`)
+### 6.1 Purpose
 
-#### Components
+The synthetic data layer solves the cold-start problem: every ML model requires months of historical data to train, but at launch (and when each new distributor onboards) that data doesn't exist. Synthetic data generated **in-memory** provides statistically realistic training data so all 9 ML models are operational from day one.
 
-**CreditScoringAiService** (LangChain4j AI Service)
-- LangChain4j `@AiService` interface
-- Input: `MerchantCreditProfile` (computed by `CreditFeatureBuilder`)
-- Peer context: similar merchants retrieved via pgvector embedding similarity
-- Output: `CreditEvaluation` POJO — grade (A-F), recommended_limit (KES), confidence (0-1), risk_factors (List<String>), reasoning (String)
-- LLM provider: **Local-only Ollama** at http://192.168.2.17:11434 (no cloud fallback)
-- Model: qwen2.5-coder:32b (32 billion parameters)
-- Embedding model: nomic-embed-text (768 dimensions)
-- Temperature: 0.1 (low for consistency)
-- Timeout: 30 seconds
-- Protected by Resilience4j circuit breaker
+### 6.2 In-Memory Architecture
 
-**CreditClassifier** (Tribuo XGBoost — Phase 2+)
-- Algorithm: `XGBoostClassificationTrainer` — binary classification
-- Input: numeric feature vector from `CreditFeatureBuilder`
-- Output: default probability (0-1), mapped to grade via configurable thresholds
-- Training data: merchants with known outcomes (defaulted vs. reliable)
-- Class imbalance: handled via `scale_pos_weight` parameter
-- Minimum training requirement: 100+ default events across 1000+ merchants
-- Replaces `CreditScoringAiService` as primary scorer when sufficient data exists
-
-**CreditFeatureBuilder**
-- Calls `MerchantFeatureService` to gather raw features
-- Produces two outputs: structured `MerchantCreditProfile` for LLM consumption, numeric `Example<Label>` for Tribuo model consumption
-- Same data, different formats — ensures LLM and ML model evaluate the same information
-
-**CreditExplainer** (LangChain4j AI Service)
-- Generates human-readable explanation of ML model decisions (Phase 2+)
-- Input: merchant features + ML model prediction + feature importance scores
-- Output: narrative explanation for credit officers
-
-**CreditLimitAdjuster**
-- Algorithm: `XGBoostRegressionTrainer`
-- Runs monthly for all active merchants
-- Predicts optimal credit limit based on current performance
-- Business rules constrain output: max 20% increase per period, decreases require human review, minimum floor enforced
-- Auto-applies adjustments within bounds, routes exceptions to finance team
-
-#### Trigger Points
-- Merchant onboarding → `CreditScoringAiService`
-- Credit limit increase request → `CreditScoringAiService`
-- Monthly scheduled re-evaluation → `CreditScoringAiService` or `CreditClassifier`
-- Monthly adjustment cycle → `CreditLimitAdjuster`
-- On each order placement → credit utilization check (existing logic, no AI)
-
----
-
-### 6.2 Demand Forecasting Module (`ai/demand/`)
-
-#### Components
-
-**DemandForecaster**
-- Algorithm: `XGBoostRegressionTrainer`
-- Input: feature vector per merchant-SKU combination from `DemandFeatureBuilder`
-- Output: predicted order quantity for next period
-- Trained on: 6-12 months of historical order data
-- Retrained: weekly
-
-**DemandFeatureBuilder**
-- Calls `OrderFeatureService` for lag and temporal features
-- Calls `MerchantFeatureService` for merchant context
-- Produces: Tribuo `Example<Regressor>` for training, feature vector for inference
-- Historical mode: computes features as they would have existed at a past date (for training)
-- Current mode: computes features as of now (for inference)
-
-**DemandForecastJob** (Spring Batch)
-- Runs nightly
-- Step 1: compute features for all active merchant-SKU combinations
-- Step 2: run inference through `DemandForecaster`
-- Step 3: store predictions in `ai_demand_forecasts` table
-- Step 4: aggregate to warehouse-SKU level for inventory planning
-- Forecast horizon: 7 days forward
-
-**OrderSuggestionService**
-- Called when sales rep opens app at merchant location
-- Retrieves pre-computed forecasts from `ai_demand_forecasts`
-- Filters: removes out-of-stock SKUs, enforces credit limit
-- Ranks: by confidence, margin contribution, recency
-- Optional LLM enrichment: brief sales tips via LangChain4j
-- Returns: ordered list of `OrderSuggestion` DTOs to mobile API
-
-#### Trigger Points
-- Nightly batch → `DemandForecastJob`
-- Sales rep merchant visit → `OrderSuggestionService`
-- Weekly → model retraining pipeline
-
----
-
-### 6.3 Anomaly Detection Module (`ai/anomaly/`)
-
-#### Components
-
-**ShrinkageDetector**
-- Algorithm: Tribuo `IsolationForestTrainer`
-- Input: inventory discrepancy features from `InventoryFeatureService`
-- Output: anomaly score (0-1), flagged if above threshold
-- Trained on: 3 months of inventory movement data
-- Retrained: weekly
-
-**PaymentAnomalyDetector**
-- Algorithm: Tribuo `IsolationForestTrainer`
-- Input: per-payment features from `PaymentFeatureService`
-- Output: anomaly score (0-1)
-- Trained on: historical payment patterns per merchant
-- Retrained: weekly
-
-**PaymentDistressClassifier** (Phase 2+ — requires default history)
-- Algorithm: `XGBoostClassificationTrainer`
-- Input: merchant payment trend features from `PaymentFeatureService`
-- Output: probability of default within 90 days
-- Training requirement: 100+ default events
-- Retrained: monthly
-
-**DataQualityDetector**
-- Tier 1 (rules): Java validation logic applied on every data entry
-  - Order quantity > 10x merchant average → flag
-  - Coordinates > 50km from registered address → flag
-  - Future-dated invoices → flag
-  - Price override > 30% deviation → flag
-  - Duplicate orders within 5-minute window → flag
-- Tier 2 (ML): Tribuo `IsolationForestTrainer` on data entry patterns
-  - Catches combinations that are individually acceptable but collectively suspicious
-  - Retrained: weekly
-
-**AnomalyFeatureBuilder**
-- Shared feature building for all anomaly models
-- Calls `InventoryFeatureService`, `PaymentFeatureService`, `OrderFeatureService`
-
-**AlertService**
-- Receives anomaly detections from all detectors
-- Deduplicates: same entity + same alert type within 24 hours → update, don't create new
-- Severity classification: based on anomaly score thresholds (configurable per alert type)
-- Persists to `ai_anomaly_alerts` table
-- Delivers: dashboard notification, high-severity alerts trigger push notifications
-
-#### Trigger Points
-- Stock adjustment recorded → `ShrinkageDetector` (event-driven)
-- Payment recorded → `PaymentAnomalyDetector` (event-driven)
-- Order created → `DataQualityDetector` Tier 1 (synchronous validation)
-- Nightly batch → `DataQualityDetector` Tier 2, `PaymentDistressClassifier`
-
----
-
-### 6.4 Predictive Alerts Module (`ai/prediction/`)
-
-#### Components
-
-**StockoutPredictor**
-- Algorithm: `XGBoostClassificationTrainer`
-- Input: warehouse-SKU features from `InventoryFeatureService` + demand forecasts from `ai_demand_forecasts`
-- Output: stockout probability within 3, 5, and 7 days
-- Dependency: requires `DemandForecaster` output
-- Retrained: weekly
-
-**RepPerformancePredictor**
-- Algorithm: `XGBoostRegressionTrainer`
-- Input: sales rep features from `SalesRepFeatureService`
-- Output: expected performance score
-- Underperformance detection: actual performance < expected - threshold for 2+ consecutive periods
-- Retrained: monthly
-
-**PredictionAlertService**
-- Evaluates prediction outputs against configurable thresholds
-- Stockout probability > 70% → generate alert with predicted date and recommended reorder quantity
-- Rep performance gap > 20% for 2+ weeks → generate alert
-- Routes alerts through `AlertService`
-
-#### Trigger Points
-- Nightly batch (after demand forecast) → `StockoutPredictor`
-- Weekly batch → `RepPerformancePredictor`
-
----
-
-### 6.5 Route Optimization Module (`ai/routing/`)
-
-#### Components
-
-**RouteSolver**
-- Technology: Timefold solver
-- Problem type: Vehicle Routing Problem with Time Windows (VRPTW)
-- Hard constraints: vehicle capacity, driver max hours, all orders delivered
-- Soft constraints: minimize total distance, minimize total time, balance driver workload, respect delivery windows
-- Solver time limit: 120 seconds for evening planning, 30 seconds for intraday re-optimization
-- Algorithms: construction heuristic (first fit decreasing) → late acceptance → tabu search
-
-**Planning Domain Entities:**
-- `Vehicle`: capacity_kg, capacity_volume, start_location (warehouse), driver_id, max_hours
-- `DeliveryStop`: merchant_location (lat/lng), order_weight, order_volume, time_window_start, time_window_end, priority
-- `RoutePlan`: @PlanningSolution — assigns stops to vehicles and sequences them
-
-**DistanceMatrixService**
-- Technology: GraphHopper (embedded Java library)
-- Loaded with: OpenStreetMap data for Kenya
-- Computes: travel time and distance between all location pairs
-- Caching: Redis cache for frequently used location pairs
-- Refresh: OSM data updated monthly
-
-**RouteOptimizationJob** (Spring Batch)
-- Runs: evening for next-day deliveries
-- Step 1: pull confirmed orders for tomorrow
-- Step 2: pull available vehicles and driver schedules
-- Step 3: compute/retrieve distance matrix
-- Step 4: execute solver
-- Step 5: persist routes to `ai_delivery_routes`
-- Step 6: push routes to driver mobile app
-
-#### Trigger Points
-- Evening scheduled job → next-day route planning
-- Manual trigger → intraday re-optimization (failed delivery, urgent order)
-
----
-
-### 6.6 AI Agent Module (`ai/agent/`)
-
-#### Components
-
-**RecommendationAgent**
-- Technology: LangChain4j Agent with tool-use capability
-- LLM: **Local-only Ollama** (qwen2.5-coder:32b) at http://192.168.2.17:11434
-- Max tool calls per run: 10 (prevents excessive computation)
-- System prompt: defines role as operational advisor for FMCG distributor
-
-**Agent Tools** (Java methods exposed to LLM via LangChain4j `@Tool` annotation):
-- `getSalesTrend(distributorId, period)` → sales data by territory, rep, product
-- `getInventoryHealth(distributorId)` → stock levels, turnover, aging
-- `getPaymentPerformance(distributorId)` → collection rates, aging, overdue
-- `getRepPerformance(distributorId)` → rep metrics and rankings
-- `getMerchantMetrics(distributorId)` → acquisition, churn, activity rates
-- `getAnomalyAlerts(distributorId, period)` → recent alerts from anomaly detection
-- `getDeliveryMetrics(distributorId)` → delivery success, cost per drop, route efficiency
-
-Each tool is a Spring service method that queries existing repositories and aggregates data.
-
-**RecommendationJob** (Spring Scheduled)
-- Runs: weekly per distributor (or on-demand from dashboard)
-- Executes agent, stores structured recommendations in `ai_recommendations` table
-- Past recommendations and outcomes stored for RAG context in future runs
-
-#### Output Structure
-Each recommendation contains:
-- `observation`: what the agent found (e.g., "Sales in Westlands territory dropped 18% over 3 weeks")
-- `evidence`: supporting data points
-- `recommendation`: specific action to take
-- `expected_impact`: projected outcome if recommendation is followed
-- `priority`: HIGH / MEDIUM / LOW
-
-#### Trigger Points
-- Weekly scheduled job
-- On-demand from distributor dashboard
-
----
-
-### 6.7 Compliance Reporting Module (`ai/reporting/`)
-
-#### Components
-
-**ComplianceReportAiService** (LangChain4j AI Service)
-- Input: structured operational data for reporting period + principal-specific template
-- Output: report sections with narrative text around structured data
-- LLM: Ollama local model
-- Temperature: 0.3 (some creativity for natural language, but grounded in data)
-
-**ReportTemplateRegistry**
-- Stores prompt templates per principal (Unilever, P&G, EABL, etc.)
-- Each template defines: required data sections, narrative tone, specific metrics required, report structure
-- Templates are versioned and updated when principal requirements change
-
-**ComplianceReportJob** (Spring Scheduled)
-- Runs: monthly or as configured per principal
-- Pulls operational data from existing report endpoints
-- Generates narrative via LLM
-- Stores report for review before submission
-
-#### Trigger Points
-- Monthly scheduled job
-- On-demand generation from dashboard
-
----
-
-## 7. Training Pipeline Architecture
-
-### 7.1 Pipeline Overview
-
-All ML models follow the same training pipeline, orchestrated by Spring Batch:
+Synthetic data is **never persisted to the database.** The flow:
 
 ```
-FeatureComputationStep → ModelTrainingStep → ModelEvaluationStep → ModelPromotionStep
+Generators → In-memory DTOs → FeatureComputer → Tribuo Dataset<T> → DataMixer → Trainer
+                                                                         ↑
+                                                        Real features from FeatureStore
 ```
 
-### 7.2 Pipeline Steps
+**What IS persisted:**
+- `ai_data_phase` — tracks current phase per model per distributor (small metadata table)
+- `ai_synthetic_runs` — logs generation parameters and seed values (audit/reproducibility)
+- Model registry columns — `data_phase`, `real_data_ratio`, `synthetic_records_used`, `real_records_used`
 
-**FeatureComputationStep**
-- Computes historical features for the training date range
-- Uses the same feature service methods as inference (consistency guarantee)
-- Stores computed feature matrix temporarily (in-memory for small datasets, PostgreSQL temp table for large)
-- Splits data: 80% training, 20% test (time-based split — train on older data, test on recent)
+**What is NOT persisted:**
+- Raw synthetic orders, payments, inventory movements, credit events, rep activities
+- These are generated fresh each training run, features computed, then discarded
 
-**ModelTrainingStep**
-- Creates Tribuo `Trainer` with configured hyperparameters
-- Trains model on training split
-- Serializes trained model
+**Why in-memory:**
+- Zero database bloat (no hundreds of thousands of synthetic records per distributor)
+- No mirror table maintenance (schema changes to real tables don't require matching synthetic tables)
+- No risk of synthetic data leaking into operational queries
+- Reproducible via seed values logged in `ai_synthetic_runs`
+- Training runs take minutes, not hours — in-memory is fast enough
 
-**ModelEvaluationStep**
-- Evaluates model on held-out test split
-- Computes metrics appropriate to model type:
-  - Regression: MAE, RMSE, MAPE, R²
-  - Classification: accuracy, precision, recall, F1, AUC-ROC
-  - Anomaly detection: precision@k, recall@k (evaluated against known anomalies if available)
-- Stores metrics in `ai_model_performance` table
-
-**ModelPromotionStep**
-- Compares new model metrics against currently ACTIVE model
-- Quality gates (configurable per model):
-  - New model must be within X% of previous model's performance (prevents regression)
-  - Minimum absolute thresholds (e.g., stockout predictor AUC must be > 0.75)
-- If gates pass: new model promoted to ACTIVE, previous model RETIRED
-- If gates fail: new model stays in EVALUATING status, alert generated for review
-
-**DriftDetectionStep** (runs independently)
-- Compares current feature distributions against training data distributions
-- Uses Population Stability Index (PSI) or Kolmogorov-Smirnov test
-- If drift detected: triggers early retraining and generates alert
-
-### 7.3 Training Schedule
-
-| Model | Frequency | Data Window | Typical Training Time |
-|---|---|---|---|
-| Demand Forecaster | Weekly | 6-12 months | 2-5 minutes |
-| Stockout Predictor | Weekly | 6 months | 1-3 minutes |
-| Shrinkage Detector | Weekly | 3 months | 1-2 minutes |
-| Payment Anomaly Detector | Weekly | 6 months | 1-2 minutes |
-| Data Quality Detector | Weekly | 3 months | 1-2 minutes |
-| Payment Distress Classifier | Monthly | 12 months | 2-5 minutes |
-| Rep Performance Predictor | Monthly | 6 months | 1-3 minutes |
-| Credit Limit Predictor | Monthly | 12 months | 2-5 minutes |
-| Credit Classifier | Monthly | 12+ months | 2-5 minutes |
-
-All training runs scheduled during off-peak hours (2:00-5:00 AM EAT).
-
----
-
-## 8. LLM Configuration
-
-### 8.1 Provider Strategy
+### 6.3 Three-Phase Data Lifecycle
 
 ```
-Primary:    **Local-only Ollama** at http://192.168.2.17:11434 → qwen2.5-coder:32b
-Fallback:   **DISABLED** - No cloud API fallback (local-only deployment)
+Phase 1: SYNTHETIC-ONLY (Day 0 — launch)
+  └─ Generators produce in-memory data → FeatureComputer → 100% synthetic dataset
+  └─ Predictions carry 0.6x confidence modifier
+  └─ All 9 ML models operational immediately
+
+Phase 2: HYBRID (Real data accumulating)
+  └─ Real features from FeatureStore + synthetic features from generators
+  └─ DataMixer blends: real weight 1.0, synthetic weight declines
+  └─ Confidence: 0.6 + (0.4 × real_data_ratio)
+
+Phase 3: REAL-ONLY (Sufficient real data)
+  └─ Generators no longer called — training uses only real data
+  └─ Confidence modifier: 1.0
+  └─ Synthetic generation disabled for that model
 ```
 
-LangChain4j model configuration uses single local provider. All AI services use the same Ollama instance for data privacy and cost control.
+### 6.4 Transition Thresholds
 
-### 8.2 LLM Usage by Module
+| Model | Synthetic → Hybrid | Hybrid → Real-Only |
+|---|---|---|
+| Demand Forecaster | 50 real orders/merchant-SKU | 6 months + 200 orders/merchant-SKU |
+| Stockout Predictor | 100 real inventory snapshots | 6 months + 20 stockout events |
+| Shrinkage Detector | 500 real stock movements | 3 months + 10 confirmed shrinkage events |
+| Payment Anomaly Detector | 200 real payments | 6 months + 500 payments |
+| Payment Distress Classifier | 500 real payments | 12 months + 100 default events |
+| Rep Performance Predictor | 8 weeks of real rep data | 6 months of real rep data |
+| Credit Classifier | 200 credit evaluations | 12 months + 100 default events |
+| Credit Limit Regressor | 100 credit limit changes | 12 months + 200 limit adjustments |
+| Data Quality Detector (ML) | 1,000 real data entries | 3 months + 5,000 entries |
 
-| Module | LLM | Temperature | Timeout | Max Tokens |
-|---|---|---|---|---|
-| Credit Scoring | Ollama (qwen2.5-coder:32b) | 0.1 | 30s | 1000 |
-| Credit Explainer | Ollama (qwen2.5-coder:32b) | 0.2 | 30s | 500 |
-| Order Suggestions | Ollama (qwen2.5-coder:32b) | 0.3 | 30s | 300 |
-| Recommendation Agent | Ollama (qwen2.5-coder:32b) | 0.4 | 30s | 2000 |
-| Compliance Reporting | Ollama (qwen2.5-coder:32b) | 0.3 | 30s | 3000 |
+### 6.5 Merchant Archetypes
 
-Note: All modules use the same local Ollama instance for consistency and data privacy.
+| Archetype | Population % | Order Freq (wk) | Avg Order (KES) | On-Time Rate | Growth | Default Prob |
+|---|---|---|---|---|---|---|
+| STEADY_GROWER | 35% | 3.5 ± 0.8 | 15,000 ± 5,000 | 92% ± 5% | +3%/mo | 2% |
+| STABLE_PERFORMER | 25% | 2.5 ± 0.5 | 12,000 ± 3,000 | 88% ± 6% | 0%/mo | 5% |
+| INCONSISTENT_BUYER | 20% | 1.5 ± 1.0 | 8,000 ± 4,000 | 72% ± 12% | -1%/mo | 15% |
+| NEW_ENTRANT | 10% | 1.0 ± 0.5 | 5,000 ± 2,000 | 85% ± 8% | +8%/mo | 10% |
+| DECLINING_RISK | 7% | 2.0 ± 0.8 | 10,000 ± 4,000 | 60% ± 15% | -5%/mo | 40% |
+| DEFAULTER | 3% | 1.5 ± 1.0 | 7,000 ± 3,000 | 45% ± 20% | -10%/mo | 100% |
 
-### 8.3 RAG Configuration
+### 6.6 Generators (In-Memory)
 
-- Embedding model: **nomic-embed-text** via Ollama at http://192.168.2.17:11434
-- Embedding storage: pgvector extension in existing PostgreSQL
-- Embedding dimensions: **768** (nomic-embed-text standard output)
-- Similarity search: cosine similarity via pgvector `<=>` operator
-- RAG contexts:
-  - Credit scoring: similar merchant profiles (5 nearest neighbors)
-  - Recommendations: past recommendations and outcomes
-  - Compliance reporting: previously approved report sections
-
-### 8.4 Resilience
-
-- All LLM calls wrapped in Resilience4j circuit breakers
-- Circuit breaker config: sliding window size 10, 50% failure threshold, 30s wait in open state
-- Timeout: 30 seconds per LLM call
-- Retry: 3 attempts with 1s wait, exponential backoff multiplier 2
-- Fallback: graceful degradation (return no AI result on complete failure)
-
-### 8.5 Fine-Tuning Path (Future)
-
-Once sufficient data accumulates (6-12 months):
-- Export training data from PostgreSQL (input-output pairs from approved credit evaluations, accepted reports)
-- Fine-tune base model using external tools (Axolotl, Unsloth — Python, offline only)
-- Deploy fine-tuned model to Ollama (same runtime, swapped model file)
-- No architecture changes — just a model file swap
-
----
-
-## 9. Event-Driven Integration
-
-### 9.1 AI Event Flow
-
-```
-Existing Zuqi Workflow → Spring Event → AI Scoring Service → Result Storage / Alert
-
-Examples:
-  Payment recorded     → PaymentRecordedEvent  → PaymentAnomalyDetector → Alert if anomalous
-  Stock adjusted       → StockAdjustedEvent     → ShrinkageDetector      → Alert if anomalous
-  Order created        → OrderCreatedEvent       → DataQualityDetector    → Validation result
-  Merchant onboarded   → MerchantCreatedEvent    → CreditScoringAiService → Credit evaluation
-  Delivery completed   → DeliveryCompletedEvent  → MerchantFeatureService → Feature update
-```
-
-### 9.2 Implementation
-
-**Initial (low volume):** Spring's `ApplicationEventPublisher` — in-process, synchronous or `@Async`
-
-**At scale:** Migrate to RabbitMQ or Kafka for:
-- Decoupling: AI processing doesn't slow down transactional workflows
-- Buffering: spikes in order volume don't overwhelm ML inference
-- Retry: failed AI scoring retried without affecting the source transaction
-
-### 9.3 Event Schema
+Each generator produces plain Java DTOs (records), not JPA entities:
 
 ```java
-public record PaymentRecordedEvent(
-    UUID paymentId,
-    UUID merchantId,
-    UUID distributorId,
-    BigDecimal amount,
-    String paymentMethod,
-    Instant occurredAt
-) {}
+// Generators produce lightweight records — no database interaction
+public record SyntheticMerchant(String id, MerchantArchetype archetype,
+    String category, String county, double lat, double lng, LocalDate registered) {}
+
+public record SyntheticOrder(String merchantId, LocalDate date,
+    List<SyntheticOrderItem> items, BigDecimal totalAmount) {}
+
+public record SyntheticPayment(String orderId, String merchantId,
+    LocalDate paymentDate, int daysToPayment, BigDecimal amount,
+    boolean isPartial, String method) {}
+// ... etc
 ```
 
-Each event carries only IDs and minimal context. The AI service retrieves full data as needed — keeping events lightweight.
+**MerchantProfileGenerator** — 1,000 merchants, archetype-distributed, county-weighted, LLM-generated names
+
+**OrderHistoryGenerator** — 12 months per merchant, seasonality applied (Dec-Jan +30%, Mar-Apr -10%, Ramadan +20% food, payday +25%)
+
+**PaymentBehaviorGenerator** — linked to orders, DEFAULTER sequence: normal 3-6mo → deterioration → 90+ day default
+
+**InventoryMovementGenerator** — shrinkage injection at 5%: concentrated time/user patterns
+
+**SalesRepActivityGenerator** — underperformance injection at 10% of reps
+
+**CreditHistoryGenerator** — DEFAULTER progression: A→B→C→D→F over 6-12 months
+
+### 6.7 SyntheticDatasetBuilder
+
+Central coordinator that generates a complete synthetic Tribuo `Dataset<T>` for any model:
+
+```java
+public class SyntheticDatasetBuilder {
+
+    /**
+     * Generates synthetic data in-memory, computes features using
+     * FeatureComputer, returns a Tribuo Dataset ready for training.
+     * No database reads or writes.
+     */
+    public Dataset<Regressor> buildDemandDataset(UUID distributorId, SyntheticDataConfig config) {
+        // Step 1: Generate synthetic merchants
+        List<SyntheticMerchant> merchants = merchantGenerator.generate(config);
+        // Step 2: Generate order history per merchant
+        List<SyntheticOrder> orders = orderGenerator.generate(merchants, config);
+        // Step 3: Compute features using shared FeatureComputer
+        List<Example<Regressor>> examples = orders.stream()
+            .map(order -> featureComputer.computeDemandFeatures(
+                orderHistory.getFor(order.merchantId(), order.skuId()),
+                merchantLookup.get(order.merchantId()),
+                productLookup.get(order.skuId()),
+                order.date()))
+            .map(features -> toTribuoExample(features, actualQuantity))
+            .toList();
+        // Step 4: Return dataset — nothing persisted
+        return new MutableDataset<>(new ListDataSource<>(examples));
+    }
+
+    // Similar methods: buildCreditDataset(), buildShrinkageDataset(), etc.
+}
+```
+
+### 6.8 DataMixer
+
+Blends synthetic and real Tribuo datasets based on current phase:
+
+```
+SYNTHETIC phase:  return syntheticDataset (generators called)
+HYBRID phase:     blend realDataset + syntheticDataset (weighted)
+REAL phase:       return realDataset (generators NOT called — skipped entirely)
+```
+
+Weighting: real = 1.0, synthetic = max(0.2, 1.0 - real_ratio). Floor of 0.2 preserves rare events.
+
+**Anomaly class preservation:** Minimum rare event representation maintained:
+- Credit classifier: ≥ 5% default class
+- Shrinkage detector: ≥ 10% anomalous
+- Payment anomaly: ≥ 8% anomalous
+- Stockout predictor: ≥ 10% stockout-positive
+
+### 6.9 Confidence Modifier
+
+```
+SYNTHETIC:  confidence = raw_confidence × 0.6
+HYBRID:     confidence = raw_confidence × (0.6 + 0.4 × real_data_ratio)
+REAL:       confidence = raw_confidence × 1.0
+```
+
+Synthetic-phase credit decisions always route to human review (confidence never reaches auto-approval threshold).
+
+### 6.10 Training Flow with Synthetic Data
+
+```
+Every training pipeline:
+  1. FeatureComputationStep    → compute real features from FeatureStore
+  2. SyntheticDatasetStep      → IF phase != REAL: generate synthetic dataset in-memory
+  3. DataMixingStep            → blend based on phase (or passthrough if REAL)
+  4. DataSplitStep             → 80/20 train/test
+  5. ModelTrainingStep         → train Tribuo model
+  6. ModelEvaluationStep       → evaluate, record metrics with data_phase tag
+  7. ModelPromotionStep        → promote if gates pass, record data composition
+  8. PhaseEvaluationStep       → check transition thresholds, fire event if phase changes
+```
+
+In REAL phase, steps 2 and 3 are skipped — no synthetic data generated, no mixing overhead.
 
 ---
 
-## 10. API Extensions
+## 7. Detailed Module Specifications
 
-### 10.1 New REST Endpoints
+### 7.1 Credit Risk Module (`ai/credit/`)
 
-Added under the existing API structure:
+**CreditScoringAiService** (LangChain4j AI Service)
+- Local-only Ollama at http://192.168.2.17:11434, qwen2.5-coder:32b
+- Temperature: 0.1, timeout: 30s, Resilience4j circuit breaker
+
+**CreditClassifier** (Tribuo XGBoost)
+- Trains on synthetic default data from day one via DataMixer
+- Phase-aware hybrid scoring:
+  - SYNTHETIC: LLM primary, ML shadow (log comparison only)
+  - HYBRID: both run, agreement → ML, disagreement → human review
+  - REAL: ML primary, LLM retired
+
+**CreditFeatureBuilder** — same data, two formats: LLM profile + Tribuo Example
+
+**CreditExplainer** — human-readable ML decision explanations
+
+**CreditLimitAdjuster** — XGBoost regression, synthetic-trained, synthetic-phase → human review
+
+### 7.2 Demand Forecasting Module (`ai/demand/`)
+
+**DemandForecaster** — XGBoost regression, trains via DataMixer (synthetic from day one)
+
+**DemandFeatureBuilder** — builds real datasets from FeatureStore; `SyntheticDatasetBuilder` handles synthetic
+
+**DemandForecastJob** — nightly batch, confidence modifier applied
+
+**OrderSuggestionService** — available from day one, ranks by phase-adjusted confidence
+
+### 7.3 Anomaly Detection Module (`ai/anomaly/`)
+
+**ShrinkageDetector** — Isolation Forest, trains on synthetic shrinkage patterns
+**PaymentAnomalyDetector** — Isolation Forest, trains on synthetic payment patterns
+**PaymentDistressClassifier** — XGBoost, trains on synthetic deterioration sequences from day one
+**DataQualityDetector** — Tier 1 rules (immediate), Tier 2 ML (synthetic-trained)
+**AlertService** — alerts include `data_phase` context
+
+### 7.4 Predictive Alerts Module (`ai/prediction/`)
+
+**StockoutPredictor** — XGBoost, synthetic-bootstrapped, nightly after demand forecasts
+**RepPerformancePredictor** — XGBoost, synthetic baselines, weekly
+
+### 7.5 Route Optimization Module (`ai/routing/`)
+
+No synthetic data needed. Timefold solver + GraphHopper for Kenya roads.
+
+### 7.6 AI Agent Module (`ai/agent/`)
+
+No synthetic data needed. LLM-based, 7 tools, weekly recommendations.
+
+### 7.7 Compliance Reporting Module (`ai/reporting/`)
+
+No synthetic data needed. LLM-based, principal-specific templates, monthly.
+
+---
+
+## 8. Training Pipeline Architecture
+
+### 8.1 Pipeline Overview
+
+```
+FeatureComputationStep → SyntheticDatasetStep → DataMixingStep → DataSplitStep →
+ModelTrainingStep → ModelEvaluationStep → ModelPromotionStep → PhaseEvaluationStep
+```
+
+Steps 2-3 are skipped when model is in REAL phase.
+
+### 8.2 Pipeline Steps
+
+**FeatureComputationStep** — computes real features via FeatureStore
+
+**SyntheticDatasetStep** — calls `SyntheticDatasetBuilder` to generate in-memory dataset; skipped if REAL phase
+
+**DataMixingStep** — `DataMixer` blends based on phase; passthrough if REAL
+
+**DataSplitStep** — time-based 80/20 train/test
+
+**ModelTrainingStep** — trains Tribuo model on blended dataset
+
+**ModelEvaluationStep** — evaluates, records metrics with `data_phase` tag
+
+**ModelPromotionStep** — quality gates (relaxed during SYNTHETIC, tightened as real ratio increases); records full data composition in registry
+
+**PhaseEvaluationStep** — `DataPhaseTracker.evaluatePhase()`; publishes `DataPhaseTransitionEvent` if threshold met
+
+**DriftDetectionStep** — PSI weekly, threshold 0.2 triggers retraining
+
+### 8.3 Training Schedule
+
+| Model | Frequency | Typical Training Time |
+|---|---|---|
+| Demand Forecaster | Weekly | 2-5 minutes |
+| Stockout Predictor | Weekly | 1-3 minutes |
+| Shrinkage Detector | Weekly | 1-2 minutes |
+| Payment Anomaly Detector | Weekly | 1-2 minutes |
+| Data Quality Detector | Weekly | 1-2 minutes |
+| Payment Distress Classifier | Monthly | 2-5 minutes |
+| Rep Performance Predictor | Monthly | 1-3 minutes |
+| Credit Limit Predictor | Monthly | 2-5 minutes |
+| Credit Classifier | Monthly | 2-5 minutes |
+
+All scheduled 2:00-5:00 AM EAT.
+
+---
+
+## 9. LLM Configuration
+
+### 9.1 Provider Strategy
+
+```
+Primary:    Local-only Ollama at http://192.168.2.17:11434 → qwen2.5-coder:32b
+Fallback:   DISABLED
+```
+
+### 9.2 LLM Usage by Module
+
+| Module | Temperature | Timeout | Max Tokens |
+|---|---|---|---|
+| Credit Scoring | 0.1 | 30s | 1000 |
+| Credit Explainer | 0.2 | 30s | 500 |
+| Order Suggestions | 0.3 | 30s | 300 |
+| Recommendation Agent | 0.4 | 30s | 2000 |
+| Compliance Reporting | 0.3 | 30s | 3000 |
+| Synthetic Name Generation | 0.7 | 30s | 500 |
+
+### 9.3 RAG Configuration
+
+- Embedding: nomic-embed-text via Ollama, 768 dimensions, pgvector cosine similarity
+- Contexts: credit (5 nearest merchants), recommendations (past outcomes), compliance (approved reports)
+
+### 9.4 Resilience
+
+- Circuit breakers: sliding window 10, 50% threshold, 30s wait
+- Timeout: 30s, retry: 3 attempts with exponential backoff
+- Fallback: graceful degradation
+
+---
+
+## 10. Event-Driven Integration
+
+### 10.1 AI Event Flow
+
+```
+  Payment recorded     → PaymentRecordedEvent  → PaymentAnomalyDetector → Alert
+  Stock adjusted       → StockAdjustedEvent     → ShrinkageDetector      → Alert
+  Order created        → OrderCreatedEvent       → DataQualityDetector    → Validation
+  Merchant onboarded   → MerchantCreatedEvent    → CreditScoringAiService → Evaluation
+  Delivery completed   → DeliveryCompletedEvent  → Feature update
+  Phase transition     → DataPhaseTransitionEvent → Retraining trigger
+```
+
+### 10.2 Event Schema
+
+```java
+public record PaymentRecordedEvent(UUID paymentId, UUID merchantId, UUID distributorId,
+    BigDecimal amount, String paymentMethod, Instant occurredAt) {}
+
+public record DataPhaseTransitionEvent(String modelName, UUID distributorId,
+    DataPhase fromPhase, DataPhase toPhase, long realDataCount) {}
+```
+
+---
+
+## 11. API Extensions
+
+### 11.1 REST Endpoints
 
 ```
 /v1/ai/credit
-  POST   /evaluate/{merchantId}         → Trigger credit evaluation
-  GET    /evaluations/{merchantId}       → Get evaluation history
-  GET    /score/{merchantId}             → Get current credit score
-  POST   /adjust/{merchantId}            → Trigger credit limit adjustment
+  POST   /evaluate/{merchantId}
+  GET    /evaluations/{merchantId}
+  GET    /score/{merchantId}
+  POST   /adjust/{merchantId}
 
 /v1/ai/demand
-  GET    /forecast/{merchantId}          → Get demand forecast for merchant
-  GET    /forecast/warehouse/{warehouseId} → Get aggregated warehouse forecast
-  GET    /suggestions/{merchantId}       → Get order suggestions for sales rep
+  GET    /forecast/{merchantId}
+  GET    /forecast/warehouse/{warehouseId}
+  GET    /suggestions/{merchantId}
 
 /v1/ai/anomaly
-  GET    /alerts                         → List anomaly alerts (filterable)
-  PUT    /alerts/{alertId}/acknowledge   → Acknowledge alert
-  PUT    /alerts/{alertId}/resolve       → Resolve alert
-  GET    /alerts/summary                 → Alert summary for dashboard
+  GET    /alerts
+  PUT    /alerts/{alertId}/acknowledge
+  PUT    /alerts/{alertId}/resolve
+  GET    /alerts/summary
 
 /v1/ai/prediction
-  GET    /stockout/{warehouseId}         → Get stockout predictions
-  GET    /rep-performance                → Get rep performance predictions
+  GET    /stockout/{warehouseId}
+  GET    /rep-performance
 
 /v1/ai/routing
-  POST   /optimize                       → Trigger route optimization
-  GET    /routes/{date}                  → Get routes for a date
-  POST   /reoptimize                     → Trigger intraday re-optimization
-  GET    /routes/{routeId}               → Get specific route detail
+  POST   /optimize
+  GET    /routes/{date}
+  POST   /reoptimize
+  GET    /routes/{routeId}
 
 /v1/ai/recommendations
-  GET    /{distributorId}                → Get recommendations
-  PUT    /{recommendationId}/accept      → Mark recommendation accepted
-  PUT    /{recommendationId}/reject      → Mark recommendation rejected
+  GET    /{distributorId}
+  PUT    /{recommendationId}/accept
+  PUT    /{recommendationId}/reject
 
 /v1/ai/reports
-  POST   /compliance/generate            → Generate compliance report
-  GET    /compliance/{reportId}          → Get generated report
+  POST   /compliance/generate
+  GET    /compliance/{reportId}
 
 /v1/ai/system
-  GET    /health                         → AI system health check
-  GET    /models                         → List active models and versions
-  GET    /models/{modelName}/performance → Model performance metrics
+  GET    /health
+  GET    /models
+  GET    /models/{modelName}/performance
+  GET    /data-maturity/{distributorId}
+
+/v1/ai/admin
+  POST   /train/{modelName}/{distributorId}       # Manual training trigger
 ```
 
-### 10.2 Authorization
-
-AI endpoints follow existing Casbin RBAC patterns:
+### 11.2 Authorization
 
 | Endpoint Group | Accessible By |
 |---|---|
@@ -1042,36 +1017,19 @@ AI endpoints follow existing Casbin RBAC patterns:
 | /v1/ai/recommendations | DISTRIBUTOR_ADMIN |
 | /v1/ai/reports | DISTRIBUTOR_ADMIN |
 | /v1/ai/system | SUPER_ADMIN, ADMIN |
+| /v1/ai/admin | SUPER_ADMIN |
 
 ---
 
-## 11. Monitoring and Observability
+## 12. Monitoring and Observability
 
-### 11.1 Model Performance Monitoring
-
-**Prediction distribution tracking:**
-- For each model, track the distribution of predictions over time
-- Alert if distribution shifts significantly (e.g., credit model suddenly assigning B to 80% of merchants)
-
-**Accuracy tracking (business outcome feedback):**
-- Credit scoring: actual default rate per grade bracket
-- Demand forecasting: predicted vs. actual order quantities (MAPE)
-- Stockout prediction: predicted stockouts vs. actual stockouts
-- Anomaly detection: flagged anomalies that were confirmed vs. dismissed
-
-**Data drift detection:**
-- Compare current feature distributions against training data
-- PSI (Population Stability Index) computed weekly per model
-- Threshold: PSI > 0.2 triggers retraining alert
-
-### 11.2 System Health Metrics (Prometheus)
+### 12.1 Prometheus Metrics
 
 ```
 # LLM metrics
 zuqi_ai_llm_requests_total{provider, model, module}
 zuqi_ai_llm_latency_seconds{provider, model, module}
 zuqi_ai_llm_errors_total{provider, model, error_type}
-zuqi_ai_llm_tokens_used{provider, model, direction}   # input/output
 
 # ML model metrics
 zuqi_ai_model_inference_total{model_name, model_version}
@@ -1079,44 +1037,38 @@ zuqi_ai_model_inference_latency_ms{model_name}
 zuqi_ai_model_training_duration_seconds{model_name}
 
 # Pipeline metrics
-zuqi_ai_training_runs_total{model_name, status}        # success/failure
+zuqi_ai_training_runs_total{model_name, status}
 zuqi_ai_feature_computation_duration_seconds{feature_service}
 zuqi_ai_forecast_records_generated{date}
 
-# Route optimization metrics
+# Data maturity metrics
+zuqi_ai_data_phase{model_name, distributor_id}
+zuqi_ai_real_data_ratio{model_name, distributor_id}
+zuqi_ai_real_data_count{model_name, distributor_id}
+zuqi_ai_confidence_modifier{model_name, distributor_id}
+zuqi_ai_phase_transitions_total{model_name, from_phase, to_phase}
+
+# Route optimization
 zuqi_ai_route_solver_duration_seconds
 zuqi_ai_route_stops_total{date}
-zuqi_ai_route_distance_planned_vs_actual_km
 
-# Alert metrics
+# Alerts
 zuqi_ai_alerts_generated_total{alert_type, severity}
 zuqi_ai_alerts_resolution_time_hours{alert_type}
 ```
 
-### 11.3 Grafana Dashboards
+### 12.2 Grafana Dashboards
 
-**AI Operations Dashboard:**
-- LLM request rate and latency
-- ML inference rate and latency
-- Model training pipeline status
-- Active model versions
-
-**Model Quality Dashboard:**
-- Prediction accuracy trends per model
-- Data drift indicators
-- Feature distribution changes
-- Business outcome tracking (default rates, forecast accuracy)
-
-**Alert Dashboard:**
-- Open alerts by type and severity
-- Alert resolution rate
-- False positive rate (dismissed alerts / total alerts)
+**AI Operations:** LLM requests/latency, ML inference, training status, active models
+**Model Quality:** Accuracy trends (phase-tagged), drift indicators, business outcomes
+**Data Maturity:** Phase progress bars, real data accumulation rate, time-to-next-transition, confidence trends
+**Alerts:** Open by type/severity, resolution rates, false positive rates
 
 ---
 
-## 12. Infrastructure Deployment
+## 13. Infrastructure Deployment
 
-### 12.1 Deployment Architecture
+### 13.1 Deployment Architecture
 
 ```
 ┌──────────────────────────────────────────────────────┐
@@ -1125,13 +1077,12 @@ zuqi_ai_alerts_resolution_time_hours{alert_type}
 │  ┌─────────────────┐    ┌──────────────────────────┐ │
 │  │  Zuqi Spring     │    │  Ollama                  │ │
 │  │  Boot App        │───▶│  (qwen2.5-coder:32b)    │ │
-│  │  (AI modules     │    │  at 192.168.2.17:11434   │ │
-│  │   included)      │    └──────────────────────────┘ │
+│  │  (AI + synthetic │    │  at 192.168.2.17:11434   │ │
+│  │   in-memory)     │    └──────────────────────────┘ │
 │  │                  │                                 │
 │  │                  │───▶ PostgreSQL + pgvector        │
 │  │                  │───▶ Redis                        │
-│  │                  │───▶ GraphHopper (embedded or     │
-│  │                  │     sidecar with Kenya OSM data) │
+│  │                  │───▶ GraphHopper (Kenya OSM)      │
 │  └─────────────────┘                                  │
 │                                                       │
 │  ┌─────────────────┐                                  │
@@ -1141,18 +1092,20 @@ zuqi_ai_alerts_resolution_time_hours{alert_type}
 └───────────────────────────────────────────────────────┘
 ```
 
-### 12.2 Resource Estimates
+### 13.2 Resource Estimates
 
 | Component | CPU | RAM | GPU | Storage |
 |---|---|---|---|---|
 | Zuqi Spring Boot (with AI) | 4 vCPU | 16 GB | — | — |
-| Ollama (qwen2.5-coder:32b) | 4 vCPU | 16 GB | 24 GB VRAM (A10G/L4) | 20 GB (model files) |
+| Ollama (qwen2.5-coder:32b) | 4 vCPU | 16 GB | 24 GB VRAM | 20 GB |
 | PostgreSQL + pgvector | 4 vCPU | 16 GB | — | 100 GB+ |
 | Redis | 2 vCPU | 8 GB | — | — |
-| GraphHopper | 2 vCPU | 4 GB | — | 2 GB (Kenya OSM) |
+| GraphHopper | 2 vCPU | 4 GB | — | 2 GB |
 | Prometheus + Grafana | 2 vCPU | 4 GB | — | 50 GB |
 
-### 12.3 Estimated Monthly Infrastructure Cost
+**Note:** In-memory synthetic generation requires ~2-4 GB of heap during training runs. The 16 GB app server allocation handles this comfortably alongside normal operations since training runs during off-peak hours.
+
+### 13.3 Estimated Monthly Cost
 
 | Component | Estimated Cost (Cloud) |
 |---|---|
@@ -1163,35 +1116,41 @@ zuqi_ai_alerts_resolution_time_hours{alert_type}
 | Monitoring | $50-100/month |
 | **Total** | **$750-1,100/month** |
 
-**Note**: Local-only deployment eliminates cloud LLM API costs entirely.
-
 ---
 
-## 13. Security and Compliance
+## 14. Security and Compliance
 
-### 13.1 Data Protection
+### 14.1 Data Protection
 
-- **All merchant financial data processed locally** (Ollama at http://192.168.2.17:11434) — **NEVER sent to external LLM providers**
-- **Local-only deployment**: Zero data leaving controlled infrastructure for AI processing
-- pgvector embeddings: contain derived features only, not raw PII
+- **All merchant financial data processed locally** (Ollama) — never sent to external providers
+- **Local-only deployment**: zero data leaving controlled infrastructure
+- pgvector embeddings: derived features only, not raw PII
 - Model registry: model binaries encrypted at rest
-- Prediction audit log: retained for minimum 7 years (KCB compliance requirement)
+- Prediction audit log: retained minimum 7 years (KCB compliance)
+- **Synthetic data exists only in-memory during training** — never persisted, never queryable
 
-### 13.2 Kenya Data Protection Act Compliance
+### 14.2 Kenya Data Protection Act Compliance
 
 - **100% local data processing** within controlled infrastructure
-- **Zero cross-border data transfer** for AI operations
-- **No third-party LLM providers**: All AI processing on-premises
-- Merchant consent: credit scoring requires explicit consent (tracked in merchant profile)
-- Right to explanation: `CreditExplainer` provides human-readable reasoning for any AI decision affecting a merchant
+- **Zero cross-border data transfer**
+- Merchant consent: credit scoring requires explicit consent
+- Right to explanation: `CreditExplainer` provides human-readable reasoning
 
-### 13.3 AI-Specific Security
+### 14.3 AI-Specific Security
 
-- LLM prompt injection protection: input sanitization before LLM calls
-- Agent tool calls: bounded (max 10 per run), each tool validates authorization
-- Model poisoning prevention: training data validated before model training
-- Adversarial input detection: extreme feature values flagged before model inference
+- LLM prompt injection protection: input sanitization
+- Agent tool calls: bounded (max 10 per run), authorization validated
+- Model poisoning prevention: training data validated
+- Adversarial input detection: extreme feature values flagged
+
+### 14.4 KCB Audit Compliance for Synthetic Data
+
+- Every model version records: `data_phase`, `real_data_ratio`, `synthetic_records_used`, `real_records_used`
+- Every prediction records: `data_phase`, `raw_confidence`, `confidence_score` (phase-adjusted)
+- Synthetic-phase credit decisions **always route to human review**
+- Generation runs logged in `ai_synthetic_runs` with seed values for reproducibility
+- Phase transitions logged and auditable
 
 ---
 
-*This blueprint defines the complete AI system architecture for Zuqi. All modules are designed to integrate into the existing Spring Boot application with minimal changes to existing code. The architecture supports evolution from LLM-based solutions to trained ML models as operational data accumulates.*
+*This blueprint defines the complete AI system architecture for Zuqi. All modules are designed to integrate into the existing Spring Boot application with minimal changes to existing code. Synthetic data is generated in-memory during training runs — never persisted — ensuring zero database bloat and zero risk of synthetic data leaking into operations. The architecture supports evolution from synthetic-trained models to real-data models, and from LLM-based solutions to trained ML classifiers, as the system matures.*

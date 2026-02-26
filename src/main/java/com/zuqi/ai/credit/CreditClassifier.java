@@ -3,6 +3,7 @@ package com.zuqi.ai.credit;
 import com.zuqi.ai.feature.MerchantFeatureService;
 import com.zuqi.ai.feature.MerchantFeatures;
 import com.zuqi.ai.model.ModelLoaderService;
+import com.zuqi.ai.model.ModelPhaseService;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +32,7 @@ public class CreditClassifier {
     private final ModelLoaderService modelLoader;
     private final MerchantFeatureService merchantFeatureService;
     private final CreditMlFeatureBuilder featureBuilder;
+    private final ModelPhaseService phaseService;
 
     private static final String MODEL_NAME = "credit_classifier";
 
@@ -78,7 +80,8 @@ public class CreditClassifier {
                     .creditScore(creditScore)
                     .defaultProbability(defaultProb)
                     .noDefaultProbability(noDefaultProb)
-                    .confidence(Math.max(defaultProb, noDefaultProb)) // Confidence = max probability
+                    .confidence(phaseService.applyModifier(
+                            Math.max(defaultProb, noDefaultProb), MODEL_NAME)) // Confidence = max probability, adjusted for data phase
                     .prediction(prediction.getOutput().getLabel())
                     .featureImportance(featureImportance)
                     .modelVersion(MODEL_NAME + "-v" + getModelVersion(model))

@@ -114,6 +114,16 @@
             <version>${tribuo.version}</version>
         </dependency>
 
+        <!-- Override xgboost4j transitive dependency to 2.1.1 which includes
+             macOS ARM64 (aarch64) native libraries (missing in the 1.6.2 that
+             Tribuo 4.3.2 pulls transitively — causes ExceptionInInitializerError
+             on Apple Silicon). -->
+        <dependency>
+            <groupId>ml.dmlc</groupId>
+            <artifactId>xgboost4j_2.12</artifactId>
+            <version>2.1.1</version>
+        </dependency>
+
         <!-- Timefold for Route Optimization -->
         <dependency>
             <groupId>ai.timefold.solver</groupId>

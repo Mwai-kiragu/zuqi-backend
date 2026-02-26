@@ -3,6 +3,7 @@ package com.zuqi.ai.anomaly;
 import com.zuqi.ai.feature.PaymentFeatureService;
 import com.zuqi.ai.feature.PaymentFeatures;
 import com.zuqi.ai.model.ModelLoaderService;
+import com.zuqi.ai.model.ModelPhaseService;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +30,7 @@ public class PaymentAnomalyDetector {
     private final ModelLoaderService    modelLoader;
     private final PaymentFeatureService paymentFeatureService;
     private final AnomalyFeatureBuilder anomalyFeatureBuilder;
+    private final ModelPhaseService     phaseService;
 
     /**
      * Detect payment anomaly for a specific payment.
@@ -66,7 +68,7 @@ public class PaymentAnomalyDetector {
                     .paymentId(paymentId)
                     .merchantId(merchantId)
                     .isAnomaly(isAnomaly)
-                    .anomalyScore(anomalyScore)
+                    .anomalyScore(phaseService.applyModifier(anomalyScore, MODEL_NAME))
                     .features(features)
                     .modelVersion(MODEL_NAME)
                     .build();

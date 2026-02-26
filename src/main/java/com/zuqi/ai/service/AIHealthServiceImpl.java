@@ -3,20 +3,26 @@ package com.zuqi.ai.service;
 import com.zuqi.ai.dto.AIModelListResponse;
 import com.zuqi.ai.dto.AIModelPerformanceResponse;
 import com.zuqi.ai.dto.AISystemHealthResponse;
+import com.zuqi.domain.ai.AIModelPerformance;
 import com.zuqi.domain.ai.AIModelRegistry;
+import com.zuqi.domain.ai.MetricName;
 import com.zuqi.domain.ai.ModelStatus;
+import com.zuqi.repository.AIModelPerformanceRepository;
 import com.zuqi.repository.AIModelRegistryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.CacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Implementation of AIHealthService for system health monitoring.
@@ -33,8 +39,15 @@ import java.util.Map;
 public class AIHealthServiceImpl implements AIHealthService {
 
     private final AIModelRegistryRepository modelRegistryRepository;
+    private final AIModelPerformanceRepository modelPerformanceRepository;
     private final CacheManager cacheManager;
     private final RedisConnectionFactory redisConnectionFactory;
+
+    @Value("${langchain4j.ollama.base-url}")
+    private String ollamaBaseUrl;
+
+    @Value("${langchain4j.ollama.chat-model.model-name}")
+    private String ollamaModelName;
 
     @Override
     public AISystemHealthResponse getSystemHealth() {
@@ -120,9 +133,33 @@ public class AIHealthServiceImpl implements AIHealthService {
                 .customMetrics(model.getPerformanceMetrics() != null ? model.getPerformanceMetrics() : new HashMap<>())
                 .build();
 
-        // TODO Phase 1+: Implement performance history tracking
-        // For now, return empty history - will be populated when we track metrics over time
-        List<AIModelPerformanceResponse.PerformanceHistory> history = new ArrayList<>();
+        // Build performance history from ai_model_performance table.
+        // Group rows by evaluation_date, then extract accuracy/precision/recall/f1 per snapshot.
+        List<LocalDate> evaluationDates = modelPerformanceRepository
+                .findDistinctEvaluationDates(modelName);
+
+        List<AIModelPerformanceResponse.PerformanceHistory> history = evaluationDates.stream()
+                .limit(30) // cap at 30 snapshots for response size
+                .map(date -> {
+                    List<AIModelPerformance> metrics = modelPerformanceRepository
+                            .findByModelNameAndModelVersionAndEvaluationDate(
+                                    modelName, model.getModelVersion(), date);
+
+                    Map<MetricName, Double> metricMap = metrics.stream()
+                            .collect(Collectors.toMap(
+                                    AIModelPerformance::getMetricName,
+                                    AIModelPerformance::getMetricValue,
+                                    (a, b) -> a));
+
+                    return AIModelPerformanceResponse.PerformanceHistory.builder()
+                            .recordedAt(date.atStartOfDay())
+                            .accuracy(metricMap.get(MetricName.ACCURACY))
+                            .precision(metricMap.get(MetricName.PRECISION))
+                            .recall(metricMap.get(MetricName.RECALL))
+                            .f1Score(metricMap.get(MetricName.F1))
+                            .build();
+                })
+                .collect(Collectors.toList());
 
         return AIModelPerformanceResponse.builder()
                 .modelName(modelName)
@@ -212,9 +249,9 @@ public class AIHealthServiceImpl implements AIHealthService {
         // TODO Phase 2: Implement actual Ollama connectivity check
         AISystemHealthResponse.OllamaStatus ollamaStatus = AISystemHealthResponse.OllamaStatus.builder()
                 .status("NOT_CONFIGURED")
-                .baseUrl("http://localhost:11434")
-                .model("N/A")
-                .message("Ollama will be configured in Phase 2")
+                .baseUrl(ollamaBaseUrl)
+                .model(ollamaModelName)
+                .message("Ollama connectivity check not yet implemented")
                 .build();
 
         AISystemHealthResponse.CloudLLMStatus cloudStatus = AISystemHealthResponse.CloudLLMStatus.builder()

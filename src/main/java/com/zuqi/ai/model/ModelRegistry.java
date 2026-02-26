@@ -1,6 +1,7 @@
 package com.zuqi.ai.model;
 
 import com.zuqi.domain.ai.AIModelRegistry;
+import com.zuqi.domain.ai.DataPhase;
 import com.zuqi.domain.ai.ModelStatus;
 
 import java.util.List;
@@ -92,4 +93,29 @@ public interface ModelRegistry {
      * @return List of models
      */
     List<AIModelRegistry> getModelsByStatus(ModelStatus status);
+
+    /**
+     * Stamp the data-phase provenance fields on a registered model.
+     *
+     * <p>Called after training to record how many synthetic vs. real examples were used
+     * and what the data maturity phase was at training time.
+     *
+     * @param modelId          ID of the model to update
+     * @param phase            data maturity phase (SYNTHETIC / HYBRID / REAL)
+     * @param syntheticRecords number of synthetic training examples used
+     * @param realRecords      number of real training examples used
+     */
+    void setDataPhaseMetadata(UUID modelId, DataPhase phase, int syntheticRecords, int realRecords);
+
+    /**
+     * Persist tuned hyperparameters on an existing model entry.
+     *
+     * <p>Called after cross-validation tuning to record the best configuration
+     * found. The map is merged into (or replaces) the existing
+     * {@code ai_model_registry.hyperparameters} JSONB column.
+     *
+     * @param modelId          ID of the model to update
+     * @param hyperparameters  best hyperparameters found by tuning
+     */
+    void updateHyperparameters(UUID modelId, Map<String, Object> hyperparameters);
 }

@@ -2,6 +2,7 @@ package com.zuqi.ai.prediction;
 
 import com.zuqi.ai.feature.SalesRepFeatureService;
 import com.zuqi.ai.model.ModelLoaderService;
+import com.zuqi.ai.model.ModelPhaseService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,15 +26,16 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class RepPerformancePredictorTest {
 
-    @Mock private ModelLoaderService         modelLoader;
-    @Mock private SalesRepFeatureService     salesRepFeatureService;
+    @Mock private ModelLoaderService           modelLoader;
+    @Mock private SalesRepFeatureService       salesRepFeatureService;
     @Mock private RepPerformanceFeatureBuilder featureBuilder;
+    @Mock private ModelPhaseService            phaseService;
 
     private RepPerformancePredictor predictor;
 
     @BeforeEach
     void setUp() {
-        predictor = new RepPerformancePredictor(modelLoader, salesRepFeatureService, featureBuilder);
+        predictor = new RepPerformancePredictor(modelLoader, salesRepFeatureService, featureBuilder, phaseService);
     }
 
     // ── Fallback when no model ─────────────────────────────────────────────

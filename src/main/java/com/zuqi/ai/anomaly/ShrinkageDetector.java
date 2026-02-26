@@ -3,6 +3,7 @@ package com.zuqi.ai.anomaly;
 import com.zuqi.ai.feature.InventoryFeatureService;
 import com.zuqi.ai.feature.InventoryFeatures;
 import com.zuqi.ai.model.ModelLoaderService;
+import com.zuqi.ai.model.ModelPhaseService;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +30,7 @@ public class ShrinkageDetector {
     private final ModelLoaderService modelLoader;
     private final InventoryFeatureService inventoryFeatureService;
     private final AnomalyFeatureBuilder anomalyFeatureBuilder;
+    private final ModelPhaseService phaseService;
 
     /**
      * Detect inventory shrinkage for a warehouse-product pair.
@@ -69,7 +71,7 @@ public class ShrinkageDetector {
                     .warehouseId(warehouseId)
                     .productId(productId)
                     .isAnomaly(isAnomaly)
-                    .anomalyScore(anomalyScore)
+                    .anomalyScore(phaseService.applyModifier(anomalyScore, MODEL_NAME))
                     .features(features)
                     .modelVersion(MODEL_NAME)
                     .build();

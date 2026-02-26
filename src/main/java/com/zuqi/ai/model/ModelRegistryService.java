@@ -2,6 +2,7 @@ package com.zuqi.ai.model;
 
 import com.zuqi.ai.event.ModelPromotedEvent;
 import com.zuqi.domain.ai.AIModelRegistry;
+import com.zuqi.domain.ai.DataPhase;
 import com.zuqi.domain.ai.ModelStatus;
 import com.zuqi.repository.AIModelRegistryRepository;
 import lombok.RequiredArgsConstructor;
@@ -146,6 +147,38 @@ public class ModelRegistryService implements ModelRegistry {
     @Transactional(readOnly = true)
     public List<AIModelRegistry> getModelsByStatus(ModelStatus status) {
         return modelRepository.findByStatus(status);
+    }
+
+    @Override
+    @Transactional
+    public void setDataPhaseMetadata(UUID modelId, DataPhase phase,
+                                     int syntheticRecords, int realRecords) {
+        AIModelRegistry model = modelRepository.findById(modelId)
+                .orElseThrow(() -> new IllegalArgumentException("Model not found: " + modelId));
+
+        int total = syntheticRecords + realRecords;
+        model.setDataPhase(phase);
+        model.setSyntheticRecordsUsed(syntheticRecords);
+        model.setRealRecordsUsed(realRecords);
+        model.setRealDataRatio(total > 0 ? (double) realRecords / total : 0.0);
+
+        modelRepository.save(model);
+        log.info("Set data phase {} on model {} v{} (synthetic={}, real={})",
+                phase, model.getModelName(), model.getModelVersion(),
+                syntheticRecords, realRecords);
+    }
+
+    @Override
+    @Transactional
+    public void updateHyperparameters(UUID modelId, Map<String, Object> hyperparameters) {
+        AIModelRegistry model = modelRepository.findById(modelId)
+                .orElseThrow(() -> new IllegalArgumentException("Model not found: " + modelId));
+
+        model.setHyperparameters(hyperparameters);
+        modelRepository.save(model);
+
+        log.info("Updated hyperparameters for model {} v{}: {}",
+                model.getModelName(), model.getModelVersion(), hyperparameters.keySet());
     }
 
     private Integer calculateNextVersion(String modelName) {
