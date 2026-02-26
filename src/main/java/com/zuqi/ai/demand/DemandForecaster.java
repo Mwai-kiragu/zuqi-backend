@@ -3,6 +3,7 @@ package com.zuqi.ai.demand;
 import com.zuqi.ai.feature.DemandFeatures;
 import com.zuqi.ai.feature.OrderFeatureService;
 import com.zuqi.ai.model.ModelLoaderService;
+import com.zuqi.ai.model.ModelPhaseService;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +33,7 @@ public class DemandForecaster {
     private final ModelLoaderService modelLoader;
     private final OrderFeatureService orderFeatureService;
     private final DemandFeatureBuilder featureBuilder;
+    private final ModelPhaseService phaseService;
 
     private static final String MODEL_NAME = "demand_forecaster";
     private static final BigDecimal MIN_QUANTITY = BigDecimal.ZERO;
@@ -74,8 +76,9 @@ public class DemandForecaster {
                     .min(MAX_QUANTITY)    // Cap at 10k
                     .setScale(0, RoundingMode.HALF_UP);  // Round to whole units
 
-            // 7. Calculate confidence (based on prediction variance if available)
-            double confidence = calculateConfidence(prediction, features);
+            // 7. Calculate confidence (based on prediction variance if available), adjusted for data phase
+            double confidence = phaseService.applyModifier(
+                    calculateConfidence(prediction, features), MODEL_NAME);
 
             log.debug("Demand forecast for merchant {} SKU {}: {} units (confidence {:.2f})",
                     merchantId, productId, forecastedQuantity, confidence);

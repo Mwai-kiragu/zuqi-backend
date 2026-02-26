@@ -27,6 +27,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Trains ML models from a {@link SyntheticDataBundle} and registers them in the
@@ -177,11 +178,16 @@ public class SyntheticModelTrainer {
                     DataPhaseTracker.MODEL_SHRINKAGE_DETECTOR, distributorId,
                     List.of(), synthetic);
 
-            if (mixed.size() < MIN_ANOMALY_EXAMPLES) {
-                log.warn("[SyntheticTrainer] {} — too few examples ({}), skipping",
-                        DataPhaseTracker.MODEL_SHRINKAGE_DETECTOR, mixed.size());
+            // LibSVMAnomalyTrainer (one-class SVM) only accepts EXPECTED events at training time
+            List<Example<Event>> trainingMixed = mixed.stream()
+                    .filter(ex -> ex.getOutput().getType() == Event.EventType.EXPECTED)
+                    .collect(Collectors.toList());
+
+            if (trainingMixed.size() < MIN_ANOMALY_EXAMPLES) {
+                log.warn("[SyntheticTrainer] {} — too few EXPECTED examples ({} total, {} expected), skipping",
+                        DataPhaseTracker.MODEL_SHRINKAGE_DETECTOR, mixed.size(), trainingMixed.size());
             } else {
-                MutableDataset<Event> ds = toAnomalyDataset(mixed,
+                MutableDataset<Event> ds = toAnomalyDataset(trainingMixed,
                         DataPhaseTracker.MODEL_SHRINKAGE_DETECTOR + "_training");
                 Model<Event> model = anomalyTrainer.train(ds);
                 UUID id = registerAndPromote(DataPhaseTracker.MODEL_SHRINKAGE_DETECTOR,
@@ -205,11 +211,16 @@ public class SyntheticModelTrainer {
                     DataPhaseTracker.MODEL_PAYMENT_ANOMALY_DETECTOR, distributorId,
                     List.of(), synthetic);
 
-            if (mixed.size() < MIN_ANOMALY_EXAMPLES) {
-                log.warn("[SyntheticTrainer] {} — too few examples ({}), skipping",
-                        DataPhaseTracker.MODEL_PAYMENT_ANOMALY_DETECTOR, mixed.size());
+            // LibSVMAnomalyTrainer (one-class SVM) only accepts EXPECTED events at training time
+            List<Example<Event>> trainingMixed = mixed.stream()
+                    .filter(ex -> ex.getOutput().getType() == Event.EventType.EXPECTED)
+                    .collect(Collectors.toList());
+
+            if (trainingMixed.size() < MIN_ANOMALY_EXAMPLES) {
+                log.warn("[SyntheticTrainer] {} — too few EXPECTED examples ({} total, {} expected), skipping",
+                        DataPhaseTracker.MODEL_PAYMENT_ANOMALY_DETECTOR, mixed.size(), trainingMixed.size());
             } else {
-                MutableDataset<Event> ds = toAnomalyDataset(mixed,
+                MutableDataset<Event> ds = toAnomalyDataset(trainingMixed,
                         DataPhaseTracker.MODEL_PAYMENT_ANOMALY_DETECTOR + "_training");
                 Model<Event> model = anomalyTrainer.train(ds);
                 UUID id = registerAndPromote(DataPhaseTracker.MODEL_PAYMENT_ANOMALY_DETECTOR,
@@ -224,6 +235,153 @@ public class SyntheticModelTrainer {
             log.error("[SyntheticTrainer] {} failed: {}",
                     DataPhaseTracker.MODEL_PAYMENT_ANOMALY_DETECTOR, e.getMessage(), e);
             errors.add(DataPhaseTracker.MODEL_PAYMENT_ANOMALY_DETECTOR + ": " + e.getMessage());
+        }
+
+        // ── demand_forecaster ─────────────────────────────────────────────
+        try {
+            List<Example<Regressor>> synthetic = featureStore.buildDemandForecasterExamples(bundle);
+            List<Example<Regressor>> mixed = dataMixer.buildTrainingDataset(
+                    DataPhaseTracker.MODEL_DEMAND_FORECASTER, distributorId,
+                    List.of(), synthetic);
+
+            if (mixed.size() < MIN_REGRESSION_EXAMPLES) {
+                log.warn("[SyntheticTrainer] {} — too few examples ({}), skipping",
+                        DataPhaseTracker.MODEL_DEMAND_FORECASTER, mixed.size());
+            } else {
+                MutableDataset<Regressor> ds = toRegressionDataset(mixed);
+                Model<Regressor> model = regressionTrainer.train(ds);
+                UUID id = registerAndPromote(DataPhaseTracker.MODEL_DEMAND_FORECASTER,
+                        "xgboost_regression", model, mixed.size(), 0, distributorId);
+                modelIds.put(DataPhaseTracker.MODEL_DEMAND_FORECASTER, id);
+                counts.put(DataPhaseTracker.MODEL_DEMAND_FORECASTER, mixed.size());
+                phaseTracker.updateCounts(DataPhaseTracker.MODEL_DEMAND_FORECASTER,
+                        distributorId, 0, mixed.size());
+                phaseTracker.evaluatePhase(DataPhaseTracker.MODEL_DEMAND_FORECASTER, distributorId);
+            }
+        } catch (Exception e) {
+            log.error("[SyntheticTrainer] {} failed: {}",
+                    DataPhaseTracker.MODEL_DEMAND_FORECASTER, e.getMessage(), e);
+            errors.add(DataPhaseTracker.MODEL_DEMAND_FORECASTER + ": " + e.getMessage());
+        }
+
+        // ── stockout_predictor ────────────────────────────────────────────
+        try {
+            List<Example<Label>> synthetic = featureStore.buildStockoutPredictorExamples(bundle);
+            List<Example<Label>> mixed = dataMixer.buildTrainingDataset(
+                    DataPhaseTracker.MODEL_STOCKOUT_PREDICTOR, distributorId,
+                    List.of(), synthetic);
+
+            if (mixed.size() < MIN_CLASSIFICATION_EXAMPLES) {
+                log.warn("[SyntheticTrainer] {} — too few examples ({}), skipping",
+                        DataPhaseTracker.MODEL_STOCKOUT_PREDICTOR, mixed.size());
+            } else if (isSingleClass(mixed)) {
+                log.warn("[SyntheticTrainer] {} — single-class dataset, skipping",
+                        DataPhaseTracker.MODEL_STOCKOUT_PREDICTOR);
+            } else {
+                MutableDataset<Label> ds = toClassificationDataset(mixed);
+                Model<Label> model = classificationTrainer.train(ds);
+                UUID id = registerAndPromote(DataPhaseTracker.MODEL_STOCKOUT_PREDICTOR,
+                        "xgboost_classification", model, mixed.size(), 0, distributorId);
+                modelIds.put(DataPhaseTracker.MODEL_STOCKOUT_PREDICTOR, id);
+                counts.put(DataPhaseTracker.MODEL_STOCKOUT_PREDICTOR, mixed.size());
+                phaseTracker.updateCounts(DataPhaseTracker.MODEL_STOCKOUT_PREDICTOR,
+                        distributorId, 0, mixed.size());
+                phaseTracker.evaluatePhase(DataPhaseTracker.MODEL_STOCKOUT_PREDICTOR, distributorId);
+            }
+        } catch (Exception e) {
+            log.error("[SyntheticTrainer] {} failed: {}",
+                    DataPhaseTracker.MODEL_STOCKOUT_PREDICTOR, e.getMessage(), e);
+            errors.add(DataPhaseTracker.MODEL_STOCKOUT_PREDICTOR + ": " + e.getMessage());
+        }
+
+        // ── rep_performance_predictor ─────────────────────────────────────
+        try {
+            List<Example<Label>> synthetic = featureStore.buildRepPerformancePredictorExamples(bundle);
+            List<Example<Label>> mixed = dataMixer.buildTrainingDataset(
+                    DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, distributorId,
+                    List.of(), synthetic);
+
+            if (mixed.size() < MIN_CLASSIFICATION_EXAMPLES) {
+                log.warn("[SyntheticTrainer] {} — too few examples ({}), skipping",
+                        DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, mixed.size());
+            } else if (isSingleClass(mixed)) {
+                log.warn("[SyntheticTrainer] {} — single-class dataset, skipping",
+                        DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR);
+            } else {
+                MutableDataset<Label> ds = toClassificationDataset(mixed);
+                Model<Label> model = classificationTrainer.train(ds);
+                UUID id = registerAndPromote(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR,
+                        "xgboost_classification", model, mixed.size(), 0, distributorId);
+                modelIds.put(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, id);
+                counts.put(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, mixed.size());
+                phaseTracker.updateCounts(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR,
+                        distributorId, 0, mixed.size());
+                phaseTracker.evaluatePhase(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, distributorId);
+            }
+        } catch (Exception e) {
+            log.error("[SyntheticTrainer] {} failed: {}",
+                    DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, e.getMessage(), e);
+            errors.add(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR + ": " + e.getMessage());
+        }
+
+        // ── payment_distress_classifier ───────────────────────────────────
+        try {
+            List<Example<Label>> synthetic = featureStore.buildPaymentDistressExamples(bundle);
+            List<Example<Label>> mixed = dataMixer.buildTrainingDataset(
+                    DataPhaseTracker.MODEL_PAYMENT_DISTRESS_CLASSIFIER, distributorId,
+                    List.of(), synthetic);
+
+            if (mixed.size() < MIN_CLASSIFICATION_EXAMPLES) {
+                log.warn("[SyntheticTrainer] {} — too few examples ({}), skipping",
+                        DataPhaseTracker.MODEL_PAYMENT_DISTRESS_CLASSIFIER, mixed.size());
+            } else if (isSingleClass(mixed)) {
+                log.warn("[SyntheticTrainer] {} — single-class dataset, skipping",
+                        DataPhaseTracker.MODEL_PAYMENT_DISTRESS_CLASSIFIER);
+            } else {
+                MutableDataset<Label> ds = toClassificationDataset(mixed);
+                Model<Label> model = classificationTrainer.train(ds);
+                UUID id = registerAndPromote(DataPhaseTracker.MODEL_PAYMENT_DISTRESS_CLASSIFIER,
+                        "xgboost_classification", model, mixed.size(), 0, distributorId);
+                modelIds.put(DataPhaseTracker.MODEL_PAYMENT_DISTRESS_CLASSIFIER, id);
+                counts.put(DataPhaseTracker.MODEL_PAYMENT_DISTRESS_CLASSIFIER, mixed.size());
+                phaseTracker.updateCounts(DataPhaseTracker.MODEL_PAYMENT_DISTRESS_CLASSIFIER,
+                        distributorId, 0, mixed.size());
+                phaseTracker.evaluatePhase(DataPhaseTracker.MODEL_PAYMENT_DISTRESS_CLASSIFIER, distributorId);
+            }
+        } catch (Exception e) {
+            log.error("[SyntheticTrainer] {} failed: {}",
+                    DataPhaseTracker.MODEL_PAYMENT_DISTRESS_CLASSIFIER, e.getMessage(), e);
+            errors.add(DataPhaseTracker.MODEL_PAYMENT_DISTRESS_CLASSIFIER + ": " + e.getMessage());
+        }
+
+        // ── data_quality_detector ─────────────────────────────────────────
+        try {
+            List<Example<Label>> synthetic = featureStore.buildDataQualityExamples(bundle);
+            List<Example<Label>> mixed = dataMixer.buildTrainingDataset(
+                    DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR, distributorId,
+                    List.of(), synthetic);
+
+            if (mixed.size() < MIN_CLASSIFICATION_EXAMPLES) {
+                log.warn("[SyntheticTrainer] {} — too few examples ({}), skipping",
+                        DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR, mixed.size());
+            } else if (isSingleClass(mixed)) {
+                log.warn("[SyntheticTrainer] {} — single-class dataset, skipping",
+                        DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR);
+            } else {
+                MutableDataset<Label> ds = toClassificationDataset(mixed);
+                Model<Label> model = classificationTrainer.train(ds);
+                UUID id = registerAndPromote(DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR,
+                        "xgboost_classification", model, mixed.size(), 0, distributorId);
+                modelIds.put(DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR, id);
+                counts.put(DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR, mixed.size());
+                phaseTracker.updateCounts(DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR,
+                        distributorId, 0, mixed.size());
+                phaseTracker.evaluatePhase(DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR, distributorId);
+            }
+        } catch (Exception e) {
+            log.error("[SyntheticTrainer] {} failed: {}",
+                    DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR, e.getMessage(), e);
+            errors.add(DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR + ": " + e.getMessage());
         }
 
         long durationMs = System.currentTimeMillis() - startMs;
@@ -280,6 +438,15 @@ public class SyntheticModelTrainer {
         } catch (Exception e) {
             return 0;
         }
+    }
+
+    /** Returns {@code true} when all examples share the same label (XGBoost would fail). */
+    private boolean isSingleClass(List<Example<Label>> examples) {
+        if (examples.isEmpty()) return true;
+        return examples.stream()
+                .map(ex -> ex.getOutput().getLabel())
+                .distinct()
+                .count() <= 1;
     }
 
     /** Convert labelled classification examples to a Tribuo MutableDataset. */

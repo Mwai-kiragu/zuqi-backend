@@ -106,4 +106,16 @@ public interface ModelRegistry {
      * @param realRecords      number of real training examples used
      */
     void setDataPhaseMetadata(UUID modelId, DataPhase phase, int syntheticRecords, int realRecords);
+
+    /**
+     * Persist tuned hyperparameters on an existing model entry.
+     *
+     * <p>Called after cross-validation tuning to record the best configuration
+     * found. The map is merged into (or replaces) the existing
+     * {@code ai_model_registry.hyperparameters} JSONB column.
+     *
+     * @param modelId          ID of the model to update
+     * @param hyperparameters  best hyperparameters found by tuning
+     */
+    void updateHyperparameters(UUID modelId, Map<String, Object> hyperparameters);
 }

@@ -1,0 +1,34 @@
+# ============================================================
+# Zuqi Backend — Local Development Infrastructure
+# ============================================================
+# PostgreSQL is on AWS RDS (sifadevdb.cpv9gzf8h14i.eu-west-1.rds.amazonaws.com).
+# This file provides the remaining local services:
+#   - Redis  (caching, session management)
+#
+# Usage:
+#   docker compose up -d            # start services
+#   docker compose down             # stop services
+#   docker compose logs -f redis    # tail Redis logs
+# ============================================================
+
+services:
+
+  # ── Redis ────────────────────────────────────────────────
+  redis:
+    image: redis:7.2-alpine
+    container_name: zuqi-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --requirepass "${REDIS_PASSWORD:-zuqi_redis_dev}"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-zuqi_redis_dev}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  redis_data:
+    driver: local

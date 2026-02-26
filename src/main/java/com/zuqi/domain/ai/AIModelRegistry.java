@@ -57,7 +57,6 @@ public class AIModelRegistry {
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> hyperparameters;
 
-    @Lob
     @Column(name = "model_binary", columnDefinition = "bytea")
     private byte[] modelBinary;
 

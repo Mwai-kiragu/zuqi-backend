@@ -168,6 +168,19 @@ public class ModelRegistryService implements ModelRegistry {
                 syntheticRecords, realRecords);
     }
 
+    @Override
+    @Transactional
+    public void updateHyperparameters(UUID modelId, Map<String, Object> hyperparameters) {
+        AIModelRegistry model = modelRepository.findById(modelId)
+                .orElseThrow(() -> new IllegalArgumentException("Model not found: " + modelId));
+
+        model.setHyperparameters(hyperparameters);
+        modelRepository.save(model);
+
+        log.info("Updated hyperparameters for model {} v{}: {}",
+                model.getModelName(), model.getModelVersion(), hyperparameters.keySet());
+    }
+
     private Integer calculateNextVersion(String modelName) {
         List<AIModelRegistry> existingVersions = modelRepository.findAllVersionsByModelName(modelName);
         if (existingVersions.isEmpty()) {

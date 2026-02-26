@@ -3,6 +3,7 @@ package com.zuqi.ai.anomaly;
 import com.zuqi.ai.feature.MerchantPaymentTrendFeatures;
 import com.zuqi.ai.feature.PaymentFeatureService;
 import com.zuqi.ai.model.ModelLoaderService;
+import com.zuqi.ai.model.ModelPhaseService;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -50,6 +51,7 @@ public class PaymentDistressClassifier {
 
     private final ModelLoaderService    modelLoader;
     private final PaymentFeatureService paymentFeatureService;
+    private final ModelPhaseService     phaseService;
 
     // ── Public API ────────────────────────────────────────────────────────
 
@@ -108,11 +110,12 @@ public class PaymentDistressClassifier {
             }
 
             boolean isDistressed = LABEL_DISTRESS.equals(prediction.getOutput().getLabel());
+            double adjustedDistressProb = phaseService.applyModifier(distressProb, MODEL_NAME);
 
             log.debug("Payment distress classification: merchant={} distressed={} prob={}",
-                    merchantId, isDistressed, String.format("%.3f", distressProb));
+                    merchantId, isDistressed, String.format("%.3f", adjustedDistressProb));
 
-            return new DistressResult(merchantId, isDistressed, distressProb, MODEL_NAME);
+            return new DistressResult(merchantId, isDistressed, adjustedDistressProb, MODEL_NAME);
 
         } catch (Exception e) {
             log.error("Prediction failed for merchant [{}]: {}", merchantId, e.getMessage(), e);

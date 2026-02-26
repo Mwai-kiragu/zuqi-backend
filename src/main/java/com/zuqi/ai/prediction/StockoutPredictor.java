@@ -3,6 +3,7 @@ package com.zuqi.ai.prediction;
 import com.zuqi.ai.feature.InventoryFeatureService;
 import com.zuqi.ai.feature.InventoryFeatures;
 import com.zuqi.ai.model.ModelLoaderService;
+import com.zuqi.ai.model.ModelPhaseService;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +31,7 @@ public class StockoutPredictor {
     private final ModelLoaderService      modelLoader;
     private final InventoryFeatureService inventoryFeatureService;
     private final StockoutFeatureBuilder  featureBuilder;
+    private final ModelPhaseService       phaseService;
 
     /**
      * Predict stockout probability for a warehouse-product pair.
@@ -47,10 +49,11 @@ public class StockoutPredictor {
 
             Prediction<Label> prediction = model.predict(example);
 
-            // Extract STOCKOUT probability from output scores
+            // Extract STOCKOUT probability from output scores, adjusted for data phase
             Map<String, Label> scores = prediction.getOutputScores();
             Label stockoutLabel = scores.get(StockoutFeatureBuilder.LABEL_STOCKOUT);
-            double stockoutProb = stockoutLabel != null ? stockoutLabel.getScore() : 0.0;
+            double stockoutProb = phaseService.applyModifier(
+                    stockoutLabel != null ? stockoutLabel.getScore() : 0.0, MODEL_NAME);
 
             String predLabel = prediction.getOutput().getLabel();
             double daysRemaining = featureBuilder.computeDaysOfStockRemaining(features);

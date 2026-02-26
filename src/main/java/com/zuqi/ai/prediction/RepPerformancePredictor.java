@@ -3,6 +3,7 @@ package com.zuqi.ai.prediction;
 import com.zuqi.ai.feature.SalesRepFeatureService;
 import com.zuqi.ai.feature.SalesRepFeatures;
 import com.zuqi.ai.model.ModelLoaderService;
+import com.zuqi.ai.model.ModelPhaseService;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,9 +29,10 @@ public class RepPerformancePredictor {
 
     static final String MODEL_NAME = "rep_performance_predictor";
 
-    private final ModelLoaderService         modelLoader;
-    private final SalesRepFeatureService     salesRepFeatureService;
+    private final ModelLoaderService          modelLoader;
+    private final SalesRepFeatureService      salesRepFeatureService;
     private final RepPerformanceFeatureBuilder featureBuilder;
+    private final ModelPhaseService           phaseService;
 
     /**
      * Predict performance score for a sales rep over the current month.
@@ -55,8 +57,9 @@ public class RepPerformancePredictor {
             Prediction<Regressor> prediction = model.predict(example);
             double rawScore = prediction.getOutput().getValues()[0];
 
-            // Clamp to [0, 100]
-            double score = Math.max(0.0, Math.min(100.0, rawScore));
+            // Clamp to [0, 100], then apply SYNTHETIC-phase modifier
+            double score = phaseService.applyModifier(
+                    Math.max(0.0, Math.min(100.0, rawScore)), MODEL_NAME);
             String tier  = determineTier(score);
 
             log.debug("Rep performance: salesRepId={} score={} tier={}",
