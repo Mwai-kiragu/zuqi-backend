@@ -3,6 +3,7 @@ package com.zuqi.ai.credit;
 import com.zuqi.ai.config.HybridScoringConfig;
 import com.zuqi.ai.monitoring.LlmMetricsService;
 import com.zuqi.ai.monitoring.PredictionLogger;
+import com.zuqi.ai.synthetic.DataMixer;
 import com.zuqi.domain.ai.EntityType;
 import com.zuqi.domain.merchant.Merchant;
 import com.zuqi.repository.MerchantRepository;
@@ -51,6 +52,7 @@ public class CreditScoringOrchestrator {
     private final CreditClassifier creditClassifier;
     private final CreditLimitRegressor creditLimitRegressor;
     private final HybridScoringConfig hybridConfig;
+    private final DataMixer dataMixer;
 
     private final Random random = new Random();
 
@@ -365,13 +367,15 @@ public class CreditScoringOrchestrator {
         int adjustedScore = evaluation.creditScore();
         BigDecimal adjustedLimit = evaluation.recommendedCreditLimit();
         String adjustedRecommendation = evaluation.recommendation();
+        boolean hardOverride = false;
 
-        // Rule 1: 90+ days overdue → automatic severe risk
+        // Rule 1: 90+ days overdue → automatic severe risk (hard override)
         if (profile.paymentHistory().worstDaysToPay() >= OVERDUE_DAYS_FOR_AUTO_REJECT) {
             log.warn("Merchant {} has {}+ days overdue - applying severe risk override",
                     merchantId, OVERDUE_DAYS_FOR_AUTO_REJECT);
             adjustedScore = Math.min(adjustedScore, 15);
             adjustedRecommendation = "REJECT";
+            hardOverride = true;
         }
 
         // Rule 2: < 30 day tenure → cap at MEDIUM risk
@@ -397,12 +401,14 @@ public class CreditScoringOrchestrator {
             adjustedLimit = maxAllowedLimit;
         }
 
-        // Recalculate recommendation based on adjusted values
-        adjustedRecommendation = CreditEvaluation.determineRecommendation(
-                adjustedScore,
-                profile.creditUtilization().currentCreditLimit(),
-                adjustedLimit
-        );
+        // Recalculate recommendation only if no hard override was applied
+        if (!hardOverride) {
+            adjustedRecommendation = CreditEvaluation.determineRecommendation(
+                    adjustedScore,
+                    profile.creditUtilization().currentCreditLimit(),
+                    adjustedLimit
+            );
+        }
 
         CreditEvaluation.RiskCategory riskCategory = CreditEvaluation.determineRiskCategory(adjustedScore);
 
@@ -439,13 +445,15 @@ public class CreditScoringOrchestrator {
         int adjustedScore = llmResponse.creditScore();
         BigDecimal adjustedLimit = BigDecimal.valueOf(llmResponse.recommendedCreditLimit());
         String adjustedRecommendation = llmResponse.recommendation();
+        boolean hardOverride = false;
 
-        // Rule 1: 90+ days overdue → automatic severe risk
+        // Rule 1: 90+ days overdue → automatic severe risk (hard override)
         if (profile.paymentHistory().worstDaysToPay() >= OVERDUE_DAYS_FOR_AUTO_REJECT) {
             log.warn("Merchant {} has {}+ days overdue - applying severe risk override",
                     merchantId, OVERDUE_DAYS_FOR_AUTO_REJECT);
             adjustedScore = Math.min(adjustedScore, 15); // Cap at VERY_HIGH risk
             adjustedRecommendation = "REJECT";
+            hardOverride = true;
         }
 
         // Rule 2: < 30 day tenure → cap at MEDIUM risk
@@ -471,12 +479,14 @@ public class CreditScoringOrchestrator {
             adjustedLimit = maxAllowedLimit;
         }
 
-        // Recalculate recommendation based on adjusted values
-        adjustedRecommendation = CreditEvaluation.determineRecommendation(
-                adjustedScore,
-                profile.creditUtilization().currentCreditLimit(),
-                adjustedLimit
-        );
+        // Recalculate recommendation only if no hard override was applied
+        if (!hardOverride) {
+            adjustedRecommendation = CreditEvaluation.determineRecommendation(
+                    adjustedScore,
+                    profile.creditUtilization().currentCreditLimit(),
+                    adjustedLimit
+            );
+        }
 
         CreditEvaluation.RiskCategory riskCategory = CreditEvaluation.determineRiskCategory(adjustedScore);
 
@@ -542,6 +552,10 @@ public class CreditScoringOrchestrator {
             predictionValue.put("recommendation", evaluation.recommendation());
             predictionValue.put("reasoning", evaluation.reasoning());
 
+            double rawConfidence = (double) evaluation.creditScore() / 100.0;
+            double adjustedConfidence = dataMixer.applyConfidenceModifier(
+                    rawConfidence, MODEL_NAME, merchant.getDistributor().getId());
+
             predictionLogger.logPrediction(
                     MODEL_NAME,
                     MODEL_VERSION,
@@ -549,7 +563,7 @@ public class CreditScoringOrchestrator {
                     merchantId,
                     merchant.getDistributor().getId(),
                     predictionValue,
-                    (double) evaluation.creditScore() / 100.0, // confidence proxy
+                    adjustedConfidence,
                     "features_hash_placeholder" // TODO: Implement feature hashing
             );
         } catch (Exception e) {

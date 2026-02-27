@@ -1,5 +1,6 @@
 package com.zuqi.ai.synthetic;
 
+import com.zuqi.ai.pipeline.ModelTrainingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
@@ -32,7 +33,7 @@ import java.util.UUID;
 public class SyntheticGenerationService {
 
     private final SyntheticDataOrchestrator orchestrator;
-    private final SyntheticModelTrainer     modelTrainer;
+    private final ModelTrainingService      modelTrainer;
 
     /**
      * Asynchronously generate a full synthetic dataset, update the run record,
@@ -59,7 +60,7 @@ public class SyntheticGenerationService {
 
             // Phase 1.5.14: train models from the generated bundle
             try {
-                SyntheticModelTrainer.SyntheticTrainingResult tr =
+                ModelTrainingService.TrainingResult tr =
                         modelTrainer.trainAllModels(bundle, config.distributorId());
                 log.info("[SyntheticGen] Model training complete — trained={}, errors={}",
                         tr.trainedModelIds().size(), tr.errors().size());

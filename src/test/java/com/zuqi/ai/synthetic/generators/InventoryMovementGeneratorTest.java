@@ -1,8 +1,8 @@
 package com.zuqi.ai.synthetic.generators;
 
 import com.zuqi.ai.synthetic.SyntheticDataConfig;
-import com.zuqi.ai.synthetic.SyntheticInventoryMovement;
-import com.zuqi.ai.synthetic.SyntheticOrder;
+import com.zuqi.ai.synthetic.dto.SyntheticInventoryMovement;
+import com.zuqi.ai.synthetic.dto.SyntheticOrder;
 import com.zuqi.ai.synthetic.generators.OrderHistoryGenerator.OrderHistoryResult;
 import com.zuqi.ai.synthetic.profiles.AnomalyPatterns;
 import org.junit.jupiter.api.BeforeEach;

@@ -1,5 +1,7 @@
 package com.zuqi.ai.synthetic;
 
+import com.zuqi.ai.synthetic.dto.*;
+
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;

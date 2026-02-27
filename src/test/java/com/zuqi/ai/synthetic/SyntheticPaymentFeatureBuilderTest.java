@@ -1,5 +1,7 @@
 package com.zuqi.ai.synthetic;
 
+import com.zuqi.ai.synthetic.dto.*;
+
 import com.zuqi.ai.feature.MerchantPaymentTrendFeatures;
 import com.zuqi.ai.feature.PaymentFeatures;
 import com.zuqi.ai.synthetic.profiles.MerchantArchetype;

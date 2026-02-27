@@ -15,4 +15,7 @@ public interface EmailService {
     void sendTemplatedEmail(String to, String subject, String templateName, java.util.Map<String, Object> context);
 
     void sendInvoiceEmailAsync(String to, String subject, java.util.Map<String, Object> context);
+
+    void sendAnomalyAlertEmail(String to, String alertType, String severity, String entityType,
+                                String description, Double anomalyScore);
 }

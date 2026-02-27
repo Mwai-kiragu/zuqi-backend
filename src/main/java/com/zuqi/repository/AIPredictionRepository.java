@@ -47,4 +47,21 @@ public interface AIPredictionRepository extends JpaRepository<AIPrediction, UUID
     List<AIPrediction> findOverriddenSince(@Param("since") LocalDateTime since);
 
     Long countByModelNameAndModelVersion(String modelName, Integer modelVersion);
+
+    @Query("SELECT p FROM AIPrediction p WHERE p.modelName = :modelName " +
+            "AND p.distributor.id = :distributorId ORDER BY p.createdAt DESC")
+    Page<AIPrediction> findByModelNameAndDistributor(
+            @Param("modelName") String modelName,
+            @Param("distributorId") UUID distributorId,
+            Pageable pageable);
+
+    @Query("SELECT p FROM AIPrediction p WHERE p.modelName = :modelName " +
+            "AND p.distributor.id = :distributorId " +
+            "AND CAST(p.predictionValue AS string) LIKE %:search% " +
+            "ORDER BY p.createdAt DESC")
+    Page<AIPrediction> findByModelNameAndDistributorAndSearch(
+            @Param("modelName") String modelName,
+            @Param("distributorId") UUID distributorId,
+            @Param("search") String search,
+            Pageable pageable);
 }

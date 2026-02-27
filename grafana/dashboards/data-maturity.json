@@ -1,0 +1,362 @@
+{
+  "title": "Zuqi AI — Data Maturity & Model Evolution",
+  "uid": "zuqi-data-maturity",
+  "description": "Per-model data phase progress (SYNTHETIC → HYBRID → REAL), real data accumulation rates, confidence modifier trends, and 7-day prediction volumes across all 7 AI models.",
+  "tags": ["zuqi", "ai", "data-maturity", "models"],
+  "timezone": "browser",
+  "refresh": "5m",
+  "schemaVersion": 38,
+  "version": 1,
+  "time": { "from": "now-7d", "to": "now" },
+  "timepicker": {},
+  "panels": [
+
+    {
+      "id": 1,
+      "type": "bargauge",
+      "title": "Data Phase by Model",
+      "description": "Current data phase per model. 0 = SYNTHETIC (orange), 1 = HYBRID (blue), 2 = REAL (green). All models start at SYNTHETIC and evolve as real data accumulates.",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "max": 2,
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "SYNTHETIC", "color": "orange" } } },
+            { "type": "value", "options": { "1": { "text": "HYBRID",    "color": "blue"   } } },
+            { "type": "value", "options": { "2": { "text": "REAL",      "color": "green"  } } }
+          ],
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "orange", "value": null },
+              { "color": "blue",   "value": 1    },
+              { "color": "green",  "value": 2    }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "minVizWidth": 8
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "zuqi_ai_data_phase",
+          "legendFormat": "{{model_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 2,
+      "type": "bargauge",
+      "title": "Real Data Ratio by Model",
+      "description": "Fraction of training data from real (non-synthetic) observations per model (0.0 = fully synthetic, 1.0 = fully real). Drives automatic phase transition.",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "orange", "value": null  },
+              { "color": "yellow", "value": 0.1   },
+              { "color": "blue",   "value": 0.5   },
+              { "color": "green",  "value": 0.9   }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "displayMode": "lcd",
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "zuqi_ai_real_data_ratio",
+          "legendFormat": "{{model_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Real Data Ratio Trends (all models)",
+      "description": "How each model's real-data fraction grows over time. Steep curves indicate fast data accumulation. Flat lines at 0 indicate models still in synthetic phase.",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "zuqi_ai_real_data_ratio",
+          "legendFormat": "{{model_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Confidence Modifier Trends (all models)",
+      "description": "Confidence modifier applied to each model's predictions. 0.6× in SYNTHETIC phase, 0.8× in HYBRID, 1.0× in REAL. Rising values indicate improving data quality.",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "orange", "value": null  },
+              { "color": "blue",   "value": 0.7   },
+              { "color": "green",  "value": 0.95  }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "zuqi_ai_confidence_modifier",
+          "legendFormat": "{{model_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 5,
+      "type": "bargauge",
+      "title": "Confidence Modifier — Current Value",
+      "description": "Current confidence modifier per model. SYNTHETIC=0.6, HYBRID=0.8, REAL=1.0. Models with modifier < 0.7 have predictions routed to human review for credit decisions.",
+      "gridPos": { "x": 0, "y": 16, "w": 12, "h": 7 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "orange", "value": null },
+              { "color": "blue",   "value": 0.7  },
+              { "color": "green",  "value": 0.95 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "zuqi_ai_confidence_modifier",
+          "legendFormat": "{{model_name}}",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "7-Day Prediction Volume by Model",
+      "description": "Rolling 7-day prediction count per model. Growing volumes indicate increasing adoption and more real-world feedback entering the training pipeline.",
+      "gridPos": { "x": 12, "y": 16, "w": 12, "h": 7 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "zuqi_ai_model_prediction_count_7d",
+          "legendFormat": "{{model}}",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Average Model Confidence Score",
+      "description": "Rolling 7-day average confidence score per model (0-1). Low average scores may indicate model uncertainty or need for retraining.",
+      "gridPos": { "x": 0, "y": 23, "w": 12, "h": 7 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "yellow", "value": 0.5  },
+              { "color": "green",  "value": 0.75 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "zuqi_ai_model_avg_score",
+          "legendFormat": "{{model}}",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 8,
+      "type": "piechart",
+      "title": "Model Phase Distribution",
+      "description": "Count of models currently in each data phase. Goal: all 7 models in REAL phase.",
+      "gridPos": { "x": 12, "y": 23, "w": 6, "h": 7 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "pieType": "donut",
+        "displayLabels": ["name", "value"],
+        "legend": { "displayMode": "list", "placement": "right" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "count by (phase) (label_replace(zuqi_ai_data_phase == 0, \"phase\", \"SYNTHETIC\", \"\", \"\"))",
+          "legendFormat": "SYNTHETIC",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "count by (phase) (label_replace(zuqi_ai_data_phase == 1, \"phase\", \"HYBRID\", \"\", \"\"))",
+          "legendFormat": "HYBRID",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "count by (phase) (label_replace(zuqi_ai_data_phase == 2, \"phase\", \"REAL\", \"\", \"\"))",
+          "legendFormat": "REAL",
+          "refId": "C"
+        }
+      ]
+    },
+
+    {
+      "id": 9,
+      "type": "stat",
+      "title": "Synthetic Training Runs",
+      "description": "Cumulative count of synthetic data generation runs. Each run seeds model training when real data is insufficient.",
+      "gridPos": { "x": 18, "y": 23, "w": 6, "h": 7 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue",  "value": null },
+              { "color": "green", "value": 1    }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "zuqi_ai_synthetic_runs_total",
+          "legendFormat": "Total Runs",
+          "refId": "A"
+        }
+      ]
+    }
+
+  ]
+}

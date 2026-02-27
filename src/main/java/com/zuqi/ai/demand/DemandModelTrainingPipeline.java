@@ -3,7 +3,7 @@ package com.zuqi.ai.demand;
 import com.zuqi.ai.feature.DemandFeatures;
 import com.zuqi.ai.feature.OrderFeatureService;
 import com.zuqi.ai.model.ModelRegistry;
-import com.zuqi.ai.training.ModelEvaluator;
+import com.zuqi.ai.pipeline.ModelEvaluator;
 import com.zuqi.domain.ai.AIModelRegistry;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;

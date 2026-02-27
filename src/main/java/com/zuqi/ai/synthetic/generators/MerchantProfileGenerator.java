@@ -1,7 +1,7 @@
 package com.zuqi.ai.synthetic.generators;
 
 import com.zuqi.ai.synthetic.SyntheticDataConfig;
-import com.zuqi.ai.synthetic.SyntheticMerchant;
+import com.zuqi.ai.synthetic.dto.SyntheticMerchant;
 import com.zuqi.ai.synthetic.profiles.MerchantArchetype;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

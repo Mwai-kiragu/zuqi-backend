@@ -1,5 +1,9 @@
 package com.zuqi.ai.synthetic;
 
+import com.zuqi.ai.feature.FeatureComputationUtils;
+
+import com.zuqi.ai.synthetic.dto.*;
+
 import com.zuqi.ai.feature.MerchantPaymentTrendFeatures;
 import com.zuqi.ai.feature.PaymentFeatures;
 import lombok.extern.slf4j.Slf4j;

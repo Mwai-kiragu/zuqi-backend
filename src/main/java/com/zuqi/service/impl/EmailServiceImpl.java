@@ -157,6 +157,37 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     @Async
+    public void sendAnomalyAlertEmail(String to, String alertType, String severity, String entityType,
+                                       String description, Double anomalyScore) {
+        if (!emailConfig.isEnabled()) {
+            log.info("Email disabled. Would send anomaly alert email to: {}", to);
+            return;
+        }
+
+        try {
+            Map<String, Object> variables = new HashMap<>();
+            variables.put("alertType", alertType);
+            variables.put("severity", severity);
+            variables.put("entityType", entityType);
+            variables.put("description", description);
+            variables.put("anomalyScore", anomalyScore != null ? String.format("%.2f", anomalyScore) : "N/A");
+            variables.put("companyName", emailConfig.getFromName());
+            variables.put("dashboardUrl", appConfig.getUrl() + "/dashboard/alerts");
+
+            sendTemplatedEmail(
+                    to,
+                    String.format("[%s] %s Alert - %s", severity, alertType.replace("_", " "), emailConfig.getFromName()),
+                    "anomaly-alert",
+                    variables
+            );
+            log.info("Anomaly alert email sent to: {} for {} {}", to, severity, alertType);
+        } catch (Exception e) {
+            log.error("Failed to send anomaly alert email to: {}", to, e);
+        }
+    }
+
+    @Override
+    @Async
     public void sendInvoiceEmailAsync(String to, String subject, Map<String, Object> contextVariables) {
         if (!emailConfig.isEnabled()) {
             log.info("Email disabled. Would send invoice email to: {}", to);

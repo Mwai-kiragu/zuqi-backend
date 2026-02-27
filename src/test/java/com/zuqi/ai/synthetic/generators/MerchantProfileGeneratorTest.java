@@ -1,7 +1,7 @@
 package com.zuqi.ai.synthetic.generators;
 
 import com.zuqi.ai.synthetic.SyntheticDataConfig;
-import com.zuqi.ai.synthetic.SyntheticMerchant;
+import com.zuqi.ai.synthetic.dto.SyntheticMerchant;
 import com.zuqi.ai.synthetic.profiles.MerchantArchetype;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

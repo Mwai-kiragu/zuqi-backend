@@ -1,6 +1,8 @@
 package com.zuqi.repository;
 
 import com.zuqi.domain.ai.DemandForecast;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -51,4 +53,23 @@ public interface DemandForecastRepository extends JpaRepository<DemandForecast, 
      * Count forecasts for a distributor on a specific date.
      */
     long countByDistributorIdAndForecastDate(UUID distributorId, LocalDate forecastDate);
+
+    /**
+     * Paginated list of forecasts for a distributor, ordered by forecast date descending.
+     */
+    @Query("SELECT f FROM DemandForecast f WHERE f.distributor.id = :distributorId " +
+            "ORDER BY f.forecastDate DESC, f.createdAt DESC")
+    Page<DemandForecast> findByDistributorId(
+            @Param("distributorId") UUID distributorId,
+            Pageable pageable);
+
+    /**
+     * Paginated list of forecasts for a distributor filtered by warehouse (via merchant's warehouse).
+     */
+    @Query("SELECT f FROM DemandForecast f WHERE f.distributor.id = :distributorId " +
+            "AND f.merchant.id IN (SELECT m.id FROM Merchant m WHERE m.distributor.id = :distributorId) " +
+            "ORDER BY f.forecastDate DESC, f.createdAt DESC")
+    Page<DemandForecast> findByDistributorIdFiltered(
+            @Param("distributorId") UUID distributorId,
+            Pageable pageable);
 }

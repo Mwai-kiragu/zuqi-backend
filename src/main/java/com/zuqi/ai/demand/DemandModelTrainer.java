@@ -1,13 +1,14 @@
 package com.zuqi.ai.demand;
 
 import com.zuqi.ai.feature.DemandFeatures;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.tribuo.Model;
 import org.tribuo.MutableDataset;
+import org.tribuo.Trainer;
 import org.tribuo.regression.Regressor;
-import org.tribuo.regression.xgboost.XGBoostRegressionTrainer;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -19,11 +20,18 @@ import java.util.stream.Collectors;
  * Blueprint: plan.md Section 6.2 - Demand Forecasting Module
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class DemandModelTrainer {
 
     private final DemandFeatureBuilder featureBuilder;
+    private final Trainer<Regressor> xgBoostRegressionTrainer;
+
+    @Autowired
+    public DemandModelTrainer(DemandFeatureBuilder featureBuilder,
+                               @Qualifier("xgBoostRegressionTrainer") Trainer<Regressor> xgBoostRegressionTrainer) {
+        this.featureBuilder = featureBuilder;
+        this.xgBoostRegressionTrainer = xgBoostRegressionTrainer;
+    }
 
     /**
      * Train XGBoost demand forecasting model on historical order data.
@@ -58,46 +66,16 @@ public class DemandModelTrainer {
         log.info("Target quantities - Min: {}, Max: {}, Avg: {:.2f}",
                 minQty, maxQty, avgQty);
 
-        // 3. Configure XGBoost trainer
-        XGBoostRegressionTrainer trainer = createTrainer();
-
-        // 4. Train model
+        // 3. Train model using injected XGBoost trainer (hyperparameters from TribuoConfig)
         log.info("Training XGBoost demand forecaster...");
         long startTime = System.currentTimeMillis();
-        Model<Regressor> model = trainer.train(dataset);
+        Model<Regressor> model = xgBoostRegressionTrainer.train(dataset);
         long duration = System.currentTimeMillis() - startTime;
 
         log.info("XGBoost demand forecaster training completed in {}ms", duration);
         log.info("Model class: {}", model.getClass().getName());
 
         return model;
-    }
-
-    /**
-     * Create XGBoost trainer with optimized hyperparameters for demand forecasting.
-     *
-     * Hyperparameters tuned for time-series regression:
-     * - num_round: 150 (more rounds for temporal patterns)
-     * - max_depth: 5 (prevent overfitting on sparse data)
-     * - eta (learning_rate): 0.05 (slower learning for stability)
-     * - subsample: 0.8 (80% data per tree)
-     * - colsample_bytree: 0.8 (80% features per tree)
-     */
-    private XGBoostRegressionTrainer createTrainer() {
-        int numRounds = 150;
-        int maxDepth = 5;
-        double eta = 0.05;
-        double subsample = 0.8;
-        double colsampleByTree = 0.8;
-        int minChildWeight = 5;
-        double gamma = 0.0; // No regularization by default
-        int seed = 42;
-
-        log.info("XGBoost demand forecasting hyperparameters: numRounds={}, maxDepth={}, eta={}, subsample={}, colsampleByTree={}",
-                numRounds, maxDepth, eta, subsample, colsampleByTree);
-        log.info("minChildWeight={}, gamma={}, seed={}", minChildWeight, gamma, seed);
-
-        return new XGBoostRegressionTrainer(numRounds);
     }
 
     /**

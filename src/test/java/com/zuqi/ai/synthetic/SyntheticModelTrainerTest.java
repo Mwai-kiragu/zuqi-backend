@@ -1,5 +1,9 @@
 package com.zuqi.ai.synthetic;
 
+import com.zuqi.ai.synthetic.dto.*;
+
+import com.zuqi.ai.pipeline.ModelTrainingService;
+
 import com.zuqi.ai.model.ModelRegistry;
 import com.zuqi.domain.ai.AIModelRegistry;
 import com.zuqi.domain.ai.DataPhase;
@@ -26,7 +30,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Unit tests for {@link SyntheticModelTrainer}.
+ * Unit tests for {@link ModelTrainingService}.
  *
  * <p>All dependencies (including Tribuo {@link Trainer}s) are mocked so:
  * <ul>
@@ -50,13 +54,13 @@ class SyntheticModelTrainerTest {
     @SuppressWarnings("unchecked")
     @Mock Trainer<Event>    anomalyTrainer;
 
-    private SyntheticModelTrainer trainer;
+    private ModelTrainingService trainer;
 
     private static final UUID DISTRIBUTOR_ID = UUID.randomUUID();
 
     @BeforeEach
     void setUp() {
-        trainer = new SyntheticModelTrainer(
+        trainer = new ModelTrainingService(
                 featureStore, dataMixer, modelRegistry, phaseTracker,
                 classificationTrainer, regressionTrainer, anomalyTrainer);
     }
@@ -109,7 +113,7 @@ class SyntheticModelTrainerTest {
     void result_successTrue_whenAllModelsTrainedWithoutError() {
         stubAllModels();
 
-        SyntheticModelTrainer.SyntheticTrainingResult result =
+        ModelTrainingService.TrainingResult result =
                 trainer.trainAllModels(emptyBundle(), DISTRIBUTOR_ID);
 
         assertThat(result.success()).isTrue();
@@ -120,7 +124,7 @@ class SyntheticModelTrainerTest {
     void result_trainedModelIds_containsAllNineEntries() {
         stubAllModels();
 
-        SyntheticModelTrainer.SyntheticTrainingResult result =
+        ModelTrainingService.TrainingResult result =
                 trainer.trainAllModels(emptyBundle(), DISTRIBUTOR_ID);
 
         assertThat(result.trainedModelIds()).containsKeys(
@@ -147,7 +151,7 @@ class SyntheticModelTrainerTest {
         stubRepPerformanceExamples(10);
         stubDataQualityExamples(13);
 
-        SyntheticModelTrainer.SyntheticTrainingResult result =
+        ModelTrainingService.TrainingResult result =
                 trainer.trainAllModels(emptyBundle(), DISTRIBUTOR_ID);
 
         assertThat(result.exampleCounts())
@@ -166,7 +170,7 @@ class SyntheticModelTrainerTest {
     void result_durationMs_greaterThanOrEqualToZero() {
         stubAllModels();
 
-        SyntheticModelTrainer.SyntheticTrainingResult result =
+        ModelTrainingService.TrainingResult result =
                 trainer.trainAllModels(emptyBundle(), DISTRIBUTOR_ID);
 
         assertThat(result.durationMs()).isGreaterThanOrEqualTo(0);
@@ -192,7 +196,7 @@ class SyntheticModelTrainerTest {
         stubRepPerformanceExamples(10);
         stubDataQualityExamples(13);
 
-        SyntheticModelTrainer.SyntheticTrainingResult result =
+        ModelTrainingService.TrainingResult result =
                 trainer.trainAllModels(emptyBundle(), DISTRIBUTOR_ID);
 
         // credit_classifier skipped → only 8 models registered
@@ -245,7 +249,7 @@ class SyntheticModelTrainerTest {
         stubRepPerformanceExamples(10);
         stubDataQualityExamples(13);
 
-        SyntheticModelTrainer.SyntheticTrainingResult result =
+        ModelTrainingService.TrainingResult result =
                 trainer.trainAllModels(emptyBundle(), DISTRIBUTOR_ID);
 
         assertThat(result.trainedModelIds())
@@ -279,7 +283,7 @@ class SyntheticModelTrainerTest {
                 .thenReturn(mockReg);
         when(modelRegistry.promoteToActive(any())).thenReturn(mockReg);
 
-        SyntheticModelTrainer.SyntheticTrainingResult result =
+        ModelTrainingService.TrainingResult result =
                 trainer.trainAllModels(emptyBundle(), DISTRIBUTOR_ID);
 
         assertThat(result.success()).isFalse();
@@ -303,7 +307,7 @@ class SyntheticModelTrainerTest {
         stubRepPerformanceExamples(10);
         stubDataQualityExamples(13);
 
-        SyntheticModelTrainer.SyntheticTrainingResult result =
+        ModelTrainingService.TrainingResult result =
                 trainer.trainAllModels(emptyBundle(), DISTRIBUTOR_ID);
 
         assertThat(result.success()).isFalse();

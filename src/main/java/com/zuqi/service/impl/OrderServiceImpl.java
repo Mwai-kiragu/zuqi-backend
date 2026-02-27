@@ -10,8 +10,12 @@ import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
+import com.zuqi.ai.event.DeliveryCompletedEvent;
 import com.zuqi.ai.event.OrderCreatedEvent;
 import com.zuqi.ai.feature.FeatureStore;
+import com.zuqi.domain.credit.CreditLimit;
+import com.zuqi.domain.credit.CreditLimitStatus;
+import com.zuqi.repository.CreditLimitRepository;
 import com.zuqi.service.InvoiceService;
 import com.zuqi.service.OrderService;
 import com.zuqi.util.SecurityUtils;
@@ -45,6 +49,7 @@ public class OrderServiceImpl implements OrderService {
     private final DistributorRepository distributorRepository;
     private final WarehouseRepository warehouseRepository;
     private final UserRepository userRepository;
+    private final CreditLimitRepository creditLimitRepository;
     private final SecurityUtils securityUtils;
     private final InvoiceService invoiceService;
     private final ApplicationEventPublisher eventPublisher;
@@ -162,6 +167,12 @@ public class OrderServiceImpl implements OrderService {
         if (request.getWarehouseId() != null) {
             warehouse = warehouseRepository.findById(request.getWarehouseId())
                     .orElseThrow(() -> new ResourceNotFoundException("Warehouse", "id", request.getWarehouseId()));
+        }
+
+        // Credit gating for CREDIT orders — block if order exceeds available credit
+        OrderType orderType = request.getOrderType() != null ? request.getOrderType() : OrderType.STANDARD;
+        if (orderType == OrderType.CREDIT) {
+            validateCreditLimit(merchant, request);
         }
 
         // Generate order number
@@ -308,6 +319,11 @@ public class OrderServiceImpl implements OrderService {
         order = orderRepository.save(order);
         log.info("Order {} status updated from {} to {}", order.getOrderNumber(), currentStatus, newStatus);
 
+        // Publish delivery event when order is delivered — closes the route optimization feedback loop
+        if (newStatus == OrderStatus.DELIVERED) {
+            publishDeliveryCompletedEvent(order, true, request.getNotes());
+        }
+
         return OrderResponse.fromEntity(order);
     }
 
@@ -389,6 +405,54 @@ public class OrderServiceImpl implements OrderService {
 
         if (!valid) {
             throw new ValidationException("Invalid status transition from " + from + " to " + to);
+        }
+    }
+
+    private void validateCreditLimit(Merchant merchant, OrderRequest request) {
+        UUID distributorId = request.getDistributorId();
+        creditLimitRepository.findByMerchantIdAndDistributorIdAndStatus(
+                merchant.getId(), distributorId, CreditLimitStatus.ACTIVE
+        ).ifPresent(creditLimit -> {
+            // Estimate order total from item requests
+            BigDecimal estimatedTotal = BigDecimal.ZERO;
+            for (OrderItemRequest item : request.getItems()) {
+                Product product = productRepository.findById(item.getProductId()).orElse(null);
+                if (product != null) {
+                    BigDecimal lineTotal = product.getUnitPrice().multiply(item.getQuantity());
+                    estimatedTotal = estimatedTotal.add(lineTotal);
+                }
+            }
+
+            BigDecimal available = creditLimit.getAvailableLimit();
+            if (available != null && estimatedTotal.compareTo(available) > 0) {
+                throw new ValidationException(String.format(
+                        "Order value KES %,.2f exceeds available credit limit KES %,.2f for merchant %s",
+                        estimatedTotal, available, merchant.getBusinessName()));
+            }
+        });
+        // If no active credit limit exists, allow the order (merchant may not have credit facility set up)
+    }
+
+    private void publishDeliveryCompletedEvent(Order order, boolean successful, String notes) {
+        try {
+            DeliveryCompletedEvent event = new DeliveryCompletedEvent(
+                    order.getId(),       // deliveryId (using orderId as reference)
+                    order.getId(),       // orderId
+                    order.getMerchant().getId(),
+                    order.getSalesRep() != null ? order.getSalesRep().getId() : null,
+                    order.getDistributor().getId(),
+                    null,                // routeId — handler will skip if null
+                    null,                // scheduledTime
+                    LocalDateTime.now(), // actualTime
+                    null,                // delayMinutes
+                    successful,
+                    notes
+            );
+            eventPublisher.publishEvent(event);
+            log.debug("Published DeliveryCompletedEvent for order {}", order.getOrderNumber());
+        } catch (Exception e) {
+            log.warn("Failed to publish DeliveryCompletedEvent for order {}: {}",
+                    order.getOrderNumber(), e.getMessage());
         }
     }
 

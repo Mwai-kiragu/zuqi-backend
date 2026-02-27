@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anomaly Alert</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f4f4f4;">
+        <tr>
+            <td style="padding: 40px 0;">
+                <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%); padding: 30px 40px; border-radius: 8px 8px 0 0;">
+                            <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;" th:text="${companyName}">Zuqi</h1>
+                        </td>
+                    </tr>
+
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 40px;">
+                            <!-- Alert Icon -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td style="text-align: center; padding-bottom: 20px;">
+                                        <div style="display: inline-block; width: 60px; height: 60px; background-color: #ffebee; border-radius: 50%; line-height: 60px; text-align: center;">
+                                            <span style="color: #f44336; font-size: 32px;">&#9888;</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <h2 style="margin: 0 0 20px 0; color: #333333; font-size: 24px; font-weight: 600; text-align: center;">
+                                Anomaly Detected
+                            </h2>
+
+                            <!-- Severity Banner -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 0 0 25px 0;">
+                                <tr>
+                                    <td style="background-color: #ffebee; border-left: 4px solid #f44336; border-radius: 4px; padding: 15px 20px;">
+                                        <p style="margin: 0; color: #c62828; font-size: 16px; font-weight: 600;">
+                                            <span th:text="${severity}">CRITICAL</span> &mdash; <span th:text="${alertType}">PAYMENT_ANOMALY</span>
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Alert Details -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 0 0 25px 0; border: 1px solid #e0e0e0; border-radius: 4px;">
+                                <tr>
+                                    <td style="padding: 15px 20px; border-bottom: 1px solid #e0e0e0; background-color: #fafafa;">
+                                        <strong style="color: #555555; font-size: 14px;">Entity Type</strong>
+                                    </td>
+                                    <td style="padding: 15px 20px; border-bottom: 1px solid #e0e0e0;">
+                                        <span style="color: #333333; font-size: 14px;" th:text="${entityType}">PAYMENT</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 15px 20px; border-bottom: 1px solid #e0e0e0; background-color: #fafafa;">
+                                        <strong style="color: #555555; font-size: 14px;">Anomaly Score</strong>
+                                    </td>
+                                    <td style="padding: 15px 20px; border-bottom: 1px solid #e0e0e0;">
+                                        <span style="color: #333333; font-size: 14px;" th:text="${anomalyScore}">0.95</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 15px 20px; background-color: #fafafa;">
+                                        <strong style="color: #555555; font-size: 14px;">Description</strong>
+                                    </td>
+                                    <td style="padding: 15px 20px;">
+                                        <span style="color: #333333; font-size: 14px;" th:text="${description}">Unusual payment pattern detected.</span>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- CTA Button -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td style="text-align: center; padding: 10px 0;">
+                                        <a th:href="${dashboardUrl}" href="#"
+                                           style="display: inline-block; padding: 14px 32px; background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%); color: #ffffff; text-decoration: none; border-radius: 6px; font-size: 16px; font-weight: 600;">
+                                            View in Dashboard
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f8f9fa; padding: 25px 40px; border-radius: 0 0 8px 8px; border-top: 1px solid #e0e0e0;">
+                            <p style="margin: 0; color: #999999; font-size: 13px; text-align: center;">
+                                &copy; 2024 <span th:text="${companyName}">Zuqi</span>. All rights reserved.
+                                <br>
+                                This is an automated alert notification from the AI anomaly detection system.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

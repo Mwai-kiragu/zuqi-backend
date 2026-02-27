@@ -7,10 +7,15 @@ import com.zuqi.ai.monitoring.PredictionLogger;
 import com.zuqi.api.dto.ApiResponse;
 import com.zuqi.domain.ai.AIPrediction;
 import com.zuqi.domain.ai.EntityType;
+import com.zuqi.repository.AIPredictionRepository;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -36,6 +41,68 @@ public class CreditScoringController {
     private final CreditScoringOrchestrator creditScoringOrchestrator;
     private final PredictionLogger predictionLogger;
     private final CreditLimitAdjustmentJob creditLimitAdjustmentJob;
+    private final AIPredictionRepository aiPredictionRepository;
+
+    /**
+     * List all credit evaluations for a distributor (paginated).
+     */
+    @GetMapping("/evaluations")
+    @Operation(
+            summary = "List credit evaluations",
+            description = "Paginated list of all credit evaluations for the distributor. " +
+                    "Supports search filtering."
+    )
+    public ResponseEntity<ApiResponse<Page<AIPrediction>>> listEvaluations(
+            @Parameter(required = true) @RequestParam UUID distributorId,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        log.info("GET /v1/ai/credit/evaluations distributor={} search={} page={} size={}",
+                distributorId, search, page, size);
+
+        try {
+            PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+            Page<AIPrediction> evaluations;
+
+            if (search != null && !search.isBlank()) {
+                evaluations = aiPredictionRepository.findByModelNameAndDistributorAndSearch(
+                        "credit_scoring", distributorId, search, pageable);
+            } else {
+                evaluations = aiPredictionRepository.findByModelNameAndDistributor(
+                        "credit_scoring", distributorId, pageable);
+            }
+
+            return ResponseEntity.ok(ApiResponse.success(evaluations));
+
+        } catch (Exception e) {
+            log.error("Failed to list credit evaluations: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("Failed to list evaluations: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Get a single credit evaluation by its prediction ID.
+     */
+    @GetMapping("/evaluations/detail/{id}")
+    @Operation(
+            summary = "Get single credit evaluation by ID",
+            description = "Returns a single credit evaluation prediction record."
+    )
+    public ResponseEntity<ApiResponse<AIPrediction>> getEvaluationById(
+            @PathVariable UUID id) {
+
+        log.info("GET /v1/ai/credit/evaluations/detail/{}", id);
+
+        return aiPredictionRepository.findById(id)
+                .map(prediction -> ResponseEntity.ok(ApiResponse.success(prediction)))
+                .orElseGet(() -> {
+                    log.warn("Credit evaluation not found: {}", id);
+                    return ResponseEntity.status(404)
+                            .body(ApiResponse.error("Credit evaluation not found"));
+                });
+    }
 
     /**
      * Evaluate merchant credit risk using AI.
@@ -160,6 +227,52 @@ public class CreditScoringController {
                     .body(ApiResponse.error("Failed to fetch current score: " + e.getMessage()));
         }
     }
+
+    /**
+     * Submit a manual review decision for a credit evaluation.
+     * Uses the AIPrediction override mechanism to store the review.
+     */
+    @PutMapping("/evaluations/{id}/review")
+    @Operation(
+            summary = "Submit manual review decision for a credit evaluation",
+            description = "Approves or rejects a credit evaluation that was flagged for manual review. " +
+                    "Stores the decision using the prediction override mechanism."
+    )
+    public ResponseEntity<ApiResponse<AIPrediction>> reviewEvaluation(
+            @PathVariable UUID id,
+            @RequestBody ReviewRequest request) {
+
+        log.info("PUT /v1/ai/credit/evaluations/{}/review decision={}", id, request.decision());
+
+        return aiPredictionRepository.findById(id)
+                .map(prediction -> {
+                    prediction.setWasOverridden(true);
+                    prediction.setOverrideValue(java.util.Map.of(
+                            "decision", request.decision(),
+                            "creditLimit", request.creditLimit() != null ? request.creditLimit() : 0,
+                            "paymentTermsDays", request.paymentTermsDays() != null ? request.paymentTermsDays() : 0
+                    ));
+                    prediction.setOverrideBy(request.reviewedBy() != null ? request.reviewedBy() : "system");
+                    prediction.setOverrideReason(request.reason());
+
+                    AIPrediction saved = aiPredictionRepository.save(prediction);
+                    log.info("Credit evaluation {} reviewed: {}", id, request.decision());
+                    return ResponseEntity.ok(ApiResponse.success("Evaluation reviewed", saved));
+                })
+                .orElseGet(() -> {
+                    log.warn("Credit evaluation not found for review: {}", id);
+                    return ResponseEntity.status(404)
+                            .body(ApiResponse.error("Credit evaluation not found"));
+                });
+    }
+
+    public record ReviewRequest(
+            String decision,
+            Double creditLimit,
+            Integer paymentTermsDays,
+            String reason,
+            String reviewedBy
+    ) {}
 
     /**
      * Trigger dynamic credit limit adjustment for a merchant.
