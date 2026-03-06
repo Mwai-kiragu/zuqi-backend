@@ -33,7 +33,7 @@ public class EmailServiceImpl implements EmailService {
     @Async
     public void sendWelcomeEmail(User user, String temporaryPassword) {
         if (!emailConfig.isEnabled()) {
-            log.info("Email disabled. Would send welcome email to: {}", user.getEmail());
+            log.info("Email disabled. Merchant credentials — email: {}, password: {}", user.getEmail(), temporaryPassword);
             return;
         }
 

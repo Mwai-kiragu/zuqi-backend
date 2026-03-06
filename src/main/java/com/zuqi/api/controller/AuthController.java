@@ -6,10 +6,15 @@ import com.zuqi.api.dto.auth.AuthenticationResponse;
 import com.zuqi.api.dto.auth.RefreshTokenRequest;
 import com.zuqi.api.dto.auth.RegisterRequest;
 import com.zuqi.api.dto.auth.DistributorRegisterRequest;
+import com.zuqi.api.dto.auth.MerchantRegisterRequest;
 import com.zuqi.api.dto.auth.ForgotPasswordRequest;
 import com.zuqi.api.dto.auth.ResetPasswordRequest;
 import com.zuqi.api.dto.auth.VerifyOtpRequest;
+import com.zuqi.api.dto.branch.SwitchBranchRequest;
+import com.zuqi.api.dto.branch.SwitchBranchResponse;
 import com.zuqi.service.AuthenticationService;
+import com.zuqi.service.BranchService;
+import com.zuqi.util.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -18,6 +23,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/v1/auth")
 @RequiredArgsConstructor
@@ -25,6 +32,8 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthenticationService authenticationService;
+    private final BranchService branchService;
+    private final SecurityUtils securityUtils;
 
     @PostMapping("/register")
     @Operation(summary = "Register a new user", description = "Creates a new user account and returns authentication tokens")
@@ -44,6 +53,16 @@ public class AuthController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Distributor registration successful", response));
+    }
+
+    @PostMapping("/register/merchant")
+    @Operation(summary = "Register a new merchant brand", description = "Creates a Merchant brand, default Distributor, MERCHANT_ADMIN user, and FREE_TRIAL subscription")
+    public ResponseEntity<ApiResponse<AuthenticationResponse>> registerMerchant(
+            @Valid @RequestBody MerchantRegisterRequest request) {
+        AuthenticationResponse response = authenticationService.registerMerchant(request);
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Merchant brand registration successful", response));
     }
 
     @PostMapping("/login")
@@ -116,6 +135,15 @@ public class AuthController {
             @Valid @RequestBody VerifyOtpRequest request) {
         AuthenticationResponse response = authenticationService.verifyEmail(request);
         return ResponseEntity.ok(ApiResponse.success("Email verified successfully", response));
+    }
+
+    @PostMapping("/switch-branch")
+    @Operation(summary = "Switch active branch", description = "Returns a new JWT token containing the selected branchId")
+    public ResponseEntity<ApiResponse<SwitchBranchResponse>> switchBranch(
+            @Valid @RequestBody SwitchBranchRequest request) {
+        UUID userId = securityUtils.getCurrentUserId();
+        SwitchBranchResponse response = branchService.switchBranch(request, userId);
+        return ResponseEntity.ok(ApiResponse.success("Branch switched successfully", response));
     }
 
     @PostMapping("/resend-verification-otp")

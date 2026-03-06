@@ -1,6 +1,6 @@
 package com.zuqi.ai.feature;
 
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.order.Order;
 import com.zuqi.domain.order.OrderItem;
 import com.zuqi.domain.payment.Payment;
@@ -35,7 +35,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class OrderFeatureServiceImpl implements OrderFeatureService {
 
-    private final MerchantRepository merchantRepository;
+    private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
@@ -48,7 +48,7 @@ public class OrderFeatureServiceImpl implements OrderFeatureService {
 
     @Override
     public DemandFeatures computeFeatures(UUID merchantId, UUID productId, LocalDateTime asOfDate) {
-        Merchant merchant = merchantRepository.findById(merchantId)
+        Customer merchant = customerRepository.findById(merchantId)
                 .orElseThrow(() -> new IllegalArgumentException("Merchant not found: " + merchantId));
 
         Product product = productRepository.findById(productId)
@@ -227,7 +227,7 @@ public class OrderFeatureServiceImpl implements OrderFeatureService {
 
     // ==================== Merchant Context Helpers ====================
 
-    private String getMerchantCategoryEncoded(Merchant merchant) {
+    private String getMerchantCategoryEncoded(Customer merchant) {
         if (merchant.getCategory() == null) {
             return "UNKNOWN";
         }
@@ -283,7 +283,7 @@ public class OrderFeatureServiceImpl implements OrderFeatureService {
         }
     }
 
-    private Integer computeMerchantTenureDays(Merchant merchant, LocalDateTime asOfDate) {
+    private Integer computeMerchantTenureDays(Customer merchant, LocalDateTime asOfDate) {
         if (merchant.getCreatedAt() == null) {
             return 0;
         }

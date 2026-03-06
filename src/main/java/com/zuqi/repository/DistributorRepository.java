@@ -1,7 +1,7 @@
 package com.zuqi.repository;
 
 import com.zuqi.domain.distributor.Distributor;
-import com.zuqi.domain.merchant.KycStatus;
+import com.zuqi.domain.customer.KycStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -33,4 +33,8 @@ public interface DistributorRepository extends JpaRepository<Distributor, UUID> 
     Page<Distributor> findByKycStatus(KycStatus status, Pageable pageable);
 
     Page<Distributor> findByKycStatusNot(KycStatus status, Pageable pageable);
+
+    Optional<Distributor> findFirstByMerchantId(UUID merchantId);
+
+    List<Distributor> findByMerchantIdAndActiveTrue(UUID merchantId);
 }

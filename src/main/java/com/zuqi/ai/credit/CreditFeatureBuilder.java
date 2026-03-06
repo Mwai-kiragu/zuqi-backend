@@ -4,8 +4,8 @@ import com.zuqi.ai.feature.MerchantFeatureService;
 import com.zuqi.ai.feature.MerchantFeatures;
 import com.zuqi.ai.service.MerchantEmbeddingService;
 import com.zuqi.domain.ai.MerchantEmbedding;
-import com.zuqi.domain.merchant.Merchant;
-import com.zuqi.repository.MerchantRepository;
+import com.zuqi.domain.customer.Customer;
+import com.zuqi.repository.CustomerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,7 +27,7 @@ public class CreditFeatureBuilder {
 
     private final MerchantFeatureService merchantFeatureService;
     private final MerchantEmbeddingService embeddingService;
-    private final MerchantRepository merchantRepository;
+    private final CustomerRepository customerRepository;
 
     /**
      * Build LLM-optimized merchant credit profile.
@@ -42,7 +42,7 @@ public class CreditFeatureBuilder {
         log.debug("Building LLM credit profile for merchant {}", merchantId);
 
         // Fetch merchant entity
-        Merchant merchant = merchantRepository.findById(merchantId)
+        Customer merchant = customerRepository.findById(merchantId)
                 .orElseThrow(() -> new IllegalArgumentException("Merchant not found: " + merchantId));
 
         // Compute features
@@ -117,7 +117,7 @@ public class CreditFeatureBuilder {
      * TODO Phase 2+: Integrate with actual risk scoring based on location data.
      * For now, returns MEDIUM as default.
      */
-    private String determineGeographicRisk(Merchant merchant) {
+    private String determineGeographicRisk(Customer merchant) {
         // Placeholder implementation
         // In production, this would:
         // 1. Geocode merchant location

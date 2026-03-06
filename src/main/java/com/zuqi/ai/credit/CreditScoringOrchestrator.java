@@ -4,8 +4,8 @@ import com.zuqi.ai.config.HybridScoringConfig;
 import com.zuqi.ai.monitoring.LlmMetricsService;
 import com.zuqi.ai.monitoring.PredictionLogger;
 import com.zuqi.domain.ai.EntityType;
-import com.zuqi.domain.merchant.Merchant;
-import com.zuqi.repository.MerchantRepository;
+import com.zuqi.domain.customer.Customer;
+import com.zuqi.repository.CustomerRepository;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.service.AiServices;
 import lombok.RequiredArgsConstructor;
@@ -46,7 +46,7 @@ public class CreditScoringOrchestrator {
     private final CreditFeatureBuilder featureBuilder;
     private final ChatLanguageModel chatLanguageModel;
     private final PredictionLogger predictionLogger;
-    private final MerchantRepository merchantRepository;
+    private final CustomerRepository customerRepository;
     private final LlmMetricsService llmMetricsService;
     private final CreditClassifier creditClassifier;
     private final CreditLimitRegressor creditLimitRegressor;
@@ -532,7 +532,7 @@ public class CreditScoringOrchestrator {
      */
     private void logPrediction(UUID merchantId, CreditEvaluation evaluation) {
         try {
-            Merchant merchant = merchantRepository.findById(merchantId)
+            Customer merchant = customerRepository.findById(merchantId)
                     .orElseThrow(() -> new IllegalArgumentException("Merchant not found: " + merchantId));
 
             Map<String, Object> predictionValue = new HashMap<>();

@@ -5,11 +5,16 @@ import com.zuqi.api.dto.auth.AuthenticationResponse;
 import com.zuqi.api.dto.auth.RefreshTokenRequest;
 import com.zuqi.api.dto.auth.RegisterRequest;
 import com.zuqi.api.dto.auth.DistributorRegisterRequest;
+import com.zuqi.api.dto.auth.MerchantRegisterRequest;
 import com.zuqi.api.dto.auth.ForgotPasswordRequest;
 import com.zuqi.api.dto.auth.ResetPasswordRequest;
 import com.zuqi.api.dto.auth.VerifyOtpRequest;
 import com.zuqi.api.dto.billing.AssignSubscriptionRequest;
 import com.zuqi.domain.billing.BillingPackageType;
+import com.zuqi.domain.branch.BranchStatus;
+import com.zuqi.domain.branch.BranchUser;
+import com.zuqi.domain.branch.BranchUserStatus;
+import com.zuqi.domain.branch.DistributorBranch;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.merchant.Merchant;
 import com.zuqi.domain.user.PasswordResetToken;
@@ -22,6 +27,8 @@ import com.zuqi.exception.AuthenticationException;
 import com.zuqi.exception.DuplicateResourceException;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
+import com.zuqi.repository.BranchUserRepository;
+import com.zuqi.repository.DistributorBranchRepository;
 import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.MerchantRepository;
 import com.zuqi.repository.PasswordResetTokenRepository;
@@ -55,6 +62,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private final RoleRepository roleRepository;
     private final DistributorRepository distributorRepository;
     private final MerchantRepository merchantRepository;
+    // CustomerRepository no longer needed here (KYC via merchant brand or distributor)
     private final RefreshTokenRepository refreshTokenRepository;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final PasswordEncoder passwordEncoder;
@@ -62,16 +70,20 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private final AuthenticationManager authenticationManager;
     private final EmailService emailService;
     private final BillingService billingService;
+    private final DistributorBranchRepository distributorBranchRepository;
+    private final BranchUserRepository branchUserRepository;
 
     // OTP expires in 10 minutes
     private static final int OTP_EXPIRY_MINUTES = 10;
 
     private String resolveKycStatus(User user) {
+        // Brand Merchant admin: resolve KYC from Merchant entity
         if (user.getMerchantId() != null) {
             return merchantRepository.findById(user.getMerchantId())
                     .map(m -> m.getKycStatus().name())
                     .orElse("PENDING");
         }
+        // Distributor staff: resolve KYC from Distributor entity
         if (user.getDistributorId() != null) {
             return distributorRepository.findById(user.getDistributorId())
                     .map(d -> d.getKycStatus() != null ? d.getKycStatus().name() : "PENDING")
@@ -95,10 +107,10 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             throw new DuplicateResourceException("User", "phoneNumber", request.getPhoneNumber());
         }
 
-        // Get default role (MERCHANT for self-registration)
+        // Get default role (CUSTOMER for self-registration)
         Set<Role> roles = new HashSet<>();
-        Role defaultRole = roleRepository.findByName(RoleName.MERCHANT)
-                .orElseThrow(() -> new ResourceNotFoundException("Role", "name", "MERCHANT"));
+        Role defaultRole = roleRepository.findByName(RoleName.CUSTOMER)
+                .orElseThrow(() -> new ResourceNotFoundException("Role", "name", "CUSTOMER"));
         roles.add(defaultRole);
 
         // Create new user
@@ -205,6 +217,26 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         User savedUser = userRepository.save(user);
 
+        // 3b. Auto-create the default Head Office branch for this distributor
+        DistributorBranch hqBranch = DistributorBranch.builder()
+                .distributor(savedDistributor)
+                .name(savedDistributor.getName() + " - Head Office")
+                .code("HQ")
+                .headquarters(true)
+                .status(BranchStatus.ACTIVE)
+                .build();
+        DistributorBranch savedHqBranch = distributorBranchRepository.save(hqBranch);
+
+        // 3c. Assign the admin user to the Head Office branch
+        BranchUser adminBranchUser = BranchUser.builder()
+                .branch(savedHqBranch)
+                .user(savedUser)
+                .role("DISTRIBUTOR_ADMIN")
+                .status(BranchUserStatus.ACTIVE)
+                .build();
+        branchUserRepository.save(adminBranchUser);
+        log.info("Created default HQ branch {} for distributor {}", savedHqBranch.getId(), savedDistributor.getId());
+
         // 4. Assign FREE_TRIAL subscription
         AssignSubscriptionRequest subRequest = new AssignSubscriptionRequest();
         subRequest.setDistributorId(savedDistributor.getId());
@@ -248,6 +280,137 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
     @Override
     @Transactional
+    public AuthenticationResponse registerMerchant(MerchantRegisterRequest request) {
+        log.info("Registering new merchant brand with email: {}", request.getEmail());
+
+        if (userRepository.existsByEmail(request.getEmail())) {
+            throw new DuplicateResourceException("User", "email", request.getEmail());
+        }
+        if (request.getPhoneNumber() != null && userRepository.existsByPhoneNumber(request.getPhoneNumber())) {
+            throw new DuplicateResourceException("User", "phoneNumber", request.getPhoneNumber());
+        }
+
+        // 1. Create Merchant brand entity
+        Merchant merchantBrand = Merchant.builder()
+                .name(request.getBrandName())
+                .registrationNumber(request.getRegistrationNumber())
+                .email(request.getEmail())
+                .phone(request.getBrandPhone())
+                .address(request.getAddress())
+                .city(request.getCity())
+                .country(request.getCountry() != null ? request.getCountry() : "Kenya")
+                .active(true)
+                .build();
+        Merchant savedMerchant = merchantRepository.save(merchantBrand);
+
+        // 2. Create Distributor linked to this Merchant
+        String distributorName = request.getCompanyName() != null ? request.getCompanyName() : request.getBrandName();
+        Distributor distributor = Distributor.builder()
+                .name(distributorName)
+                .registrationNumber(request.getRegistrationNumber())
+                .email(request.getEmail())
+                .phone(request.getBrandPhone())
+                .address(request.getAddress())
+                .city(request.getCity())
+                .country(request.getCountry() != null ? request.getCountry() : "Kenya")
+                .merchant(savedMerchant)
+                .active(true)
+                .build();
+        Distributor savedDistributor = distributorRepository.save(distributor);
+
+        // 3. Get MERCHANT_ADMIN role
+        Set<Role> roles = new HashSet<>();
+        Role merchantAdminRole = roleRepository.findByName(RoleName.MERCHANT_ADMIN)
+                .orElseThrow(() -> new ResourceNotFoundException("Role", "name", "MERCHANT_ADMIN"));
+        roles.add(merchantAdminRole);
+
+        // 4. Create User linked to both Merchant brand and Distributor
+        User user = User.builder()
+                .firstName(request.getFirstName())
+                .lastName(request.getLastName())
+                .email(request.getEmail())
+                .phoneNumber(request.getPhoneNumber())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .roles(roles)
+                .distributorId(savedDistributor.getId())
+                .merchantId(savedMerchant.getId())
+                .active(true)
+                .emailVerified(false)
+                .mustChangePassword(true)
+                .build();
+        User savedUser = userRepository.save(user);
+
+        // 5. Auto-create HQ branch for the Distributor
+        DistributorBranch hqBranch = DistributorBranch.builder()
+                .distributor(savedDistributor)
+                .name(savedDistributor.getName() + " - Head Office")
+                .code("HQ")
+                .headquarters(true)
+                .status(BranchStatus.ACTIVE)
+                .build();
+        DistributorBranch savedHqBranch = distributorBranchRepository.save(hqBranch);
+
+        // 6. Assign admin user to HQ branch
+        BranchUser adminBranchUser = BranchUser.builder()
+                .branch(savedHqBranch)
+                .user(savedUser)
+                .role("MERCHANT_ADMIN")
+                .status(BranchUserStatus.ACTIVE)
+                .build();
+        branchUserRepository.save(adminBranchUser);
+
+        // 7. Assign subscription package (defaults to FREE_TRIAL if not specified)
+        AssignSubscriptionRequest subRequest = new AssignSubscriptionRequest();
+        subRequest.setDistributorId(savedDistributor.getId());
+        subRequest.setPackageType(request.getPackageType() != null ? request.getPackageType() : BillingPackageType.FREE_TRIAL);
+        if (request.getCustomModules() != null && !request.getCustomModules().isEmpty()) {
+            subRequest.setCustomModules(request.getCustomModules());
+        }
+        billingService.assign(subRequest, savedUser);
+
+        log.info("Merchant brand registered: {}, Distributor: {}, User: {}",
+                savedMerchant.getId(), savedDistributor.getId(), savedUser.getId());
+
+        // 8. Send welcome email with login credentials
+        emailService.sendWelcomeEmail(savedUser, request.getPassword());
+
+        // 9. Send email verification OTP
+        String otp = generateOtp();
+        LocalDateTime otpExpiry = LocalDateTime.now().plusMinutes(OTP_EXPIRY_MINUTES);
+        PasswordResetToken verificationToken = PasswordResetToken.builder()
+                .token(otp)
+                .user(savedUser)
+                .expiresAt(otpExpiry)
+                .used(false)
+                .purpose(TokenPurpose.EMAIL_VERIFICATION)
+                .build();
+        passwordResetTokenRepository.save(verificationToken);
+        emailService.sendEmailVerificationOtpEmail(savedUser, otp);
+
+        // 9. Generate tokens
+        String accessToken = jwtService.generateAccessToken(savedUser);
+        String refreshToken = createRefreshToken(savedUser);
+
+        return AuthenticationResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .tokenType("Bearer")
+                .expiresIn(jwtService.getAccessTokenExpiration())
+                .userId(savedUser.getId())
+                .email(savedUser.getEmail())
+                .fullName(savedUser.getFullName())
+                .roles(savedUser.getRoles().stream().map(r -> r.getName()).toList())
+                .distributorId(savedDistributor.getId())
+                .merchantId(savedMerchant.getId())
+                .phoneNumber(savedUser.getPhoneNumber())
+                .emailVerified(savedUser.isEmailVerified())
+                .kycStatus(resolveKycStatus(savedUser))
+                .mustChangePassword(savedUser.isMustChangePassword())
+                .build();
+    }
+
+    @Override
+    @Transactional
     public AuthenticationResponse authenticate(AuthenticationRequest request) {
         log.info("Authenticating user: {}", request.getEmail());
 
@@ -284,9 +447,11 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .roles(user.getRoles().stream().map(r -> r.getName()).toList())
                 .distributorId(user.getDistributorId())
                 .merchantId(user.getMerchantId())
+                .customerId(user.getCustomerId())
                 .phoneNumber(user.getPhoneNumber())
                 .emailVerified(user.isEmailVerified())
                 .kycStatus(resolveKycStatus(user))
+                .mustChangePassword(user.isMustChangePassword())
                 .build();
     }
 
@@ -326,6 +491,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .roles(user.getRoles().stream().map(r -> r.getName()).toList())
                 .distributorId(user.getDistributorId())
                 .merchantId(user.getMerchantId())
+                .customerId(user.getCustomerId())
                 .phoneNumber(user.getPhoneNumber())
                 .emailVerified(user.isEmailVerified())
                 .kycStatus(resolveKycStatus(user))
@@ -482,6 +648,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .roles(user.getRoles().stream().map(r -> r.getName()).toList())
                 .distributorId(user.getDistributorId())
                 .merchantId(user.getMerchantId())
+                .customerId(user.getCustomerId())
                 .phoneNumber(user.getPhoneNumber())
                 .emailVerified(true)
                 .kycStatus(resolveKycStatus(user))

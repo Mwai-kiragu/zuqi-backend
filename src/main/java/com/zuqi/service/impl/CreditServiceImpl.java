@@ -27,7 +27,7 @@ public class CreditServiceImpl implements CreditService {
 
     private final CreditLimitRepository creditLimitRepository;
     private final CreditScoreRepository creditScoreRepository;
-    private final MerchantRepository merchantRepository;
+    private final CustomerRepository customerRepository;
     private final DistributorRepository distributorRepository;
     private final UserRepository userRepository;
 
@@ -79,8 +79,8 @@ public class CreditServiceImpl implements CreditService {
     public CreditLimitResponse createCreditLimit(CreditLimitRequest request, UUID approvedById) {
         log.debug("Creating credit limit for merchant: {}", request.getMerchantId());
 
-        var merchant = merchantRepository.findById(request.getMerchantId())
-                .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", request.getMerchantId()));
+        var merchant = customerRepository.findById(request.getMerchantId())
+                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getMerchantId()));
 
         var distributor = distributorRepository.findById(request.getDistributorId())
                 .orElseThrow(() -> new ResourceNotFoundException("Distributor", "id", request.getDistributorId()));

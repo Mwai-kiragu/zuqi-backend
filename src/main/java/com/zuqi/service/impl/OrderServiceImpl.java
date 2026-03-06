@@ -3,7 +3,7 @@ package com.zuqi.service.impl;
 import com.zuqi.api.dto.order.*;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.inventory.Warehouse;
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.order.*;
 import com.zuqi.domain.product.Product;
 import com.zuqi.domain.user.User;
@@ -40,7 +40,7 @@ public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final OrderStatusHistoryRepository statusHistoryRepository;
-    private final MerchantRepository merchantRepository;
+    private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
     private final DistributorRepository distributorRepository;
     private final WarehouseRepository warehouseRepository;
@@ -149,8 +149,8 @@ public class OrderServiceImpl implements OrderService {
         Distributor distributor = distributorRepository.findById(request.getDistributorId())
                 .orElseThrow(() -> new ResourceNotFoundException("Distributor", "id", request.getDistributorId()));
 
-        Merchant merchant = merchantRepository.findById(request.getMerchantId())
-                .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", request.getMerchantId()));
+        Customer merchant = customerRepository.findById(request.getMerchantId())
+                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getMerchantId()));
 
         User salesRep = null;
         if (request.getSalesRepId() != null) {

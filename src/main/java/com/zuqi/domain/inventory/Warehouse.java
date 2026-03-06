@@ -1,5 +1,6 @@
 package com.zuqi.domain.inventory;
 
+import com.zuqi.domain.branch.DistributorBranch;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.user.User;
 import jakarta.persistence.*;
@@ -45,6 +46,10 @@ public class Warehouse {
     private BigDecimal latitude;
 
     private BigDecimal longitude;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "branch_id")
+    private DistributorBranch branch;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "manager_id")

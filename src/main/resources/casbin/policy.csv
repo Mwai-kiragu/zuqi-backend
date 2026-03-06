@@ -238,6 +238,40 @@ p, FINANCE, /v1/users/me, GET|PUT
 p, FINANCE, /v1/users/me/change-password, POST
 p, DRIVER, /v1/users/me, GET|PUT
 p, DRIVER, /v1/users/me/change-password, POST
+p, MERCHANT_ADMIN, /v1/users/me, GET|PUT
+p, MERCHANT_ADMIN, /v1/users/me/change-password, POST
+
+# MERCHANT_ADMIN - Brand owner access
+p, MERCHANT_ADMIN, /v1/roles/name/:name, GET
+p, MERCHANT_ADMIN, /v1/billing/subscriptions/:id, GET
+p, MERCHANT_ADMIN, /v1/billing/packages, GET
+p, MERCHANT_ADMIN, /v1/dashboard, GET
+p, MERCHANT_ADMIN, /v1/dashboard/stats, GET
+p, MERCHANT_ADMIN, /v1/dashboard/orders, GET
+p, MERCHANT_ADMIN, /v1/dashboard/revenue, GET
+p, MERCHANT_ADMIN, /v1/dashboard/top-products, GET
+p, MERCHANT_ADMIN, /v1/merchants, GET
+p, MERCHANT_ADMIN, /v1/merchants/:id, GET|PUT
+p, MERCHANT_ADMIN, /v1/distributors, GET|POST
+p, MERCHANT_ADMIN, /v1/distributors/:id, GET|PUT
+p, MERCHANT_ADMIN, /v1/distributors/:id/activate, POST
+p, MERCHANT_ADMIN, /v1/distributors/:id/deactivate, POST
+p, MERCHANT_ADMIN, /v1/orders, GET
+p, MERCHANT_ADMIN, /v1/orders/:id, GET
+p, MERCHANT_ADMIN, /v1/products, GET
+p, MERCHANT_ADMIN, /v1/products/:id, GET
+p, MERCHANT_ADMIN, /v1/products/categories, GET
+p, MERCHANT_ADMIN, /v1/products/categories/:id, GET
+p, MERCHANT_ADMIN, /v1/inventory, GET
+p, MERCHANT_ADMIN, /v1/inventory/:id, GET
+p, MERCHANT_ADMIN, /v1/users/distributor/:id, GET
+p, MERCHANT_ADMIN, /v1/users/roles, GET
+p, MERCHANT_ADMIN, /v1/branches, GET|POST
+p, MERCHANT_ADMIN, /v1/branches/:id, GET|PUT
+p, MERCHANT_ADMIN, /v1/branches/:id/activate, POST
+p, MERCHANT_ADMIN, /v1/branches/:id/deactivate, POST
+p, MERCHANT_ADMIN, /v1/branches/:id/users, GET|POST
+p, MERCHANT_ADMIN, /v1/branches/:id/users/:id, DELETE
 
 # Approval Workflow endpoints
 p, SUPER_ADMIN, /v1/approvals, .*

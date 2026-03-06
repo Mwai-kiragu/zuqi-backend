@@ -59,4 +59,12 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
 
     @Query("SELECT COUNT(s) FROM Stock s WHERE s.quantity <= 0")
     long countAllOutOfStock();
+
+    @Query("SELECT s FROM Stock s WHERE " +
+            "(:distributorId IS NULL OR s.warehouse.distributor.id = :distributorId) AND " +
+            "(:warehouseId IS NULL OR s.warehouse.id = :warehouseId)")
+    Page<Stock> findByFilters(
+            @Param("distributorId") UUID distributorId,
+            @Param("warehouseId") UUID warehouseId,
+            Pageable pageable);
 }

@@ -1,9 +1,9 @@
 package com.zuqi.ai.feature;
 
 import com.zuqi.domain.inventory.Stock;
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.product.Product;
-import com.zuqi.repository.MerchantRepository;
+import com.zuqi.repository.CustomerRepository;
 import com.zuqi.repository.ProductRepository;
 import com.zuqi.repository.StockRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +32,7 @@ public class FeatureStoreImpl implements FeatureStore {
     private final InventoryFeatureService inventoryFeatureService;
     private final SalesRepFeatureService salesRepFeatureService;
 
-    private final MerchantRepository merchantRepository;
+    private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
     private final StockRepository stockRepository;
 
@@ -80,13 +80,13 @@ public class FeatureStoreImpl implements FeatureStore {
     public List<MerchantFeatures> getAllMerchantFeatures(UUID distributorId) {
         log.info("Getting all merchant features for distributor {}", distributorId);
 
-        List<Merchant> merchants = merchantRepository.findAll().stream()
+        List<Customer> merchants = customerRepository.findAll().stream()
                 .filter(m -> m.getDistributor() != null && m.getDistributor().getId().equals(distributorId))
-                .filter(Merchant::isActive)
+                .filter(Customer::isActive)
                 .collect(Collectors.toList());
 
         List<MerchantFeatures> features = new ArrayList<>();
-        for (Merchant merchant : merchants) {
+        for (Customer merchant : merchants) {
             try {
                 features.add(merchantFeatureService.computeFeatures(merchant.getId()));
             } catch (Exception e) {
@@ -102,9 +102,9 @@ public class FeatureStoreImpl implements FeatureStore {
     public List<DemandFeatures> getAllDemandFeatures(UUID distributorId) {
         log.info("Getting all demand features for distributor {}", distributorId);
 
-        List<Merchant> merchants = merchantRepository.findAll().stream()
+        List<Customer> merchants = customerRepository.findAll().stream()
                 .filter(m -> m.getDistributor() != null && m.getDistributor().getId().equals(distributorId))
-                .filter(Merchant::isActive)
+                .filter(Customer::isActive)
                 .collect(Collectors.toList());
 
         List<Product> products = productRepository.findAll().stream()
@@ -113,7 +113,7 @@ public class FeatureStoreImpl implements FeatureStore {
                 .collect(Collectors.toList());
 
         List<DemandFeatures> features = new ArrayList<>();
-        for (Merchant merchant : merchants) {
+        for (Customer merchant : merchants) {
             for (Product product : products) {
                 try {
                     features.add(orderFeatureService.computeFeatures(merchant.getId(), product.getId()));
@@ -180,13 +180,13 @@ public class FeatureStoreImpl implements FeatureStore {
     public void refreshAllMerchantFeatures(UUID distributorId) {
         log.info("Refreshing all merchant features for distributor {}", distributorId);
 
-        List<Merchant> merchants = merchantRepository.findAll().stream()
+        List<Customer> merchants = customerRepository.findAll().stream()
                 .filter(m -> m.getDistributor() != null && m.getDistributor().getId().equals(distributorId))
-                .filter(Merchant::isActive)
+                .filter(Customer::isActive)
                 .collect(Collectors.toList());
 
         int refreshed = 0;
-        for (Merchant merchant : merchants) {
+        for (Customer merchant : merchants) {
             try {
                 // Evict cache
                 invalidateMerchantCache(merchant.getId());
@@ -206,14 +206,14 @@ public class FeatureStoreImpl implements FeatureStore {
         log.info("Warming up cache for distributor {}", distributorId);
 
         // Warm up merchant features
-        List<Merchant> merchants = merchantRepository.findAll().stream()
+        List<Customer> merchants = customerRepository.findAll().stream()
                 .filter(m -> m.getDistributor() != null && m.getDistributor().getId().equals(distributorId))
-                .filter(Merchant::isActive)
+                .filter(Customer::isActive)
                 .limit(100) // Limit to prevent overwhelming the system
                 .collect(Collectors.toList());
 
         int warmedUp = 0;
-        for (Merchant merchant : merchants) {
+        for (Customer merchant : merchants) {
             try {
                 merchantFeatureService.computeFeatures(merchant.getId());
                 warmedUp++;

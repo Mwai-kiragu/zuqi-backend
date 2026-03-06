@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "merchant_categories")
+@Table(name = "customer_categories")
 @Getter
 @Setter
 @Builder

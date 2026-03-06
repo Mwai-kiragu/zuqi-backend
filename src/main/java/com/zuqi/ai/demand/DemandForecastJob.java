@@ -2,11 +2,11 @@ package com.zuqi.ai.demand;
 
 import com.zuqi.domain.ai.DemandForecast;
 import com.zuqi.domain.distributor.Distributor;
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.product.Product;
 import com.zuqi.repository.DemandForecastRepository;
 import com.zuqi.repository.DistributorRepository;
-import com.zuqi.repository.MerchantRepository;
+import com.zuqi.repository.CustomerRepository;
 import com.zuqi.repository.ProductRepository;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -38,7 +38,7 @@ import java.util.List;
 public class DemandForecastJob {
 
     private final DistributorRepository distributorRepository;
-    private final MerchantRepository merchantRepository;
+    private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
     private final DemandForecaster demandForecaster;
     private final DemandForecastRepository demandForecastRepository;
@@ -94,7 +94,7 @@ public class DemandForecastJob {
      */
     private int generateForecastsForDistributor(Distributor distributor) {
         // Get all active merchants for this distributor
-        List<Merchant> merchants = merchantRepository.findByDistributorIdAndActiveTrue(distributor.getId());
+        List<Customer> merchants = customerRepository.findByDistributorIdAndActiveTrue(distributor.getId());
         log.debug("Found {} active merchants for distributor {}", merchants.size(), distributor.getId());
 
         // Get all active products for this distributor
@@ -108,7 +108,7 @@ public class DemandForecastJob {
 
         // Generate all merchant-product pairs
         List<DemandForecaster.MerchantProductPair> pairs = new ArrayList<>();
-        for (Merchant merchant : merchants) {
+        for (Customer merchant : merchants) {
             for (Product product : products) {
                 pairs.add(new DemandForecaster.MerchantProductPair(merchant.getId(), product.getId()));
             }
@@ -147,7 +147,7 @@ public class DemandForecastJob {
                               DemandForecaster.DemandForecast forecast,
                               LocalDate forecastDate) {
 
-        Merchant merchant = merchantRepository.findById(forecast.merchantId())
+        Customer merchant = customerRepository.findById(forecast.merchantId())
                 .orElseThrow(() -> new IllegalArgumentException("Merchant not found: " + forecast.merchantId()));
 
         Product product = productRepository.findById(forecast.productId())

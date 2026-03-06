@@ -35,4 +35,10 @@ public class CreateUserRequest {
     private UUID distributorId;
 
     private UUID merchantId;
+
+    /** Optional: assign user to this branch. Defaults to the distributor's HQ branch if not provided. */
+    private UUID branchId;
+
+    /** Optional: role within the branch. Defaults to the system role if not provided. */
+    private String branchRole;
 }

@@ -1,7 +1,7 @@
 package com.zuqi.ai.credit;
 
-import com.zuqi.domain.merchant.Merchant;
-import com.zuqi.repository.MerchantRepository;
+import com.zuqi.domain.customer.Customer;
+import com.zuqi.repository.CustomerRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit;
 public class CreditScoringScheduler {
 
     private final CreditScoringOrchestrator creditScoringOrchestrator;
-    private final MerchantRepository merchantRepository;
+    private final CustomerRepository customerRepository;
 
     private static final long RATE_LIMIT_DELAY_MS = 5000; // 5 seconds between evaluations
 
@@ -39,8 +39,8 @@ public class CreditScoringScheduler {
         log.info("Starting monthly credit re-evaluation job");
 
         try {
-            List<Merchant> activeMerchants = merchantRepository.findAll().stream()
-                    .filter(Merchant::isActive)
+            List<Customer> activeMerchants = customerRepository.findAll().stream()
+                    .filter(Customer::isActive)
                     .toList();
 
             log.info("Found {} active merchants for re-evaluation", activeMerchants.size());
@@ -48,7 +48,7 @@ public class CreditScoringScheduler {
             int successCount = 0;
             int failureCount = 0;
 
-            for (Merchant merchant : activeMerchants) {
+            for (Customer merchant : activeMerchants) {
                 try {
                     log.debug("Re-evaluating merchant {} ({})", merchant.getId(), merchant.getBusinessName());
                     creditScoringOrchestrator.evaluateMerchant(merchant.getId());

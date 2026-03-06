@@ -5,7 +5,8 @@ public enum RoleName {
     DISTRIBUTOR_ADMIN,
     SALES_REP,
     WAREHOUSE_MANAGER,
-    MERCHANT,
+    CUSTOMER,
+    MERCHANT_ADMIN,
     FINANCE,
     DRIVER
 }

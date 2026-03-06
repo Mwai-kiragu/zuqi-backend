@@ -46,6 +46,12 @@ public class InventoryServiceImpl implements InventoryService {
 
 
     @Override
+    public Page<StockResponse> getStock(UUID distributorId, UUID warehouseId, Pageable pageable) {
+        return stockRepository.findByFilters(distributorId, warehouseId, pageable)
+                .map(this::mapToStockResponse);
+    }
+
+    @Override
     public Page<StockResponse> getStockByWarehouse(UUID warehouseId, Pageable pageable) {
         validateWarehouseExists(warehouseId);
         return stockRepository.findByWarehouseId(warehouseId, pageable)
@@ -374,8 +380,11 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     private StockResponse mapToStockResponse(Stock stock) {
+        var distributor = stock.getWarehouse().getDistributor();
         return StockResponse.builder()
                 .id(stock.getId())
+                .distributorId(distributor != null ? distributor.getId() : null)
+                .distributorName(distributor != null ? distributor.getName() : null)
                 .warehouseId(stock.getWarehouse().getId())
                 .warehouseName(stock.getWarehouse().getName())
                 .warehouseCode(stock.getWarehouse().getCode())

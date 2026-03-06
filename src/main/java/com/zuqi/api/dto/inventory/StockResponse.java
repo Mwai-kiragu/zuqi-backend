@@ -16,6 +16,8 @@ import java.util.UUID;
 public class StockResponse {
 
     private UUID id;
+    private UUID distributorId;
+    private String distributorName;
     private UUID warehouseId;
     private String warehouseName;
     private String warehouseCode;

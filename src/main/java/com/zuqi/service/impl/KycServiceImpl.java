@@ -4,13 +4,13 @@ import com.zuqi.api.dto.kyc.DistributorKycRequest;
 import com.zuqi.api.dto.kyc.KycApplicationResponse;
 import com.zuqi.api.dto.kyc.MerchantKycRequest;
 import com.zuqi.domain.distributor.Distributor;
-import com.zuqi.domain.merchant.KycStatus;
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
+import com.zuqi.domain.customer.KycStatus;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.DistributorRepository;
-import com.zuqi.repository.MerchantRepository;
+import com.zuqi.repository.CustomerRepository;
 import com.zuqi.repository.UserRepository;
 import com.zuqi.service.KycService;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +34,7 @@ import java.util.UUID;
 public class KycServiceImpl implements KycService {
 
     private final UserRepository userRepository;
-    private final MerchantRepository merchantRepository;
+    private final CustomerRepository customerRepository;
     private final DistributorRepository distributorRepository;
 
     @Override
@@ -45,13 +45,13 @@ public class KycServiceImpl implements KycService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId.toString()));
 
-        Merchant merchant;
-        if (user.getMerchantId() != null) {
-            merchant = merchantRepository.findById(user.getMerchantId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", user.getMerchantId().toString()));
+        Customer merchant;
+        if (user.getCustomerId() != null) {
+            merchant = customerRepository.findById(user.getCustomerId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", user.getCustomerId().toString()));
         } else {
-            // Create new merchant record for the user
-            merchant = Merchant.builder()
+            // Create new customer record for the user
+            merchant = Customer.builder()
                     .businessName(request.getBusinessName())
                     .ownerName(user.getFirstName() + " " + user.getLastName())
                     .email(user.getEmail())
@@ -73,15 +73,15 @@ public class KycServiceImpl implements KycService {
         merchant.setKycDocuments(kycDocs);
 
         merchant.setKycStatus(KycStatus.SUBMITTED);
-        Merchant savedMerchant = merchantRepository.save(merchant);
+        Customer savedMerchant = customerRepository.save(merchant);
 
-        // Link merchant to user if not already linked
-        if (user.getMerchantId() == null) {
-            user.setMerchantId(savedMerchant.getId());
+        // Link customer to user if not already linked
+        if (user.getCustomerId() == null) {
+            user.setCustomerId(savedMerchant.getId());
             userRepository.save(user);
         }
 
-        log.info("Merchant KYC submitted for user: {}, merchant: {}", userId, savedMerchant.getId());
+        log.info("Customer KYC submitted for user: {}, customer: {}", userId, savedMerchant.getId());
     }
 
     @Override
@@ -117,8 +117,8 @@ public class KycServiceImpl implements KycService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId.toString()));
 
-        if (user.getMerchantId() != null) {
-            return merchantRepository.findById(user.getMerchantId())
+        if (user.getCustomerId() != null) {
+            return customerRepository.findById(user.getCustomerId())
                     .map(m -> m.getKycStatus().name())
                     .orElse("PENDING");
         }
@@ -139,13 +139,13 @@ public class KycServiceImpl implements KycService {
 
         if (status != null && !status.isEmpty()) {
             KycStatus kycStatus = KycStatus.valueOf(status);
-            Page<Merchant> merchants = merchantRepository.findByKycStatus(kycStatus, pageable);
+            Page<Customer> merchants = customerRepository.findByKycStatus(kycStatus, pageable);
             merchants.getContent().forEach(m -> results.add(mapMerchant(m)));
 
             Page<Distributor> distributors = distributorRepository.findByKycStatus(kycStatus, pageable);
             distributors.getContent().forEach(d -> results.add(mapDistributor(d)));
         } else {
-            Page<Merchant> merchants = merchantRepository.findByKycStatusNot(KycStatus.PENDING, pageable);
+            Page<Customer> merchants = customerRepository.findByKycStatusNot(KycStatus.PENDING, pageable);
             merchants.getContent().forEach(m -> results.add(mapMerchant(m)));
 
             Page<Distributor> distributors = distributorRepository.findByKycStatusNot(KycStatus.PENDING, pageable);
@@ -161,11 +161,11 @@ public class KycServiceImpl implements KycService {
     @Transactional
     public void approveKyc(UUID entityId, String type) {
         if ("MERCHANT".equalsIgnoreCase(type)) {
-            Merchant merchant = merchantRepository.findById(entityId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", entityId.toString()));
+            Customer merchant = customerRepository.findById(entityId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", entityId.toString()));
             merchant.setKycStatus(KycStatus.APPROVED);
-            merchantRepository.save(merchant);
-            log.info("Merchant KYC approved: {}", entityId);
+            customerRepository.save(merchant);
+            log.info("Customer KYC approved: {}", entityId);
         } else if ("DISTRIBUTOR".equalsIgnoreCase(type)) {
             Distributor distributor = distributorRepository.findById(entityId)
                     .orElseThrow(() -> new ResourceNotFoundException("Distributor", "id", entityId.toString()));
@@ -181,14 +181,14 @@ public class KycServiceImpl implements KycService {
     @Transactional
     public void rejectKyc(UUID entityId, String type, String reason) {
         if ("MERCHANT".equalsIgnoreCase(type)) {
-            Merchant merchant = merchantRepository.findById(entityId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", entityId.toString()));
+            Customer merchant = customerRepository.findById(entityId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", entityId.toString()));
             merchant.setKycStatus(KycStatus.REJECTED);
             Map<String, Object> docs = merchant.getKycDocuments() != null ? merchant.getKycDocuments() : new HashMap<>();
             docs.put("rejectionReason", reason);
             merchant.setKycDocuments(docs);
-            merchantRepository.save(merchant);
-            log.info("Merchant KYC rejected: {}, reason: {}", entityId, reason);
+            customerRepository.save(merchant);
+            log.info("Customer KYC rejected: {}, reason: {}", entityId, reason);
         } else if ("DISTRIBUTOR".equalsIgnoreCase(type)) {
             Distributor distributor = distributorRepository.findById(entityId)
                     .orElseThrow(() -> new ResourceNotFoundException("Distributor", "id", entityId.toString()));
@@ -203,7 +203,7 @@ public class KycServiceImpl implements KycService {
         }
     }
 
-    private KycApplicationResponse mapMerchant(Merchant m) {
+    private KycApplicationResponse mapMerchant(Customer m) {
         Map<String, Object> docs = m.getKycDocuments() != null ? m.getKycDocuments() : new HashMap<>();
         return KycApplicationResponse.builder()
                 .id(m.getId())

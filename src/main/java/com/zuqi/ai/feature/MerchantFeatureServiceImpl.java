@@ -1,11 +1,14 @@
 package com.zuqi.ai.feature;
 
 import com.zuqi.domain.credit.CreditLimit;
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.order.Order;
 import com.zuqi.domain.order.OrderStatus;
 import com.zuqi.domain.payment.Payment;
-import com.zuqi.repository.*;
+import com.zuqi.repository.CustomerRepository;
+import com.zuqi.repository.CreditLimitRepository;
+import com.zuqi.repository.OrderRepository;
+import com.zuqi.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
@@ -25,7 +28,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class MerchantFeatureServiceImpl implements MerchantFeatureService {
 
-    private final MerchantRepository merchantRepository;
+    private final CustomerRepository customerRepository;
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
     private final CreditLimitRepository creditLimitRepository;
@@ -42,8 +45,8 @@ public class MerchantFeatureServiceImpl implements MerchantFeatureService {
     public MerchantFeatures computeFeatures(UUID merchantId, LocalDateTime asOfDate) {
         log.debug("Computing merchant features for {} as of {}", merchantId, asOfDate);
 
-        Merchant merchant = merchantRepository.findById(merchantId)
-                .orElseThrow(() -> new IllegalArgumentException("Merchant not found: " + merchantId));
+        Customer merchant = customerRepository.findById(merchantId)
+                .orElseThrow(() -> new IllegalArgumentException("Customer not found: " + merchantId));
 
         // Fetch all data needed for feature computation
         List<Order> orders = orderRepository.findByMerchantIdAndCreatedAtBefore(merchantId, asOfDate);
@@ -340,21 +343,20 @@ public class MerchantFeatureServiceImpl implements MerchantFeatureService {
     // Profile Feature Computations
     // ===========================
 
-    private String computeBusinessCategoryEncoded(Merchant merchant) {
-        return merchant.getCategory() != null ? merchant.getCategory().getName() : "UNKNOWN";
+    private String computeBusinessCategoryEncoded(Customer customer) {
+        return customer.getCategory() != null ? customer.getCategory().getName() : "UNKNOWN";
     }
 
-    private Integer computeRelationshipTenureDays(Merchant merchant, LocalDateTime asOfDate) {
-        return (int) ChronoUnit.DAYS.between(merchant.getCreatedAt(), asOfDate);
+    private Integer computeRelationshipTenureDays(Customer customer, LocalDateTime asOfDate) {
+        return (int) ChronoUnit.DAYS.between(customer.getCreatedAt(), asOfDate);
     }
 
-    private String computeVerificationStatus(Merchant merchant) {
-        // TODO: Add verification status to Merchant entity
-        return "UNVERIFIED";
+    private String computeVerificationStatus(Customer customer) {
+        return customer.getKycStatus() != null ? customer.getKycStatus().name() : "PENDING";
     }
 
-    private String computeGeographicCluster(Merchant merchant) {
-        return merchant.getCity() != null ? merchant.getCity() : "UNKNOWN";
+    private String computeGeographicCluster(Customer customer) {
+        return customer.getCity() != null ? customer.getCity() : "UNKNOWN";
     }
 
     // ===========================

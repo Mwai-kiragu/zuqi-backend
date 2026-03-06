@@ -1,7 +1,7 @@
 package com.zuqi.domain.invoice;
 
 import com.zuqi.domain.distributor.Distributor;
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.order.Order;
 import jakarta.persistence.*;
 import lombok.*;
@@ -52,7 +52,7 @@ public class Invoice {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "merchant_id", nullable = false)
-    private Merchant merchant;
+    private Customer merchant;
 
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;

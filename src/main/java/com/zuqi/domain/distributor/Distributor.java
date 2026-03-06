@@ -8,7 +8,8 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import com.zuqi.domain.merchant.KycStatus;
+import com.zuqi.domain.customer.KycStatus;
+import com.zuqi.domain.merchant.Merchant;
 import com.zuqi.domain.user.User;
 
 import java.time.LocalDateTime;
@@ -57,6 +58,10 @@ public class Distributor {
     @Column(nullable = false)
     @Builder.Default
     private boolean active = true;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "merchant_id")
+    private Merchant merchant;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")

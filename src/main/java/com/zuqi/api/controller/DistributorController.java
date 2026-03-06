@@ -4,12 +4,17 @@ import com.zuqi.api.dto.ApiResponse;
 import com.zuqi.api.dto.distributor.DistributorRequest;
 import com.zuqi.api.dto.distributor.DistributorResponse;
 import com.zuqi.domain.distributor.Distributor;
+import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.user.RoleName;
+import com.zuqi.domain.user.User;
 import com.zuqi.repository.DistributorRepository;
+import com.zuqi.repository.MerchantRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -22,16 +27,28 @@ import java.util.UUID;
 public class DistributorController {
 
     private final DistributorRepository distributorRepository;
+    private final MerchantRepository merchantRepository;
 
     @GetMapping
-    @Operation(summary = "Get all active distributors")
-    public ResponseEntity<ApiResponse<List<DistributorResponse>>> getAllDistributors() {
-        List<DistributorResponse> distributors = distributorRepository.findByActiveTrue()
-                .stream()
+    @Operation(summary = "Get all active distributors (MERCHANT_ADMIN sees only their own)")
+    public ResponseEntity<ApiResponse<List<DistributorResponse>>> getAllDistributors(
+            @AuthenticationPrincipal User currentUser) {
+        List<Distributor> distributors;
+
+        boolean isMerchantAdmin = currentUser != null && currentUser.getRoles().stream()
+                .anyMatch(r -> r.isRole(RoleName.MERCHANT_ADMIN));
+
+        if (isMerchantAdmin && currentUser.getMerchantId() != null) {
+            distributors = distributorRepository.findByMerchantIdAndActiveTrue(currentUser.getMerchantId());
+        } else {
+            distributors = distributorRepository.findByActiveTrue();
+        }
+
+        List<DistributorResponse> response = distributors.stream()
                 .map(DistributorResponse::fromEntity)
                 .toList();
 
-        return ResponseEntity.ok(ApiResponse.success("Distributors retrieved successfully", distributors));
+        return ResponseEntity.ok(ApiResponse.success("Distributors retrieved successfully", response));
     }
 
     @GetMapping("/{id}")
@@ -45,13 +62,22 @@ public class DistributorController {
     }
 
     @PostMapping
-    @Operation(summary = "Create a new distributor")
+    @Operation(summary = "Create a new distributor (MERCHANT_ADMIN auto-links to their merchant)")
     public ResponseEntity<ApiResponse<DistributorResponse>> createDistributor(
-            @Valid @RequestBody DistributorRequest request) {
+            @Valid @RequestBody DistributorRequest request,
+            @AuthenticationPrincipal User currentUser) {
 
         if (distributorRepository.existsByName(request.getName())) {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("Distributor with this name already exists"));
+        }
+
+        // Resolve merchant: MERCHANT_ADMIN links to their own merchant
+        Merchant merchant = null;
+        boolean isMerchantAdmin = currentUser != null && currentUser.getRoles().stream()
+                .anyMatch(r -> r.isRole(RoleName.MERCHANT_ADMIN));
+        if (isMerchantAdmin && currentUser.getMerchantId() != null) {
+            merchant = merchantRepository.findById(currentUser.getMerchantId()).orElse(null);
         }
 
         Distributor distributor = Distributor.builder()
@@ -62,6 +88,7 @@ public class DistributorController {
                 .address(request.getAddress())
                 .city(request.getCity())
                 .country(request.getCountry() != null ? request.getCountry() : "Kenya")
+                .merchant(merchant)
                 .active(true)
                 .build();
 

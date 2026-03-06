@@ -11,6 +11,7 @@ import javax.crypto.SecretKey;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.function.Function;
 
 @Service
@@ -61,6 +62,23 @@ public class JwtService {
 
     public long getRefreshTokenExpiration() {
         return refreshTokenExpiration;
+    }
+
+    public String generateTokenWithBranch(UserDetails userDetails, UUID branchId, boolean isHeadquarters) {
+        Map<String, Object> extraClaims = new HashMap<>();
+        extraClaims.put("branchId", branchId.toString());
+        extraClaims.put("isHq", isHeadquarters);
+        return buildToken(extraClaims, userDetails, accessTokenExpiration);
+    }
+
+    public UUID extractBranchId(String token) {
+        String branchIdStr = extractClaim(token, claims -> claims.get("branchId", String.class));
+        return branchIdStr != null ? UUID.fromString(branchIdStr) : null;
+    }
+
+    public boolean extractIsHeadquarters(String token) {
+        Boolean isHq = extractClaim(token, claims -> claims.get("isHq", Boolean.class));
+        return Boolean.TRUE.equals(isHq);
     }
 
     private Date extractExpiration(String token) {

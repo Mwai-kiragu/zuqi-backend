@@ -6,6 +6,9 @@ import com.zuqi.api.dto.user.ResetPasswordRequest;
 import com.zuqi.api.dto.user.UpdateProfileRequest;
 import com.zuqi.api.dto.user.UpdateUserRequest;
 import com.zuqi.api.dto.user.UserResponse;
+import com.zuqi.domain.branch.BranchUser;
+import com.zuqi.domain.branch.BranchUserStatus;
+import com.zuqi.domain.branch.DistributorBranch;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.merchant.Merchant;
 import com.zuqi.domain.user.Role;
@@ -14,6 +17,8 @@ import com.zuqi.domain.user.User;
 import com.zuqi.exception.DuplicateResourceException;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
+import com.zuqi.repository.BranchUserRepository;
+import com.zuqi.repository.DistributorBranchRepository;
 import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.MerchantRepository;
 import com.zuqi.repository.RoleRepository;
@@ -46,6 +51,8 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final SecurityUtils securityUtils;
     private final EmailService emailService;
+    private final DistributorBranchRepository distributorBranchRepository;
+    private final BranchUserRepository branchUserRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -184,7 +191,7 @@ public class UserServiceImpl implements UserService {
         }
 
         // Validate distributor exists if provided
-        if (finalDistributorId != null && roleName != RoleName.SUPER_ADMIN && roleName != RoleName.MERCHANT) {
+        if (finalDistributorId != null && roleName != RoleName.SUPER_ADMIN && roleName != RoleName.CUSTOMER) {
             distributorRepository.findById(finalDistributorId)
                     .orElseThrow(() -> new ResourceNotFoundException("Distributor", "id", finalDistributorId.toString()));
         }
@@ -223,6 +230,32 @@ public class UserServiceImpl implements UserService {
 
         User savedUser = userRepository.save(user);
         log.info("User created successfully with ID: {}", savedUser.getId());
+
+        // Assign user to branch (specified or default HQ branch)
+        if (finalDistributorId != null) {
+            DistributorBranch targetBranch = null;
+            if (request.getBranchId() != null) {
+                targetBranch = distributorBranchRepository.findById(request.getBranchId()).orElse(null);
+            }
+            if (targetBranch == null) {
+                targetBranch = distributorBranchRepository
+                        .findByDistributorIdAndHeadquartersTrue(finalDistributorId)
+                        .orElse(null);
+            }
+            if (targetBranch != null && !branchUserRepository.existsByBranchIdAndUserId(targetBranch.getId(), savedUser.getId())) {
+                String effectiveBranchRole = (request.getBranchRole() != null && !request.getBranchRole().isBlank())
+                        ? request.getBranchRole()
+                        : request.getRole();
+                BranchUser branchUser = BranchUser.builder()
+                        .branch(targetBranch)
+                        .user(savedUser)
+                        .role(effectiveBranchRole)
+                        .status(BranchUserStatus.ACTIVE)
+                        .build();
+                branchUserRepository.save(branchUser);
+                log.info("Assigned user {} to branch {}", savedUser.getId(), targetBranch.getId());
+            }
+        }
 
         // Send welcome email with temporary password
         if (sendWelcomeEmail) {
@@ -349,6 +382,7 @@ public class UserServiceImpl implements UserService {
 
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
         user.setPasswordChangedAt(java.time.LocalDateTime.now());
+        user.setMustChangePassword(false);
         userRepository.save(user);
 
         // Send password changed notification email
@@ -457,7 +491,7 @@ public class UserServiceImpl implements UserService {
 
         if (user.getMerchantId() != null) {
             merchantName = merchantRepository.findById(user.getMerchantId())
-                    .map(Merchant::getBusinessName)
+                    .map(Merchant::getName)
                     .orElse(null);
         }
 
