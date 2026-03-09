@@ -8,11 +8,15 @@ import com.zuqi.domain.product.Product;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
+import com.zuqi.event.PosSaleCompletedEvent;
 import com.zuqi.repository.*;
+import com.zuqi.service.InvoiceService;
+import com.zuqi.service.PaymentService;
 import com.zuqi.service.PosService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -45,6 +49,9 @@ public class PosServiceImpl implements PosService {
     private final WarehouseRepository warehouseRepository;
     private final UserRepository userRepository;
     private final SecurityUtils securityUtils;
+    private final InvoiceService invoiceService;
+    private final PaymentService paymentService;
+    private final ApplicationEventPublisher eventPublisher;
 
     private static final AtomicInteger receiptCounter = new AtomicInteger(1);
 
@@ -194,7 +201,9 @@ public class PosServiceImpl implements PosService {
         PosSale sale = getSaleEntity(saleId);
         validateSaleDraft(sale);
 
-        // Clear existing items
+        Warehouse warehouse = resolveWarehouse(sale.getBranch().getId(), sale.getBranch().getDistributor().getId());
+
+        // Clear existing items (stock already deducted — not restored until cancellation)
         sale.getItems().clear();
 
         BigDecimal subtotal = BigDecimal.ZERO;
@@ -221,12 +230,26 @@ public class PosServiceImpl implements PosService {
 
             sale.getItems().add(item);
             subtotal = subtotal.add(lineTotal);
+
+            // Deduct stock immediately
+            if (warehouse != null) {
+                adjustStock(warehouse, product, itemReq.getQuantity(), false);
+            }
         }
 
         sale.setSubtotal(subtotal);
         sale.setTotalAmount(subtotal.subtract(sale.getDiscountAmount()).add(sale.getTaxAmount()));
 
-        return mapToSaleResponse(saleRepository.save(sale));
+        PosSale savedSale = saleRepository.save(sale);
+
+        // Generate/update invoice immediately (SENT status until completed)
+        try {
+            invoiceService.createInvoiceFromPosSale(savedSale.getId());
+        } catch (Exception e) {
+            log.error("Failed to generate invoice for sale {}: {}", saleId, e.getMessage());
+        }
+
+        return mapToSaleResponse(savedSale);
     }
 
     @Override
@@ -265,48 +288,24 @@ public class PosServiceImpl implements PosService {
         if (sale.getItems().isEmpty()) {
             throw new ValidationException("Cannot complete a sale with no items");
         }
-        if (sale.getAmountPaid().compareTo(sale.getTotalAmount()) < 0) {
-            throw new ValidationException("Payment is insufficient");
-        }
-
-        // Deduct stock from warehouse
-        if (warehouseId != null) {
-            Warehouse warehouse = warehouseRepository.findById(warehouseId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Warehouse", "id", warehouseId));
-
-            User cashier = sale.getCashier();
-
-            for (PosSaleItem item : sale.getItems()) {
-                Stock stock = stockRepository.findByWarehouseIdAndProductId(warehouseId, item.getProduct().getId())
-                        .orElseThrow(() -> new ValidationException(
-                                "No stock found for product: " + item.getProductName()));
-
-                if (stock.getAvailableQuantity().compareTo(item.getQuantity()) < 0) {
-                    throw new ValidationException("Insufficient stock for product: " + item.getProductName());
-                }
-
-                stock.setQuantity(stock.getQuantity().subtract(item.getQuantity()));
-                stockRepository.save(stock);
-
-                StockMovement movement = StockMovement.builder()
-                        .warehouse(warehouse)
-                        .product(item.getProduct())
-                        .movementType(StockMovement.MovementType.OUT)
-                        .quantity(item.getQuantity())
-                        .referenceType("POS_SALE")
-                        .referenceId(sale.getId())
-                        .notes("POS sale: " + (sale.getReceiptNumber() != null ? sale.getReceiptNumber() : saleId))
-                        .createdBy(cashier)
-                        .build();
-                stockMovementRepository.save(movement);
-            }
-        }
+        // Allow underpayment (credit sales) — outstanding balance is tracked via invoice
+        // Stock already deducted when items were set — nothing to do here
 
         sale.setStatus(PosSaleStatus.COMPLETED);
         sale.setReceiptNumber(generateReceiptNumber());
         sale.setCompletedAt(LocalDateTime.now());
 
-        return mapToSaleResponse(saleRepository.save(sale));
+        PosSale savedSale = saleRepository.save(sale);
+
+        // Record payment transactions (one Payment record per tender type)
+        paymentService.createPaymentsForPosSale(savedSale);
+
+        // Publish event — invoice is created AFTER this transaction commits
+        // (TransactionalEventListener AFTER_COMMIT), keeping invoice failure
+        // fully isolated from the sale completion.
+        eventPublisher.publishEvent(new PosSaleCompletedEvent(savedSale.getId()));
+
+        return mapToSaleResponse(savedSale);
     }
 
     @Override
@@ -318,6 +317,16 @@ public class PosServiceImpl implements PosService {
         }
         if (sale.getStatus() == PosSaleStatus.CANCELLED) {
             throw new ValidationException("Sale is already cancelled");
+        }
+
+        // Restore stock for all items that were deducted when items were set
+        if (!sale.getItems().isEmpty()) {
+            Warehouse warehouse = resolveWarehouse(sale.getBranch().getId(), sale.getBranch().getDistributor().getId());
+            if (warehouse != null) {
+                for (PosSaleItem item : sale.getItems()) {
+                    adjustStock(warehouse, item.getProduct(), item.getQuantity(), true);
+                }
+            }
         }
 
         sale.setStatus(PosSaleStatus.CANCELLED);
@@ -414,6 +423,46 @@ public class PosServiceImpl implements PosService {
     }
 
     // ---- Helpers ----
+
+    /** Returns the first active warehouse for the branch, falling back to distributor warehouse. */
+    private Warehouse resolveWarehouse(UUID branchId, UUID distributorId) {
+        List<Warehouse> branchWarehouses = warehouseRepository.findByBranchIdAndActiveTrue(branchId);
+        if (!branchWarehouses.isEmpty()) return branchWarehouses.get(0);
+
+        List<Warehouse> distributorWarehouses = warehouseRepository.findByDistributorIdAndActiveTrue(distributorId);
+        if (!distributorWarehouses.isEmpty()) return distributorWarehouses.get(0);
+
+        log.warn("No active warehouse found for branch {} / distributor {} — stock not adjusted", branchId, distributorId);
+        return null;
+    }
+
+    /**
+     * Adjusts stock for a product in a warehouse.
+     * @param restore true = add back (cancel), false = deduct (sale)
+     */
+    private void adjustStock(Warehouse warehouse, Product product, BigDecimal quantity, boolean restore) {
+        Stock stock = stockRepository.findByWarehouseIdAndProductId(warehouse.getId(), product.getId())
+                .orElse(null);
+
+        if (stock == null) {
+            stock = Stock.builder()
+                    .warehouse(warehouse)
+                    .product(product)
+                    .quantity(BigDecimal.ZERO)
+                    .reservedQuantity(BigDecimal.ZERO)
+                    .build();
+        }
+
+        if (restore) {
+            stock.setQuantity(stock.getQuantity().add(quantity));
+            log.info("Restored {} units of '{}' to warehouse {}", quantity, product.getName(), warehouse.getId());
+        } else {
+            stock.setQuantity(stock.getQuantity().subtract(quantity));
+            log.info("Deducted {} units of '{}' from warehouse {}", quantity, product.getName(), warehouse.getId());
+        }
+
+        stockRepository.save(stock);
+    }
 
     private PosSale getSaleEntity(UUID saleId) {
         return saleRepository.findById(saleId)

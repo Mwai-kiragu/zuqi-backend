@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -30,11 +31,18 @@ public class ProductResponse {
     private String imageUrl;
     private String barcode;
     private boolean active;
+    private boolean allBranches;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private String deactivationReason;
     private LocalDateTime deactivatedAt;
     private String deactivatedByName;
+
+    // Aggregated stock across all warehouses (null = not requested)
+    private BigDecimal totalStock;
+
+    // Per-branch price overrides / availability (null = not requested)
+    private List<ProductBranchPriceResponse> branchPrices;
 
     public static ProductResponse fromEntity(Product product) {
         return ProductResponse.builder()
@@ -52,6 +60,7 @@ public class ProductResponse {
                 .imageUrl(product.getImageUrl())
                 .barcode(product.getBarcode())
                 .active(product.isActive())
+                .allBranches(product.isAllBranches())
                 .createdAt(product.getCreatedAt())
                 .updatedAt(product.getUpdatedAt())
                 .deactivationReason(product.getDeactivationReason())

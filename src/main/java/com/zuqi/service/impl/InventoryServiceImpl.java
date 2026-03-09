@@ -9,6 +9,7 @@ import com.zuqi.domain.product.Product;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
+import com.zuqi.domain.branch.DistributorBranch;
 import com.zuqi.repository.*;
 import com.zuqi.ai.event.StockAdjustedEvent;
 import com.zuqi.ai.feature.FeatureStore;
@@ -39,6 +40,7 @@ public class InventoryServiceImpl implements InventoryService {
     private final WarehouseRepository warehouseRepository;
     private final ProductRepository productRepository;
     private final DistributorRepository distributorRepository;
+    private final DistributorBranchRepository branchRepository;
     private final UserRepository userRepository;
     private final SecurityUtils securityUtils;
     private final ApplicationEventPublisher eventPublisher;
@@ -196,6 +198,13 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     @Override
+    public List<WarehouseResponse> getWarehousesByBranch(UUID branchId) {
+        return warehouseRepository.findByBranchIdAndActiveTrue(branchId).stream()
+                .map(this::mapToWarehouseResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public Page<WarehouseResponse> getWarehousesByDistributor(UUID distributorId, Pageable pageable) {
         // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
@@ -263,6 +272,13 @@ public class InventoryServiceImpl implements InventoryService {
                 .active(request.isActive())
                 .build();
 
+        // Set branch if provided
+        if (request.getBranchId() != null) {
+            DistributorBranch branch = branchRepository.findById(request.getBranchId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Branch", "id", request.getBranchId()));
+            warehouse.setBranch(branch);
+        }
+
         // Set manager if provided
         if (request.getManagerId() != null) {
             User manager = userRepository.findById(request.getManagerId())
@@ -295,6 +311,15 @@ public class InventoryServiceImpl implements InventoryService {
         warehouse.setLatitude(request.getLatitude());
         warehouse.setLongitude(request.getLongitude());
         warehouse.setActive(request.isActive());
+
+        // Update branch if provided
+        if (request.getBranchId() != null) {
+            DistributorBranch branch = branchRepository.findById(request.getBranchId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Branch", "id", request.getBranchId()));
+            warehouse.setBranch(branch);
+        } else {
+            warehouse.setBranch(null);
+        }
 
         // Update manager if provided
         if (request.getManagerId() != null) {
@@ -414,6 +439,8 @@ public class InventoryServiceImpl implements InventoryService {
                 .distributorName(warehouse.getDistributor().getName())
                 .managerId(warehouse.getManager() != null ? warehouse.getManager().getId() : null)
                 .managerName(warehouse.getManager() != null ? warehouse.getManager().getFullName() : null)
+                .branchId(warehouse.getBranch() != null ? warehouse.getBranch().getId() : null)
+                .branchName(warehouse.getBranch() != null ? warehouse.getBranch().getName() : null)
                 .active(warehouse.isActive())
                 .createdAt(warehouse.getCreatedAt())
                 .updatedAt(warehouse.getUpdatedAt())

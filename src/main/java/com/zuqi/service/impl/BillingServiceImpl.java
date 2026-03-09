@@ -80,11 +80,17 @@ public class BillingServiceImpl implements BillingService {
 
     @Override
     @Transactional
-    public SubscriptionResponse update(UUID subscriptionId, AssignSubscriptionRequest request, User currentUser) {
-        DistributorSubscription sub = subscriptionRepository.findById(subscriptionId)
-                .orElseThrow(() -> new RuntimeException("Subscription not found"));
+    public SubscriptionResponse update(UUID distributorId, AssignSubscriptionRequest request, User currentUser) {
+        Distributor distributor = distributorRepository.findById(distributorId)
+                .orElseThrow(() -> new RuntimeException("Distributor not found: " + distributorId));
+
+        DistributorSubscription sub = subscriptionRepository.findByDistributorId(distributorId)
+                .orElse(DistributorSubscription.builder()
+                        .distributor(distributor)
+                        .build());
 
         applyRequest(sub, request, currentUser);
+        sub.setCreatedBy(sub.getId() == null ? currentUser : sub.getCreatedBy());
         DistributorSubscription saved = subscriptionRepository.save(sub);
         return SubscriptionResponse.fromEntity(saved);
     }
@@ -215,10 +221,20 @@ public class BillingServiceImpl implements BillingService {
     private void applyRequest(DistributorSubscription sub, AssignSubscriptionRequest req, User actor) {
         sub.setPackageType(req.getPackageType());
         sub.setActive(true);
-        sub.setStartDate(LocalDate.now());
-        sub.setEndDate(req.getDurationDays() != null
-                ? LocalDate.now().plusDays(req.getDurationDays())
-                : null);
+
+        // Use explicit startDate if provided, otherwise default to today
+        LocalDate start = req.getStartDate() != null ? req.getStartDate() : LocalDate.now();
+        sub.setStartDate(start);
+
+        // Use explicit endDate > durationDays > null (unlimited)
+        if (req.getEndDate() != null) {
+            sub.setEndDate(req.getEndDate());
+        } else if (req.getDurationDays() != null) {
+            sub.setEndDate(start.plusDays(req.getDurationDays()));
+        } else {
+            sub.setEndDate(null);
+        }
+
         sub.setNotes(req.getNotes());
         sub.setUpdatedBy(actor);
 

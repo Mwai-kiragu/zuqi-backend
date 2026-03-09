@@ -3,6 +3,7 @@ package com.zuqi.domain.payment;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.order.Order;
+import com.zuqi.domain.pos.PosSale;
 import com.zuqi.domain.user.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -40,12 +41,20 @@ public class Payment {
     @Column(name = "payment_number", nullable = false, unique = true, length = 50)
     private String paymentNumber;
 
+    @Column(name = "source_type", nullable = false, length = 20)
+    @Builder.Default
+    private String sourceType = "MANUAL";
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id")
     private Order order;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "merchant_id", nullable = false)
+    @JoinColumn(name = "pos_sale_id")
+    private PosSale posSale;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "merchant_id")
     private Customer merchant;
 
     @ManyToOne(fetch = FetchType.LAZY)

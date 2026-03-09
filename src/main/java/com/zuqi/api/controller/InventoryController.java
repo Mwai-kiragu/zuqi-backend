@@ -88,10 +88,13 @@ public class InventoryController {
     }
 
     @GetMapping("/warehouses")
-    @Operation(summary = "List warehouses", description = "Get all active warehouses for a distributor")
+    @Operation(summary = "List warehouses", description = "Get all active warehouses for a distributor or branch")
     public ResponseEntity<ApiResponse<List<WarehouseResponse>>> getWarehouses(
-            @Parameter(description = "Distributor ID (optional for admins)") @RequestParam(required = false) UUID distributorId) {
-        List<WarehouseResponse> warehouses = inventoryService.getWarehousesByDistributor(distributorId);
+            @Parameter(description = "Distributor ID (optional for admins)") @RequestParam(required = false) UUID distributorId,
+            @Parameter(description = "Branch ID filter") @RequestParam(required = false) UUID branchId) {
+        List<WarehouseResponse> warehouses = branchId != null
+                ? inventoryService.getWarehousesByBranch(branchId)
+                : inventoryService.getWarehousesByDistributor(distributorId);
         return ResponseEntity.ok(ApiResponse.success(warehouses));
     }
 

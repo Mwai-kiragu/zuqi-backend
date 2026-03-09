@@ -10,6 +10,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Data
@@ -46,4 +48,10 @@ public class ProductRequest {
 
     @Size(max = 100, message = "Barcode must not exceed 100 characters")
     private String barcode;
+
+    @Builder.Default
+    private boolean allBranches = true;
+
+    @Builder.Default
+    private List<ProductBranchPriceRequest> branchPrices = new ArrayList<>();
 }

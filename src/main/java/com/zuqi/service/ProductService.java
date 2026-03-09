@@ -51,4 +51,6 @@ public interface ProductService {
     void deactivateCategory(Long id, String reason, User currentUser);
 
     void activateCategory(Long id);
+
+    Page<ProductResponse> getProductsForBranch(UUID distributorId, UUID branchId, String search, Pageable pageable);
 }

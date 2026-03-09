@@ -57,4 +57,32 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
      * Find all active products for a distributor (for batch operations).
      */
     List<Product> findByDistributorIdAndActiveTrue(UUID distributorId);
+
+    /**
+     * Products available for a specific branch:
+     * allBranches=true OR has an active entry in product_branch_prices for that branch.
+     */
+    @Query("SELECT p FROM Product p WHERE p.distributor.id = :distributorId AND p.active = true " +
+            "AND (p.allBranches = true OR EXISTS (" +
+            "  SELECT pbp FROM ProductBranchPrice pbp " +
+            "  WHERE pbp.product = p AND pbp.branch.id = :branchId AND pbp.active = true))")
+    Page<Product> findAvailableByDistributorAndBranch(
+            @Param("distributorId") UUID distributorId,
+            @Param("branchId") UUID branchId,
+            Pageable pageable);
+
+    /**
+     * Same as above with name/SKU search filter.
+     */
+    @Query("SELECT p FROM Product p WHERE p.distributor.id = :distributorId AND p.active = true " +
+            "AND (LOWER(p.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+            "     LOWER(p.sku)  LIKE LOWER(CONCAT('%', :searchTerm, '%'))) " +
+            "AND (p.allBranches = true OR EXISTS (" +
+            "  SELECT pbp FROM ProductBranchPrice pbp " +
+            "  WHERE pbp.product = p AND pbp.branch.id = :branchId AND pbp.active = true))")
+    Page<Product> searchAvailableByDistributorAndBranch(
+            @Param("distributorId") UUID distributorId,
+            @Param("branchId") UUID branchId,
+            @Param("searchTerm") String searchTerm,
+            Pageable pageable);
 }

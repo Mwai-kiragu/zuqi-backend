@@ -33,6 +33,7 @@ public class WarehouseRequest {
     @NotNull(message = "Distributor ID is required")
     private UUID distributorId;
 
+    private UUID branchId;
     private UUID managerId;
     private boolean active = true;
 }

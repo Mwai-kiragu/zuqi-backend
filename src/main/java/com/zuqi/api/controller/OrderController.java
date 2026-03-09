@@ -85,7 +85,7 @@ public class OrderController {
 
     @PostMapping
     @Operation(summary = "Create order", description = "Creates a new order")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP', 'MERCHANT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP', 'MERCHANT', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<OrderResponse>> createOrder(
             @Valid @RequestBody OrderRequest request,
             @AuthenticationPrincipal User currentUser) {
@@ -97,7 +97,7 @@ public class OrderController {
 
     @PutMapping("/{id}")
     @Operation(summary = "Update order", description = "Updates an existing order (only pending orders)")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<OrderResponse>> updateOrder(
             @Parameter(description = "Order ID") @PathVariable UUID id,
             @Valid @RequestBody OrderRequest request) {
@@ -118,7 +118,7 @@ public class OrderController {
 
     @PostMapping("/{id}/cancel")
     @Operation(summary = "Cancel order", description = "Cancels an order")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<OrderResponse>> cancelOrder(
             @Parameter(description = "Order ID") @PathVariable UUID id,
             @RequestParam(required = false) String reason,

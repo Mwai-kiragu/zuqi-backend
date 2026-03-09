@@ -3,6 +3,7 @@ package com.zuqi.domain.invoice;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.order.Order;
+import com.zuqi.domain.pos.PosSale;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -42,16 +43,24 @@ public class Invoice {
     @Column(name = "invoice_number", nullable = false, unique = true, length = 50)
     private String invoiceNumber;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "order_id", nullable = false)
+    @OneToOne(fetch = FetchType.LAZY, optional = true)
+    @JoinColumn(name = "order_id", nullable = true)
     private Order order;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pos_sale_id", nullable = true)
+    private PosSale posOrder;
+
+    @Column(name = "source_type", nullable = false, length = 20)
+    @Builder.Default
+    private String sourceType = "ORDER";
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "distributor_id", nullable = false)
     private Distributor distributor;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "merchant_id", nullable = false)
+    @JoinColumn(name = "merchant_id", nullable = true)
     private Customer merchant;
 
     @Column(nullable = false, precision = 15, scale = 2)

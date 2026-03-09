@@ -15,6 +15,10 @@ public interface InvoiceService {
 
     InvoiceResponse createInvoiceFromOrder(Order order);
 
+    InvoiceResponse createInvoiceFromPosSale(UUID saleId);
+
+    InvoiceResponse getInvoiceBySaleId(UUID saleId);
+
     InvoiceResponse getInvoiceById(UUID id);
 
     InvoiceResponse getInvoiceByNumber(String invoiceNumber);
@@ -41,7 +45,7 @@ public interface InvoiceService {
 
     InvoiceResponse markAsViewed(UUID invoiceId);
 
-    InvoiceResponse recordPayment(UUID invoiceId, BigDecimal amount);
+    InvoiceResponse recordPayment(UUID invoiceId, BigDecimal amount, Long paymentMethodId, String externalReference);
 
     InvoiceResponse cancelInvoice(UUID invoiceId);
 

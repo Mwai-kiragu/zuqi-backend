@@ -21,6 +21,8 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
 
     Optional<Invoice> findByOrderId(UUID orderId);
 
+    Optional<Invoice> findByPosOrderId(UUID posOrderId);
+
     Page<Invoice> findByDistributorId(UUID distributorId, Pageable pageable);
 
     Page<Invoice> findByMerchantId(UUID merchantId, Pageable pageable);

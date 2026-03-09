@@ -84,7 +84,7 @@ public class PaymentController {
 
     @PostMapping
     @Operation(summary = "Create payment", description = "Records a new payment")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE', 'MERCHANT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'FINANCE', 'MERCHANT', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<PaymentResponse>> createPayment(
             @Valid @RequestBody PaymentRequest request) {
         PaymentResponse payment = paymentService.createPayment(request);

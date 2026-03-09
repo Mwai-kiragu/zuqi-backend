@@ -66,32 +66,32 @@ public class CustomerController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<CustomerResponse>> createCustomer(@Valid @RequestBody CustomerRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Customer created successfully", customerService.createCustomer(request)));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'SALES_REP', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<CustomerResponse>> updateCustomer(@PathVariable UUID id, @Valid @RequestBody CustomerRequest request) {
         return ResponseEntity.ok(ApiResponse.success("Customer updated successfully", customerService.updateCustomer(id, request)));
     }
 
     @PatchMapping("/{id}/assign")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<CustomerResponse>> assignSalesRep(@PathVariable UUID id, @RequestParam UUID salesRepId) {
         return ResponseEntity.ok(ApiResponse.success("Sales rep assigned successfully", customerService.assignSalesRep(id, salesRepId)));
     }
 
     @PatchMapping("/{id}/verify")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<CustomerResponse>> verifyCustomer(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success("Customer verified successfully", customerService.verifyCustomer(id)));
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deactivateCustomer(@PathVariable UUID id,
             @Valid @RequestBody DeactivateRequest request,
             @AuthenticationPrincipal User currentUser) {
@@ -100,14 +100,14 @@ public class CustomerController {
     }
 
     @PostMapping("/{id}/activate")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> activateCustomer(@PathVariable UUID id) {
         customerService.activateCustomer(id);
         return ResponseEntity.ok(ApiResponse.success("Customer activated successfully"));
     }
 
     @PostMapping("/{id}/blacklist")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<CustomerResponse>> blacklistCustomer(@PathVariable UUID id,
             @Valid @RequestBody BlacklistRequest request,
             @AuthenticationPrincipal User currentUser) {
@@ -123,7 +123,7 @@ public class CustomerController {
     }
 
     @GetMapping("/blacklisted")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<Page<CustomerResponse>>> getBlacklistedCustomers(
             @PageableDefault(size = 20, sort = "businessName", direction = Sort.Direction.ASC) Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(customerService.getBlacklistedCustomers(pageable)));
@@ -140,21 +140,21 @@ public class CustomerController {
     }
 
     @PostMapping("/categories")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<CustomerCategoryResponse>> createCategory(@Valid @RequestBody CustomerCategoryRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Category created successfully", customerService.createCategory(request)));
     }
 
     @PutMapping("/categories/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<CustomerCategoryResponse>> updateCategory(@PathVariable Long id,
             @Valid @RequestBody CustomerCategoryRequest request) {
         return ResponseEntity.ok(ApiResponse.success("Category updated successfully", customerService.updateCategory(id, request)));
     }
 
     @DeleteMapping("/categories/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deleteCategory(@PathVariable Long id) {
         customerService.deleteCategory(id);
         return ResponseEntity.ok(ApiResponse.success("Category deleted successfully"));

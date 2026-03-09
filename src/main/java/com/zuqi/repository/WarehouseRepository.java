@@ -29,4 +29,6 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
     boolean existsByCodeAndDistributorId(String code, UUID distributorId);
 
     List<Warehouse> findByManagerIdAndActiveTrue(UUID managerId);
+
+    List<Warehouse> findByBranchIdAndActiveTrue(UUID branchId);
 }

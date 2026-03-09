@@ -68,6 +68,10 @@ public class Product {
 
     private String barcode;
 
+    @Column(name = "all_branches", nullable = false)
+    @Builder.Default
+    private boolean allBranches = true;
+
     @Column(nullable = false)
     @Builder.Default
     private boolean active = true;

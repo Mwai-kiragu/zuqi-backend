@@ -42,6 +42,9 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
 
     boolean existsByWarehouseIdAndProductId(UUID warehouseId, UUID productId);
 
+    @Query("SELECT s.product.id, COALESCE(SUM(s.quantity), 0) FROM Stock s WHERE s.product.id IN :productIds GROUP BY s.product.id")
+    List<Object[]> findTotalStockByProductIds(@Param("productIds") List<UUID> productIds);
+
     @Query("SELECT COALESCE(SUM(s.quantity), 0) FROM Stock s WHERE s.product.id = :productId")
     java.math.BigDecimal getTotalQuantityByProductId(@Param("productId") UUID productId);
 

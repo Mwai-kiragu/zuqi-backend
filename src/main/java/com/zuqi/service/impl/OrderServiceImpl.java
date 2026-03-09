@@ -2,6 +2,7 @@ package com.zuqi.service.impl;
 
 import com.zuqi.api.dto.order.*;
 import com.zuqi.domain.distributor.Distributor;
+import com.zuqi.domain.inventory.Stock;
 import com.zuqi.domain.inventory.Warehouse;
 import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.order.*;
@@ -44,6 +45,7 @@ public class OrderServiceImpl implements OrderService {
     private final ProductRepository productRepository;
     private final DistributorRepository distributorRepository;
     private final WarehouseRepository warehouseRepository;
+    private final StockRepository stockRepository;
     private final UserRepository userRepository;
     private final SecurityUtils securityUtils;
     private final InvoiceService invoiceService;
@@ -217,6 +219,11 @@ public class OrderServiceImpl implements OrderService {
         // Add initial status history
         addStatusHistory(order, OrderStatus.PENDING, "Order created", currentUser);
 
+        // Deduct stock immediately at order creation
+        if (order.getWarehouse() != null) {
+            deductStockForOrder(order);
+        }
+
         // Create and send invoice
         try {
             invoiceService.createInvoiceFromOrder(order);
@@ -325,6 +332,11 @@ public class OrderServiceImpl implements OrderService {
         order.setStatus(OrderStatus.CANCELLED);
         addStatusHistory(order, OrderStatus.CANCELLED, reason, currentUser);
 
+        // Restore stock when order is cancelled
+        if (order.getWarehouse() != null && order.getItems() != null) {
+            restoreStockForOrder(order);
+        }
+
         order = orderRepository.save(order);
         log.info("Order {} cancelled", order.getOrderNumber());
 
@@ -358,6 +370,37 @@ public class OrderServiceImpl implements OrderService {
     }
 
     // Helper methods
+
+    private void deductStockForOrder(Order order) {
+        for (OrderItem item : order.getItems()) {
+            Stock stock = stockRepository
+                    .findByWarehouseIdAndProductId(order.getWarehouse().getId(), item.getProduct().getId())
+                    .orElse(null);
+            if (stock == null) {
+                stock = Stock.builder()
+                        .warehouse(order.getWarehouse())
+                        .product(item.getProduct())
+                        .quantity(BigDecimal.ZERO)
+                        .reservedQuantity(BigDecimal.ZERO)
+                        .build();
+            }
+            stock.setQuantity(stock.getQuantity().subtract(item.getQuantity()));
+            stockRepository.save(stock);
+            log.info("Deducted {} of '{}' for order {}", item.getQuantity(), item.getProduct().getName(), order.getOrderNumber());
+        }
+    }
+
+    private void restoreStockForOrder(Order order) {
+        for (OrderItem item : order.getItems()) {
+            Stock stock = stockRepository
+                    .findByWarehouseIdAndProductId(order.getWarehouse().getId(), item.getProduct().getId())
+                    .orElse(null);
+            if (stock == null) return;
+            stock.setQuantity(stock.getQuantity().add(item.getQuantity()));
+            stockRepository.save(stock);
+            log.info("Restored {} of '{}' on cancellation of order {}", item.getQuantity(), item.getProduct().getName(), order.getOrderNumber());
+        }
+    }
 
     private String generateOrderNumber() {
         String prefix = "ORD-" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + "-";

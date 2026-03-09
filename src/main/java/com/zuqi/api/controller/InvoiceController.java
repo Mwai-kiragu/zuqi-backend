@@ -78,6 +78,13 @@ public class InvoiceController {
         return ResponseEntity.ok(ApiResponse.success("Invoice retrieved successfully", invoice));
     }
 
+    @GetMapping("/pos-sale/{saleId}")
+    @Operation(summary = "Get invoice by POS sale ID")
+    public ResponseEntity<ApiResponse<InvoiceResponse>> getInvoiceBySaleId(@PathVariable UUID saleId) {
+        InvoiceResponse invoice = invoiceService.getInvoiceBySaleId(saleId);
+        return ResponseEntity.ok(ApiResponse.success("Invoice retrieved successfully", invoice));
+    }
+
     @GetMapping("/distributor/{distributorId}")
     @Operation(summary = "Get invoices by distributor")
     public ResponseEntity<ApiResponse<Page<InvoiceResponse>>> getInvoicesByDistributor(
@@ -127,9 +134,11 @@ public class InvoiceController {
     @Operation(summary = "Record payment against invoice")
     public ResponseEntity<ApiResponse<InvoiceResponse>> recordPayment(
             @PathVariable UUID id,
-            @RequestParam BigDecimal amount) {
+            @RequestParam BigDecimal amount,
+            @RequestParam(required = false) Long paymentMethodId,
+            @RequestParam(required = false) String externalReference) {
 
-        InvoiceResponse invoice = invoiceService.recordPayment(id, amount);
+        InvoiceResponse invoice = invoiceService.recordPayment(id, amount, paymentMethodId, externalReference);
         return ResponseEntity.ok(ApiResponse.success("Payment recorded successfully", invoice));
     }
 

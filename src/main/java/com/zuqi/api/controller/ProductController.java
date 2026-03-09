@@ -38,6 +38,7 @@ public class ProductController {
     @Operation(summary = "Get all products", description = "Retrieves products with pagination and optional filters")
     public ResponseEntity<ApiResponse<Page<ProductResponse>>> getAllProducts(
             @Parameter(description = "Distributor ID filter") @RequestParam(required = false) UUID distributorId,
+            @Parameter(description = "Branch ID filter — returns only products available at this branch") @RequestParam(required = false) UUID branchId,
             @Parameter(description = "Category ID filter") @RequestParam(required = false) Long categoryId,
             @Parameter(description = "Search term") @RequestParam(required = false) String search,
             @Parameter(description = "Filter by active status") @RequestParam(required = false) Boolean active,
@@ -45,7 +46,10 @@ public class ProductController {
 
         Page<ProductResponse> products;
 
-        if (search != null && !search.isBlank()) {
+        // Branch-scoped query takes precedence when branchId is provided
+        if (branchId != null && distributorId != null) {
+            products = productService.getProductsForBranch(distributorId, branchId, search, pageable);
+        } else if (search != null && !search.isBlank()) {
             products = productService.searchProducts(search, distributorId, pageable);
         } else if (active != null && !active) {
             // Return inactive products
@@ -84,7 +88,7 @@ public class ProductController {
 
     @PostMapping
     @Operation(summary = "Create product", description = "Creates a new product")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<ProductResponse>> createProduct(
             @Valid @RequestBody ProductRequest request) {
         ProductResponse product = productService.createProduct(request);
@@ -95,7 +99,7 @@ public class ProductController {
 
     @PutMapping("/{id}")
     @Operation(summary = "Update product", description = "Updates an existing product")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<ProductResponse>> updateProduct(
             @Parameter(description = "Product ID") @PathVariable UUID id,
             @Valid @RequestBody ProductRequest request) {
@@ -105,7 +109,7 @@ public class ProductController {
 
     @DeleteMapping("/{id}")
     @Operation(summary = "Deactivate product", description = "Deactivates a product (soft delete) with reason")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deactivateProduct(
             @Parameter(description = "Product ID") @PathVariable UUID id,
             @Valid @RequestBody DeactivateRequest request,
@@ -116,7 +120,7 @@ public class ProductController {
 
     @PostMapping("/{id}/activate")
     @Operation(summary = "Activate product", description = "Reactivates a deactivated product")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> activateProduct(
             @Parameter(description = "Product ID") @PathVariable UUID id) {
         productService.activateProduct(id);
@@ -141,7 +145,7 @@ public class ProductController {
 
     @PostMapping("/categories")
     @Operation(summary = "Create category", description = "Creates a new product category")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<ProductCategoryResponse>> createCategory(
             @Valid @RequestBody ProductCategoryRequest request) {
         ProductCategoryResponse category = productService.createCategory(request);
@@ -152,7 +156,7 @@ public class ProductController {
 
     @PutMapping("/categories/{id}")
     @Operation(summary = "Update category", description = "Updates an existing product category")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<ProductCategoryResponse>> updateCategory(
             @Parameter(description = "Category ID") @PathVariable Long id,
             @Valid @RequestBody ProductCategoryRequest request) {
@@ -162,7 +166,7 @@ public class ProductController {
 
     @DeleteMapping("/categories/{id}")
     @Operation(summary = "Deactivate category", description = "Deactivates a product category (soft delete) with reason")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> deactivateCategory(
             @Parameter(description = "Category ID") @PathVariable Long id,
             @Valid @RequestBody DeactivateRequest request,
@@ -173,7 +177,7 @@ public class ProductController {
 
     @PostMapping("/categories/{id}/activate")
     @Operation(summary = "Activate category", description = "Reactivates a deactivated product category")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<Void>> activateCategory(
             @Parameter(description = "Category ID") @PathVariable Long id) {
         productService.activateCategory(id);

@@ -7,6 +7,8 @@ import com.zuqi.domain.order.Order;
 import com.zuqi.domain.payment.Payment;
 import com.zuqi.domain.payment.PaymentMethod;
 import com.zuqi.domain.payment.PaymentStatus;
+import com.zuqi.domain.pos.PosSale;
+import com.zuqi.domain.pos.PosSalePayment;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.repository.*;
@@ -18,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -92,6 +95,8 @@ public class PaymentServiceImpl implements PaymentService {
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
+        // Strip sort from pageable — native query has explicit ORDER BY p.created_at DESC
+        Pageable unsorted = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
         return paymentRepository.findByFilters(
                 effectiveDistributorId,
                 status != null ? status.name() : null,
@@ -99,7 +104,7 @@ public class PaymentServiceImpl implements PaymentService {
                 reconciled,
                 startDateTime,
                 endDateTime,
-                pageable
+                unsorted
         ).map(PaymentResponse::fromEntity);
     }
 
@@ -159,6 +164,7 @@ public class PaymentServiceImpl implements PaymentService {
         // Create payment
         Payment payment = Payment.builder()
                 .paymentNumber(paymentNumber)
+                .sourceType(order != null ? "ORDER" : "MANUAL")
                 .order(order)
                 .merchant(merchant)
                 .distributor(distributor)
@@ -263,6 +269,37 @@ public class PaymentServiceImpl implements PaymentService {
                 .stream()
                 .map(PaymentMethodResponse::fromEntity)
                 .toList();
+    }
+
+    @Override
+    @Transactional
+    public void createPaymentsForPosSale(PosSale sale) {
+        if (sale.getPayments() == null || sale.getPayments().isEmpty()) {
+            return;
+        }
+        for (PosSalePayment posPayment : sale.getPayments()) {
+            // Map PosPaymentMethod enum name → PaymentMethod entity by code
+            PaymentMethod method = paymentMethodRepository
+                    .findByCode(posPayment.getPaymentMethod().name())
+                    .orElse(null);
+
+            Payment payment = Payment.builder()
+                    .paymentNumber(generatePaymentNumber())
+                    .sourceType("POS_SALE")
+                    .posSale(sale)
+                    .distributor(sale.getBranch().getDistributor())
+                    .paymentMethod(method)
+                    .amount(posPayment.getAmount())
+                    .currency("KES")
+                    .status(PaymentStatus.COMPLETED)
+                    .paymentDate(sale.getCompletedAt())
+                    .externalReference(posPayment.getReferenceNumber())
+                    .notes(posPayment.getNotes())
+                    .build();
+
+            paymentRepository.save(payment);
+        }
+        log.info("Created {} payment record(s) for POS sale {}", sale.getPayments().size(), sale.getId());
     }
 
     // Helper methods

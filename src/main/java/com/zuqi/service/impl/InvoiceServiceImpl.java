@@ -5,11 +5,20 @@ import com.zuqi.config.EmailConfig;
 import com.zuqi.domain.invoice.Invoice;
 import com.zuqi.domain.invoice.InvoiceStatus;
 import com.zuqi.domain.order.Order;
+import com.zuqi.domain.order.OrderItem;
+import com.zuqi.domain.pos.PosSale;
+import com.zuqi.domain.pos.PosSaleStatus;
+import com.zuqi.domain.inventory.Stock;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
+import com.zuqi.api.dto.payment.PaymentRequest;
+import com.zuqi.domain.payment.PaymentStatus;
 import com.zuqi.repository.InvoiceRepository;
+import com.zuqi.repository.PosSaleRepository;
+import com.zuqi.repository.StockRepository;
 import com.zuqi.service.EmailService;
 import com.zuqi.service.InvoiceService;
+import com.zuqi.service.PaymentService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,10 +29,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -33,9 +44,12 @@ import java.util.UUID;
 public class InvoiceServiceImpl implements InvoiceService {
 
     private final InvoiceRepository invoiceRepository;
+    private final PosSaleRepository posSaleRepository;
+    private final StockRepository stockRepository;
     private final EmailService emailService;
     private final EmailConfig emailConfig;
     private final SecurityUtils securityUtils;
+    private final PaymentService paymentService;
 
     @Override
     @Transactional
@@ -86,6 +100,66 @@ public class InvoiceServiceImpl implements InvoiceService {
             invoice = invoiceRepository.save(invoice);
         }
 
+        return InvoiceResponse.fromEntity(invoice);
+    }
+
+    @Override
+    @Transactional
+    public InvoiceResponse createInvoiceFromPosSale(UUID saleId) {
+        log.info("Syncing invoice for POS sale: {}", saleId);
+
+        PosSale sale = posSaleRepository.findById(saleId)
+                .orElseThrow(() -> new ResourceNotFoundException("PosSale", "id", saleId));
+
+        boolean isCompleted = sale.getStatus() == PosSaleStatus.COMPLETED;
+        InvoiceStatus status = isCompleted ? InvoiceStatus.PAID : InvoiceStatus.SENT;
+        BigDecimal paidAmount = isCompleted ? sale.getAmountPaid() : BigDecimal.ZERO;
+
+        // Upsert: update existing invoice if found
+        Optional<Invoice> existing = invoiceRepository.findByPosOrderId(saleId);
+        if (existing.isPresent()) {
+            Invoice invoice = existing.get();
+            invoice.setAmount(sale.getTotalAmount());
+            invoice.setSubtotal(sale.getSubtotal());
+            invoice.setDiscountAmount(sale.getDiscountAmount());
+            invoice.setTaxAmount(sale.getTaxAmount());
+            invoice.setTotalAmount(sale.getTotalAmount());
+            invoice.setPaidAmount(paidAmount);
+            invoice.setStatus(status);
+            invoice.calculateBalanceDue();
+            log.info("POS invoice updated: {}", invoice.getInvoiceNumber());
+            return InvoiceResponse.fromEntity(invoiceRepository.save(invoice));
+        }
+
+        // Create new invoice
+        String invoiceNumber = generateInvoiceNumber();
+        Invoice invoice = Invoice.builder()
+                .invoiceNumber(invoiceNumber)
+                .sourceType("POS_SALE")
+                .posOrder(sale)
+                .distributor(sale.getBranch().getDistributor())
+                .amount(sale.getTotalAmount())
+                .subtotal(sale.getSubtotal())
+                .discountAmount(sale.getDiscountAmount())
+                .taxAmount(sale.getTaxAmount())
+                .totalAmount(sale.getTotalAmount())
+                .paidAmount(paidAmount)
+                .status(status)
+                .issueDate(LocalDate.now())
+                .dueDate(isCompleted ? LocalDate.now() : LocalDate.now().plusDays(30))
+                .build();
+
+        invoice.calculateBalanceDue();
+        invoice = invoiceRepository.save(invoice);
+
+        log.info("POS invoice created: {} ({})", invoice.getInvoiceNumber(), status);
+        return InvoiceResponse.fromEntity(invoice);
+    }
+
+    @Override
+    public InvoiceResponse getInvoiceBySaleId(UUID saleId) {
+        Invoice invoice = invoiceRepository.findByPosOrderId(saleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Invoice", "posOrderId", saleId));
         return InvoiceResponse.fromEntity(invoice);
     }
 
@@ -209,7 +283,7 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     @Override
     @Transactional
-    public InvoiceResponse recordPayment(UUID invoiceId, BigDecimal amount) {
+    public InvoiceResponse recordPayment(UUID invoiceId, BigDecimal amount, Long paymentMethodId, String externalReference) {
         Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
 
@@ -221,10 +295,48 @@ public class InvoiceServiceImpl implements InvoiceService {
             throw new ValidationException("Payment amount must be positive");
         }
 
+        InvoiceStatus previousStatus = invoice.getStatus();
         invoice.recordPayment(amount);
         invoice = invoiceRepository.save(invoice);
 
         log.info("Payment of {} recorded for invoice {}", amount, invoice.getInvoiceNumber());
+
+        // Create a completed Payment record so transactions appear on the payments list
+        if (invoice.getDistributor() != null && invoice.getMerchant() != null) {
+            PaymentRequest paymentRequest = PaymentRequest.builder()
+                    .orderId(invoice.getOrder() != null ? invoice.getOrder().getId() : null)
+                    .merchantId(invoice.getMerchant().getId())
+                    .distributorId(invoice.getDistributor().getId())
+                    .paymentMethodId(paymentMethodId)
+                    .amount(amount)
+                    .currency("KES")
+                    .externalReference(externalReference)
+                    .notes("Payment for " + invoice.getInvoiceNumber())
+                    .build();
+            var created = paymentService.createPayment(paymentRequest);
+            // Payment via invoice is already received — mark completed immediately
+            paymentService.updatePaymentStatus(created.getId(), PaymentStatus.COMPLETED);
+        }
+
+        // When a POS invoice is fully paid, mark the linked sale as COMPLETED
+        if (previousStatus != InvoiceStatus.PAID
+                && invoice.getStatus() == InvoiceStatus.PAID
+                && invoice.getPosOrder() != null) {
+            PosSale sale = posSaleRepository.findById(invoice.getPosOrder().getId()).orElse(null);
+            if (sale != null && sale.getStatus() == PosSaleStatus.DRAFT) {
+                sale.setStatus(PosSaleStatus.COMPLETED);
+                sale.setAmountPaid(invoice.getPaidAmount());
+                sale.setCompletedAt(LocalDateTime.now());
+                if (sale.getReceiptNumber() == null) {
+                    sale.setReceiptNumber("RCP-"
+                            + DateTimeFormatter.ofPattern("yyyyMMdd").format(LocalDateTime.now())
+                            + "-" + String.format("%05d", Math.abs(sale.getId().hashCode() % 100000)));
+                }
+                posSaleRepository.save(sale);
+                log.info("POS sale {} marked COMPLETED after invoice {} was fully paid",
+                        sale.getId(), invoice.getInvoiceNumber());
+            }
+        }
 
         return InvoiceResponse.fromEntity(invoice);
     }
@@ -314,6 +426,38 @@ public class InvoiceServiceImpl implements InvoiceService {
     }
 
     // Helper methods
+
+    private void deductStockForOrderInvoice(Invoice invoice) {
+        Order order = invoice.getOrder();
+        if (order == null || order.getWarehouse() == null || order.getItems() == null) {
+            log.warn("Cannot deduct stock for invoice {}: missing order, warehouse, or items",
+                    invoice.getInvoiceNumber());
+            return;
+        }
+
+        for (OrderItem item : order.getItems()) {
+            Stock stock = stockRepository
+                    .findByWarehouseIdAndProductId(order.getWarehouse().getId(), item.getProduct().getId())
+                    .orElse(null);
+
+            if (stock == null) {
+                log.warn("No stock entry for product '{}' in warehouse {} — creating with negative quantity",
+                        item.getProduct().getName(), order.getWarehouse().getId());
+                stock = Stock.builder()
+                        .warehouse(order.getWarehouse())
+                        .product(item.getProduct())
+                        .quantity(BigDecimal.ZERO)
+                        .reservedQuantity(BigDecimal.ZERO)
+                        .build();
+            }
+
+            stock.setQuantity(stock.getQuantity().subtract(item.getQuantity()));
+            stockRepository.save(stock);
+            log.info("Deducted {} units of '{}' for invoice {} (order {})",
+                    item.getQuantity(), item.getProduct().getName(),
+                    invoice.getInvoiceNumber(), order.getOrderNumber());
+        }
+    }
 
     private String generateInvoiceNumber() {
         String prefix = "INV-" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + "-";
