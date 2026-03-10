@@ -27,6 +27,7 @@ public interface ActivityLogService {
     PageResponse<ActivityLogResponse> getAll(UUID userId, ActivityAction action,
                                               String entityType, String module,
                                               LocalDateTime from, LocalDateTime to,
+                                              Boolean success,
                                               int page, int size);
 
     PageResponse<ActivityLogResponse> getForEntity(String entityType, UUID entityId, int page, int size);

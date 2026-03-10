@@ -56,6 +56,11 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
             "AND s.quantity <= 0")
     long countOutOfStockByDistributorId(@Param("distributorId") UUID distributorId);
 
+    /** Scope to a merchant brand (MERCHANT_ADMIN) — low stock items. */
+    @Query("SELECT s FROM Stock s WHERE s.warehouse.distributor.merchant.id = :merchantId " +
+            "AND s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel")
+    Page<Stock> findLowStockByMerchantId(@Param("merchantId") UUID merchantId, Pageable pageable);
+
     // Global queries for SUPER_ADMIN/ADMIN (no distributor filter)
     @Query("SELECT COUNT(s) FROM Stock s WHERE s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel AND s.quantity > 0")
     long countAllLowStock();

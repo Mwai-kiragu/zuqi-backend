@@ -10,6 +10,7 @@ import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.event.PosSaleCompletedEvent;
 import com.zuqi.repository.*;
+import com.zuqi.service.GlAutoPostingService;
 import com.zuqi.service.InvoiceService;
 import com.zuqi.service.PaymentService;
 import com.zuqi.service.PosService;
@@ -51,6 +52,7 @@ public class PosServiceImpl implements PosService {
     private final SecurityUtils securityUtils;
     private final InvoiceService invoiceService;
     private final PaymentService paymentService;
+    private final GlAutoPostingService glAutoPostingService;
     private final ApplicationEventPublisher eventPublisher;
 
     private static final AtomicInteger receiptCounter = new AtomicInteger(1);
@@ -299,6 +301,9 @@ public class PosServiceImpl implements PosService {
 
         // Record payment transactions (one Payment record per tender type)
         paymentService.createPaymentsForPosSale(savedSale);
+
+        // Auto-post to GL: DR Cash+AR / CR Revenue, and DR COGS / CR Inventory
+        glAutoPostingService.postPosSaleCompleted(savedSale);
 
         // Publish event — invoice is created AFTER this transaction commits
         // (TransactionalEventListener AFTER_COMMIT), keeping invoice failure

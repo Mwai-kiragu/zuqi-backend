@@ -1,6 +1,7 @@
 package com.zuqi.repository;
 
 import com.zuqi.domain.gl.GlAccount;
+import com.zuqi.domain.gl.SystemAccountType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -22,4 +23,6 @@ public interface GlAccountRepository extends JpaRepository<GlAccount, UUID> {
     Optional<GlAccount> findByDistributorIdAndAccountCode(UUID distributorId, String accountCode);
 
     List<GlAccount> findByDistributorIdAndActiveOrderByAccountCodeAsc(UUID distributorId, boolean active);
+
+    Optional<GlAccount> findByDistributorIdAndSystemAccountType(UUID distributorId, SystemAccountType systemAccountType);
 }

@@ -158,9 +158,13 @@ public class InventoryServiceImpl implements InventoryService {
 
     @Override
     public Page<StockResponse> getLowStock(UUID distributorId, Pageable pageable) {
-        // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return stockRepository.findLowStockByMerchantId(merchantId, pageable)
+                        .map(this::mapToStockResponse);
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
@@ -170,7 +174,7 @@ public class InventoryServiceImpl implements InventoryService {
                     .map(this::mapToStockResponse);
         }
 
-        // SUPER_ADMIN/ADMIN can see all low stock items
+        // SUPER_ADMIN can see all low stock items
         return stockRepository.findAllLowStock(pageable)
                 .map(this::mapToStockResponse);
     }
@@ -178,9 +182,14 @@ public class InventoryServiceImpl implements InventoryService {
 
     @Override
     public List<WarehouseResponse> getWarehousesByDistributor(UUID distributorId) {
-        // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return warehouseRepository.findByDistributorMerchantIdAndActiveTrue(merchantId).stream()
+                        .map(this::mapToWarehouseResponse)
+                        .collect(Collectors.toList());
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
@@ -191,7 +200,7 @@ public class InventoryServiceImpl implements InventoryService {
                     .collect(Collectors.toList());
         }
 
-        // SUPER_ADMIN/ADMIN can see all warehouses
+        // SUPER_ADMIN can see all warehouses
         return warehouseRepository.findByActiveTrue().stream()
                 .map(this::mapToWarehouseResponse)
                 .collect(Collectors.toList());
@@ -206,9 +215,13 @@ public class InventoryServiceImpl implements InventoryService {
 
     @Override
     public Page<WarehouseResponse> getWarehousesByDistributor(UUID distributorId, Pageable pageable) {
-        // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return warehouseRepository.findByDistributorMerchantIdAndActiveTrue(merchantId, pageable)
+                        .map(this::mapToWarehouseResponse);
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
@@ -218,16 +231,20 @@ public class InventoryServiceImpl implements InventoryService {
                     .map(this::mapToWarehouseResponse);
         }
 
-        // SUPER_ADMIN/ADMIN can see all warehouses
+        // SUPER_ADMIN can see all warehouses
         return warehouseRepository.findByActiveTrue(pageable)
                 .map(this::mapToWarehouseResponse);
     }
 
     @Override
     public Page<WarehouseResponse> getInactiveWarehousesByDistributor(UUID distributorId, Pageable pageable) {
-        // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return warehouseRepository.findByDistributorMerchantIdAndActiveFalse(merchantId, pageable)
+                        .map(this::mapToWarehouseResponse);
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
@@ -237,7 +254,7 @@ public class InventoryServiceImpl implements InventoryService {
                     .map(this::mapToWarehouseResponse);
         }
 
-        // SUPER_ADMIN/ADMIN can see all inactive warehouses
+        // SUPER_ADMIN can see all inactive warehouses
         return warehouseRepository.findByActiveFalse(pageable)
                 .map(this::mapToWarehouseResponse);
     }

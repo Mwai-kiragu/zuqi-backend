@@ -17,6 +17,7 @@ import com.zuqi.repository.InvoiceRepository;
 import com.zuqi.repository.PosSaleRepository;
 import com.zuqi.repository.StockRepository;
 import com.zuqi.service.EmailService;
+import com.zuqi.service.GlAutoPostingService;
 import com.zuqi.service.InvoiceService;
 import com.zuqi.service.PaymentService;
 import com.zuqi.util.SecurityUtils;
@@ -50,6 +51,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final EmailConfig emailConfig;
     private final SecurityUtils securityUtils;
     private final PaymentService paymentService;
+    private final GlAutoPostingService glAutoPostingService;
 
     @Override
     @Transactional
@@ -91,6 +93,9 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice = invoiceRepository.save(invoice);
 
         log.info("Invoice created successfully: {}", invoice.getInvoiceNumber());
+
+        // Auto-post to GL: DR Accounts Receivable / CR Sales Revenue
+        glAutoPostingService.postInvoiceCreated(invoice);
 
         // Automatically send invoice if merchant has email
         if (order.getMerchant().getEmail() != null && !order.getMerchant().getEmail().isEmpty()) {
@@ -186,6 +191,11 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     @Override
     public Page<InvoiceResponse> getAllInvoices(Pageable pageable) {
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId != null) {
+            return invoiceRepository.findByDistributorMerchantId(merchantId, pageable)
+                    .map(InvoiceResponse::fromEntity);
+        }
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
         if (distributorId != null) {
             return invoiceRepository.findByDistributorId(distributorId, pageable)
@@ -234,6 +244,11 @@ public class InvoiceServiceImpl implements InvoiceService {
     public Page<InvoiceResponse> searchInvoices(UUID distributorId, String search, Pageable pageable) {
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return invoiceRepository.searchInvoicesByMerchant(merchantId, search, pageable)
+                        .map(InvoiceResponse::fromEntity);
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
@@ -300,6 +315,9 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice = invoiceRepository.save(invoice);
 
         log.info("Payment of {} recorded for invoice {}", amount, invoice.getInvoiceNumber());
+
+        // Auto-post to GL: DR Cash & Bank / CR Accounts Receivable
+        glAutoPostingService.postPaymentReceived(invoice, amount);
 
         // Create a completed Payment record so transactions appear on the payments list
         if (invoice.getDistributor() != null && invoice.getMerchant() != null) {
@@ -384,6 +402,10 @@ public class InvoiceServiceImpl implements InvoiceService {
     public long getInvoiceCountByStatus(UUID distributorId, InvoiceStatus status) {
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return invoiceRepository.countByDistributorMerchantIdAndStatus(merchantId, status);
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
@@ -395,28 +417,36 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     @Override
     public Map<String, Long> getAllStatusCounts(UUID distributorId) {
+        UUID merchantId = null;
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
-            effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
+            merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId == null) {
+                effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
+            }
         }
 
+        final UUID finalDistributorId = effectiveDistributorId;
+        final UUID finalMerchantId = merchantId;
         Map<String, Long> counts = new HashMap<>();
 
-        // Get counts for all statuses
         for (InvoiceStatus status : InvoiceStatus.values()) {
             long count;
-            if (effectiveDistributorId != null) {
-                count = invoiceRepository.countByDistributorIdAndStatus(effectiveDistributorId, status);
+            if (finalMerchantId != null) {
+                count = invoiceRepository.countByDistributorMerchantIdAndStatus(finalMerchantId, status);
+            } else if (finalDistributorId != null) {
+                count = invoiceRepository.countByDistributorIdAndStatus(finalDistributorId, status);
             } else {
                 count = invoiceRepository.countByStatus(status);
             }
             counts.put(status.name(), count);
         }
 
-        // Add total count
         long total;
-        if (effectiveDistributorId != null) {
-            total = invoiceRepository.countByDistributorId(effectiveDistributorId);
+        if (finalMerchantId != null) {
+            total = invoiceRepository.countByDistributorMerchantId(finalMerchantId);
+        } else if (finalDistributorId != null) {
+            total = invoiceRepository.countByDistributorId(finalDistributorId);
         } else {
             total = invoiceRepository.count();
         }

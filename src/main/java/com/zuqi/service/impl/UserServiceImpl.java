@@ -11,6 +11,7 @@ import com.zuqi.domain.branch.BranchUserStatus;
 import com.zuqi.domain.branch.DistributorBranch;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.audit.ActivityAction;
 import com.zuqi.domain.user.Role;
 import com.zuqi.domain.user.RoleName;
 import com.zuqi.domain.user.User;
@@ -23,6 +24,7 @@ import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.MerchantRepository;
 import com.zuqi.repository.RoleRepository;
 import com.zuqi.repository.UserRepository;
+import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.EmailService;
 import com.zuqi.service.UserService;
 import com.zuqi.util.SecurityUtils;
@@ -50,6 +52,7 @@ public class UserServiceImpl implements UserService {
     private final MerchantRepository merchantRepository;
     private final PasswordEncoder passwordEncoder;
     private final SecurityUtils securityUtils;
+    private final ActivityLogService activityLogService;
     private final EmailService emailService;
     private final DistributorBranchRepository distributorBranchRepository;
     private final BranchUserRepository branchUserRepository;
@@ -57,23 +60,55 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public Page<UserResponse> getAllUsers(Pageable pageable) {
-        return getAllUsers(pageable, null);
+        return getAllUsers(pageable, null, null);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<UserResponse> getAllUsers(Pageable pageable, Boolean active) {
-        log.info("Fetching all users with active filter: {}", active);
+        return getAllUsers(pageable, active, null);
+    }
 
-        // SUPER_ADMIN can see all users
+    @Override
+    @Transactional(readOnly = true)
+    public Page<UserResponse> getAllUsers(Pageable pageable, Boolean active, String search) {
+        log.info("Fetching all users with active filter: {}, search: {}", active, search);
+
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId != null) {
+            if (search != null && !search.isBlank()) {
+                if (active != null && !active) {
+                    return userRepository.searchInactiveByMerchantScope(merchantId, search, pageable)
+                            .map(this::mapToUserResponse);
+                }
+                return userRepository.searchByMerchantScope(merchantId, search, pageable)
+                        .map(this::mapToUserResponse);
+            }
+            if (active != null && !active) {
+                return userRepository.findInactiveByMerchantScope(merchantId, pageable)
+                        .map(this::mapToUserResponse);
+            }
+            return userRepository.findByMerchantScope(merchantId, pageable)
+                    .map(this::mapToUserResponse);
+        }
+
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
         if (distributorId != null) {
-            return getUsersByDistributor(distributorId, pageable, active);
+            return getUsersByDistributor(distributorId, pageable, active, search);
+        }
+
+        // SUPER_ADMIN
+        if (search != null && !search.isBlank()) {
+            if (active != null) {
+                return userRepository.searchAllUsersByActive(search, active, pageable)
+                        .map(this::mapToUserResponse);
+            }
+            return userRepository.searchAllUsers(search, pageable)
+                    .map(this::mapToUserResponse);
         }
 
         List<User> allUsers = userRepository.findAll();
         List<User> filteredUsers = allUsers;
-
         if (active != null) {
             filteredUsers = allUsers.stream()
                     .filter(u -> u.isActive() == active)
@@ -91,13 +126,28 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public Page<UserResponse> getUsersByDistributor(UUID distributorId, Pageable pageable) {
-        return getUsersByDistributor(distributorId, pageable, null);
+        return getUsersByDistributor(distributorId, pageable, null, null);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<UserResponse> getUsersByDistributor(UUID distributorId, Pageable pageable, Boolean active) {
-        log.info("Fetching users for distributor: {} with active filter: {}", distributorId, active);
+        return getUsersByDistributor(distributorId, pageable, active, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<UserResponse> getUsersByDistributor(UUID distributorId, Pageable pageable, Boolean active, String search) {
+        log.info("Fetching users for distributor: {} with active filter: {}, search: {}", distributorId, active, search);
+
+        if (search != null && !search.isBlank()) {
+            if (active != null) {
+                return userRepository.searchByDistributorAndActive(distributorId, search, active, pageable)
+                        .map(this::mapToUserResponse);
+            }
+            return userRepository.searchByDistributor(distributorId, search, pageable)
+                    .map(this::mapToUserResponse);
+        }
 
         List<User> users;
         if (active == null) {
@@ -110,11 +160,9 @@ public class UserServiceImpl implements UserService {
 
         int start = (int) pageable.getOffset();
         int end = Math.min((start + pageable.getPageSize()), users.size());
-
         List<UserResponse> responseList = users.subList(start, end).stream()
                 .map(this::mapToUserResponse)
                 .toList();
-
         return new PageImpl<>(responseList, pageable, users.size());
     }
 
@@ -130,8 +178,11 @@ public class UserServiceImpl implements UserService {
         }
 
         List<User> allUsers;
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
         if (effectiveDistributorId != null) {
             allUsers = userRepository.findByDistributorIdAndActiveTrue(effectiveDistributorId);
+        } else if (merchantId != null) {
+            allUsers = userRepository.findActiveByMerchantScope(merchantId);
         } else {
             // SUPER_ADMIN can see all users
             allUsers = userRepository.findAll();
@@ -230,6 +281,15 @@ public class UserServiceImpl implements UserService {
 
         User savedUser = userRepository.save(user);
         log.info("User created successfully with ID: {}", savedUser.getId());
+
+        User creator = securityUtils.getCurrentUser();
+        if (creator != null) {
+            activityLogService.log(creator.getId(), creator.getEmail(),
+                    creator.getFirstName() + " " + creator.getLastName(),
+                    ActivityAction.CREATE, "USER", savedUser.getId(),
+                    savedUser.getEmail(), "USERS", "Created user: " + savedUser.getEmail()
+                            + " with role: " + request.getRole());
+        }
 
         // Assign user to branch (specified or default HQ branch)
         if (finalDistributorId != null) {
@@ -395,6 +455,11 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public Page<UserResponse> getInactiveUsers(Pageable pageable) {
         log.info("Fetching inactive users");
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId != null) {
+            return userRepository.findInactiveByMerchantScope(merchantId, pageable)
+                    .map(this::mapToUserResponse);
+        }
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
         if (distributorId != null) {
             return userRepository.findByDistributorIdAndActiveFalse(distributorId, pageable)

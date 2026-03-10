@@ -73,6 +73,17 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
             "FROM payments WHERE payment_number LIKE :prefix%", nativeQuery = true)
     Integer findMaxPaymentNumberByPrefix(@Param("prefix") String prefix);
 
+    /** Scope to a merchant brand (MERCHANT_ADMIN). */
+    Page<Payment> findByDistributorMerchantId(UUID merchantId, Pageable pageable);
+
+    @Query("SELECT p FROM Payment p WHERE p.distributor.merchant.id = :merchantId " +
+            "AND (p.paymentNumber LIKE %:search% OR p.externalReference LIKE %:search% " +
+            "OR (p.merchant IS NOT NULL AND p.merchant.businessName LIKE %:search%))")
+    Page<Payment> searchPaymentsByMerchant(
+            @Param("merchantId") UUID merchantId,
+            @Param("search") String search,
+            Pageable pageable);
+
     // Global queries for SUPER_ADMIN/ADMIN (no distributor filter)
     @Query("SELECT COUNT(p) FROM Payment p WHERE p.reconciled = false")
     long countAllUnreconciledPayments();

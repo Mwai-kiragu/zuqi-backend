@@ -55,7 +55,10 @@ public class ProductServiceImpl implements ProductService {
     public Page<ProductResponse> getAllProducts(Pageable pageable) {
         log.debug("Fetching all products");
 
-        // SUPER_ADMIN and ADMIN can see all products
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId != null) {
+            return enrichWithStockAndBranchPrices(productRepository.findByDistributorMerchantIdAndActiveTrue(merchantId, pageable));
+        }
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
         if (distributorId != null) {
             return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndActiveTrue(distributorId, pageable));
@@ -85,6 +88,10 @@ public class ProductServiceImpl implements ProductService {
 
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return enrichWithStockAndBranchPrices(productRepository.searchByMerchant(merchantId, searchTerm, pageable));
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
@@ -245,6 +252,10 @@ public class ProductServiceImpl implements ProductService {
     public Page<ProductResponse> getInactiveProducts(Pageable pageable) {
         log.debug("Fetching all inactive products");
 
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId != null) {
+            return enrichWithStockAndBranchPrices(productRepository.findByDistributorMerchantIdAndActiveFalse(merchantId, pageable));
+        }
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
         if (distributorId != null) {
             return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndActiveFalse(distributorId, pageable));
@@ -301,6 +312,12 @@ public class ProductServiceImpl implements ProductService {
 
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return categoryRepository.findByDistributorMerchantIdAndActiveTrue(merchantId).stream()
+                        .map(ProductCategoryResponse::fromEntity)
+                        .toList();
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
@@ -323,6 +340,12 @@ public class ProductServiceImpl implements ProductService {
 
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return categoryRepository.findByDistributorMerchantIdAndActiveFalse(merchantId).stream()
+                        .map(ProductCategoryResponse::fromEntity)
+                        .toList();
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 

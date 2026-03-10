@@ -38,10 +38,11 @@ public class ActivityLogController {
             @RequestParam(required = false) String module,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
+            @RequestParam(required = false) Boolean success,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
         PageResponse<ActivityLogResponse> result =
-                activityLogService.getAll(userId, action, entityType, module, from, to, page, size);
+                activityLogService.getAll(userId, action, entityType, module, from, to, success, page, size);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 

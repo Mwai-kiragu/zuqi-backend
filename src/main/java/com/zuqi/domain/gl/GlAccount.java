@@ -64,6 +64,11 @@ public class GlAccount {
     @Builder.Default
     private boolean isSystemAccount = false;
 
+    /** Identifies which posting role this account plays (nullable = no auto-posting role). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "system_account_type", length = 50)
+    private SystemAccountType systemAccountType;
+
     @Column(columnDefinition = "TEXT")
     private String description;
 

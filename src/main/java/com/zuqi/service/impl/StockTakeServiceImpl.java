@@ -83,15 +83,32 @@ public class StockTakeServiceImpl implements StockTakeService {
     @Override
     public Page<StockTakeResponse> getStockTakesByWarehouse(UUID warehouseId, Pageable pageable) {
         UUID effectiveBranchId = securityUtils.getEffectiveBranchId();
-        if (effectiveBranchId == null && warehouseId == null) {
-            // HQ or SUPER_ADMIN with no specific filter — return all
-            return batchRepository.findAll(pageable).map(this::mapToResponse);
-        }
+
+        // Specific branch scope (non-HQ branch context)
         if (effectiveBranchId != null) {
-            // Specific non-HQ branch scope
             return batchRepository.findByBranchId(effectiveBranchId, pageable).map(this::mapToResponse);
         }
-        return batchRepository.findByWarehouseId(warehouseId, pageable).map(this::mapToResponse);
+
+        // Specific warehouse filter requested by the user
+        if (warehouseId != null) {
+            return batchRepository.findByWarehouseId(warehouseId, pageable).map(this::mapToResponse);
+        }
+
+        // No warehouse filter — scope by identity
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId != null) {
+            // MERCHANT_ADMIN: only their merchant's stock takes
+            return batchRepository.findByWarehouseDistributorMerchantId(merchantId, pageable).map(this::mapToResponse);
+        }
+
+        UUID distributorId = securityUtils.getDistributorIdForFiltering();
+        if (distributorId != null) {
+            // DISTRIBUTOR_ADMIN / staff: only their distributor's stock takes
+            return batchRepository.findByWarehouseDistributorId(distributorId, pageable).map(this::mapToResponse);
+        }
+
+        // SUPER_ADMIN: return all
+        return batchRepository.findAll(pageable).map(this::mapToResponse);
     }
 
     @Override

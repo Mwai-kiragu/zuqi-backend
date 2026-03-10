@@ -19,11 +19,15 @@ public interface UserService {
 
     Page<UserResponse> getAllUsers(Pageable pageable, Boolean active);
 
+    Page<UserResponse> getAllUsers(Pageable pageable, Boolean active, String search);
+
     Page<UserResponse> getInactiveUsers(Pageable pageable);
 
     Page<UserResponse> getUsersByDistributor(UUID distributorId, Pageable pageable);
 
     Page<UserResponse> getUsersByDistributor(UUID distributorId, Pageable pageable, Boolean active);
+
+    Page<UserResponse> getUsersByDistributor(UUID distributorId, Pageable pageable, Boolean active, String search);
 
     Page<UserResponse> getInactiveUsersByDistributor(UUID distributorId, Pageable pageable);
 

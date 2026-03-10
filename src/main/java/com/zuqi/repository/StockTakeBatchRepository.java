@@ -17,4 +17,10 @@ public interface StockTakeBatchRepository extends JpaRepository<StockTakeBatch, 
     Page<StockTakeBatch> findByBranchId(UUID branchId, Pageable pageable);
 
     Page<StockTakeBatch> findByWarehouseIdAndStatus(UUID warehouseId, StockTakeBatchStatus status, Pageable pageable);
+
+    /** Scope to a specific distributor (DISTRIBUTOR_ADMIN). */
+    Page<StockTakeBatch> findByWarehouseDistributorId(UUID distributorId, Pageable pageable);
+
+    /** Scope to a merchant brand (MERCHANT_ADMIN) — traverses warehouse → distributor → merchant. */
+    Page<StockTakeBatch> findByWarehouseDistributorMerchantId(UUID merchantId, Pageable pageable);
 }

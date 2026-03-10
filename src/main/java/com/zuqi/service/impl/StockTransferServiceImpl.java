@@ -101,19 +101,30 @@ public class StockTransferServiceImpl implements StockTransferService {
     public Page<StockTransferResponse> getTransfers(String status, Pageable pageable) {
         UUID effectiveBranchId = securityUtils.getEffectiveBranchId();
 
-        if (effectiveBranchId == null) {
-            // HQ or SUPER_ADMIN — show all transfers
-            if (status != null && !status.isBlank()) {
-                StockTransferStatus transferStatus = StockTransferStatus.valueOf(status.toUpperCase());
-                return transferRepository.findByStatus(transferStatus, pageable).map(this::mapToResponse);
-            }
-            return transferRepository.findAll(pageable).map(this::mapToResponse);
+        if (effectiveBranchId != null) {
+            // Specific branch — show transfers where branch is source or destination
+            return transferRepository
+                    .findBySourceBranchIdOrDestinationBranchId(effectiveBranchId, effectiveBranchId, pageable)
+                    .map(this::mapToResponse);
         }
 
-        // Specific branch — show transfers where branch is source or destination
-        return transferRepository
-                .findBySourceBranchIdOrDestinationBranchId(effectiveBranchId, effectiveBranchId, pageable)
-                .map(this::mapToResponse);
+        // Check MERCHANT_ADMIN scope
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId != null) {
+            if (status != null && !status.isBlank()) {
+                StockTransferStatus transferStatus = StockTransferStatus.valueOf(status.toUpperCase());
+                return transferRepository.findByMerchantIdAndStatus(merchantId, transferStatus, pageable)
+                        .map(this::mapToResponse);
+            }
+            return transferRepository.findByMerchantId(merchantId, pageable).map(this::mapToResponse);
+        }
+
+        // HQ distributor or SUPER_ADMIN — show all (or filtered by status)
+        if (status != null && !status.isBlank()) {
+            StockTransferStatus transferStatus = StockTransferStatus.valueOf(status.toUpperCase());
+            return transferRepository.findByStatus(transferStatus, pageable).map(this::mapToResponse);
+        }
+        return transferRepository.findAll(pageable).map(this::mapToResponse);
     }
 
     @Override

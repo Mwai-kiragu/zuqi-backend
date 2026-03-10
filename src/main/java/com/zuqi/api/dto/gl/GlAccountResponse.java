@@ -26,6 +26,7 @@ public class GlAccountResponse {
     private int level;
     private boolean isPostingAccount;
     private boolean isSystemAccount;
+    private SystemAccountType systemAccountType;
     private String description;
     private boolean active;
     private LocalDateTime createdAt;
@@ -44,6 +45,7 @@ public class GlAccountResponse {
                 .level(a.getLevel())
                 .isPostingAccount(a.isPostingAccount())
                 .isSystemAccount(a.isSystemAccount())
+                .systemAccountType(a.getSystemAccountType())
                 .description(a.getDescription())
                 .active(a.isActive())
                 .createdAt(a.getCreatedAt())

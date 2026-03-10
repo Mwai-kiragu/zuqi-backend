@@ -58,6 +58,19 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
      */
     List<Product> findByDistributorIdAndActiveTrue(UUID distributorId);
 
+    /** Scope to a merchant brand (MERCHANT_ADMIN). */
+    Page<Product> findByDistributorMerchantIdAndActiveTrue(UUID merchantId, Pageable pageable);
+
+    Page<Product> findByDistributorMerchantIdAndActiveFalse(UUID merchantId, Pageable pageable);
+
+    @Query("SELECT p FROM Product p WHERE p.distributor.merchant.id = :merchantId AND p.active = true AND " +
+            "(LOWER(p.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+            "LOWER(p.sku)  LIKE LOWER(CONCAT('%', :searchTerm, '%')))")
+    Page<Product> searchByMerchant(
+            @Param("merchantId") UUID merchantId,
+            @Param("searchTerm") String searchTerm,
+            Pageable pageable);
+
     /**
      * Products available for a specific branch:
      * allBranches=true OR has an active entry in product_branch_prices for that branch.

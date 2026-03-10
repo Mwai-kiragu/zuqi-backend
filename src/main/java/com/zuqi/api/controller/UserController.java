@@ -47,9 +47,10 @@ public class UserController {
     public ResponseEntity<ApiResponse<Page<UserResponse>>> getAllUsers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) Boolean active) {
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String search) {
 
-        Page<UserResponse> users = userService.getAllUsers(PageRequest.of(page, size), active);
+        Page<UserResponse> users = userService.getAllUsers(PageRequest.of(page, size), active, search);
         return ResponseEntity.ok(ApiResponse.success("Users retrieved successfully", users));
     }
 
@@ -59,9 +60,10 @@ public class UserController {
             @PathVariable UUID distributorId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) Boolean active) {
+            @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String search) {
 
-        Page<UserResponse> users = userService.getUsersByDistributor(distributorId, PageRequest.of(page, size), active);
+        Page<UserResponse> users = userService.getUsersByDistributor(distributorId, PageRequest.of(page, size), active, search);
         return ResponseEntity.ok(ApiResponse.success("Users retrieved successfully", users));
     }
 

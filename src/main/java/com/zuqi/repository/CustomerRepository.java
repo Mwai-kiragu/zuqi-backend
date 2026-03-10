@@ -49,6 +49,23 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID>, JpaSp
 
     Page<Customer> findByDistributorIdAndBlacklistedTrue(UUID distributorId, Pageable pageable);
 
+    /** Scope to a merchant brand (MERCHANT_ADMIN). */
+    Page<Customer> findByDistributorMerchantIdAndActiveTrue(UUID merchantId, Pageable pageable);
+
+    Page<Customer> findByDistributorMerchantIdAndActiveFalse(UUID merchantId, Pageable pageable);
+
+    Page<Customer> findByDistributorMerchantIdAndBlacklistedTrue(UUID merchantId, Pageable pageable);
+
+    @Query("SELECT c FROM Customer c WHERE c.distributor.merchant.id = :merchantId AND c.active = :active AND " +
+            "(LOWER(c.businessName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+            "LOWER(c.ownerName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+            "c.phone LIKE CONCAT('%', :searchTerm, '%'))")
+    Page<Customer> searchByMerchantAndActive(
+            @Param("merchantId") UUID merchantId,
+            @Param("searchTerm") String searchTerm,
+            @Param("active") Boolean active,
+            Pageable pageable);
+
     @Query("SELECT COUNT(c) FROM Customer c")
     long countAll();
 

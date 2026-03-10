@@ -2,6 +2,7 @@ package com.zuqi.api.dto.gl;
 
 import com.zuqi.domain.gl.AccountSubType;
 import com.zuqi.domain.gl.AccountType;
+import com.zuqi.domain.gl.SystemAccountType;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -37,4 +38,7 @@ public class GlAccountRequest {
     private boolean isPostingAccount = true;
 
     private String description;
+
+    /** Optional: tag this account for automatic GL posting. */
+    private SystemAccountType systemAccountType;
 }

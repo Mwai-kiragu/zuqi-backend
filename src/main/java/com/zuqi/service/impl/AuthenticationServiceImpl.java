@@ -35,7 +35,9 @@ import com.zuqi.repository.PasswordResetTokenRepository;
 import com.zuqi.repository.RefreshTokenRepository;
 import com.zuqi.repository.RoleRepository;
 import com.zuqi.repository.UserRepository;
+import com.zuqi.domain.audit.ActivityAction;
 import com.zuqi.security.JwtService;
+import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.AuthenticationService;
 import com.zuqi.service.BillingService;
 import com.zuqi.service.EmailService;
@@ -70,6 +72,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private final AuthenticationManager authenticationManager;
     private final EmailService emailService;
     private final BillingService billingService;
+    private final ActivityLogService activityLogService;
     private final DistributorBranchRepository distributorBranchRepository;
     private final BranchUserRepository branchUserRepository;
 
@@ -436,6 +439,11 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         log.info("User authenticated successfully: {}", user.getEmail());
 
+        activityLogService.log(user.getId(), user.getEmail(),
+                user.getFirstName() + " " + user.getLastName(),
+                ActivityAction.LOGIN, "USER", user.getId(),
+                user.getEmail(), "AUTH", "User logged in successfully");
+
         return AuthenticationResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
@@ -505,8 +513,13 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         refreshTokenRepository.findByTokenAndRevokedFalse(refreshToken)
                 .ifPresent(token -> {
+                    User user = token.getUser();
                     token.setRevoked(true);
                     refreshTokenRepository.save(token);
+                    activityLogService.log(user.getId(), user.getEmail(),
+                            user.getFirstName() + " " + user.getLastName(),
+                            ActivityAction.LOGOUT, "USER", user.getId(),
+                            user.getEmail(), "AUTH", "User logged out");
                 });
     }
 

@@ -8,9 +8,11 @@ import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.order.*;
 import com.zuqi.domain.product.Product;
 import com.zuqi.domain.user.User;
+import com.zuqi.domain.audit.ActivityAction;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
+import com.zuqi.service.ActivityLogService;
 import com.zuqi.ai.event.OrderCreatedEvent;
 import com.zuqi.ai.feature.FeatureStore;
 import com.zuqi.service.InvoiceService;
@@ -48,13 +50,18 @@ public class OrderServiceImpl implements OrderService {
     private final StockRepository stockRepository;
     private final UserRepository userRepository;
     private final SecurityUtils securityUtils;
+    private final ActivityLogService activityLogService;
     private final InvoiceService invoiceService;
     private final ApplicationEventPublisher eventPublisher;
     private final FeatureStore featureStore;
 
     @Override
     public Page<OrderResponse> getAllOrders(Pageable pageable) {
-        // SUPER_ADMIN and ADMIN can see all orders
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId != null) {
+            return orderRepository.findByDistributorMerchantId(merchantId, pageable)
+                    .map(OrderResponse::fromEntity);
+        }
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
         if (distributorId != null) {
             return orderRepository.findByDistributorId(distributorId, pageable)
@@ -118,9 +125,13 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public Page<OrderResponse> searchOrders(UUID distributorId, String search, Pageable pageable) {
-        // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return orderRepository.searchOrdersByMerchant(merchantId, search, pageable)
+                        .map(OrderResponse::fromEntity);
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
@@ -239,6 +250,11 @@ public class OrderServiceImpl implements OrderService {
 
         // Publish AI event for data quality validation and demand forecasting
         publishOrderCreatedEvent(order);
+
+        activityLogService.log(currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.CREATE, "ORDER", order.getId(),
+                order.getOrderNumber(), "ORDERS", "Created order: " + order.getOrderNumber());
 
         log.info("Order created successfully: {}", order.getOrderNumber());
         return OrderResponse.fromEntity(order);

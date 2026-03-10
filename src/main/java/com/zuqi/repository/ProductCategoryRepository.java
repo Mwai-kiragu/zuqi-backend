@@ -13,6 +13,11 @@ public interface ProductCategoryRepository extends JpaRepository<ProductCategory
 
     List<ProductCategory> findByDistributorIdAndActiveTrue(UUID distributorId);
 
+    /** Scope to a merchant brand (MERCHANT_ADMIN). */
+    List<ProductCategory> findByDistributorMerchantIdAndActiveTrue(UUID merchantId);
+
+    List<ProductCategory> findByDistributorMerchantIdAndActiveFalse(UUID merchantId);
+
     List<ProductCategory> findByDistributorIdAndActiveFalse(UUID distributorId);
 
     List<ProductCategory> findByDistributorId(UUID distributorId);

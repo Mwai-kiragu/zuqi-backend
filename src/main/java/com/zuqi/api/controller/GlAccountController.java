@@ -75,4 +75,16 @@ public class GlAccountController {
         glAccountService.deactivate(id, currentUser);
         return ResponseEntity.ok(ApiResponse.success("GL account deactivated"));
     }
+
+    @PostMapping("/seed")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DISTRIBUTOR_ADMIN')")
+    @Operation(summary = "Seed default chart of accounts",
+               description = "Creates a standard chart of accounts with system account types pre-tagged for auto-posting. Skips any account whose code already exists.")
+    public ResponseEntity<ApiResponse<List<GlAccountResponse>>> seedDefaultAccounts(
+            @RequestParam(required = false) UUID distributorId,
+            @AuthenticationPrincipal User currentUser) {
+        UUID effectiveDistributorId = distributorId != null ? distributorId : securityUtils.getDistributorIdForFiltering();
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Chart of accounts seeded", glAccountService.seedDefaultAccounts(effectiveDistributorId, currentUser)));
+    }
 }

@@ -199,7 +199,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
 
         JournalEntry entry = buildEntry(distributorId, request, period, currentUser, JournalEntryStatus.POSTED);
         entry.setPostedAt(LocalDateTime.now());
-        entry.setPostedBy(currentUser.getId());
+        entry.setPostedBy(currentUser != null ? currentUser.getId() : null);
         populateLines(entry, request.getLines());
 
         return JournalEntryResponse.fromEntity(journalEntryRepository.save(entry));
@@ -241,9 +241,10 @@ public class JournalEntryServiceImpl implements JournalEntryService {
                 .entryDate(request.getEntryDate())
                 .description(request.getDescription())
                 .reference(request.getReference())
-                .sourceModule(JournalSourceModule.MANUAL)
+                .sourceModule(request.getSourceModule() != null ? request.getSourceModule() : JournalSourceModule.MANUAL)
+                .sourceDocumentId(request.getSourceDocumentId())
                 .status(status)
-                .createdBy(currentUser.getId())
+                .createdBy(currentUser != null ? currentUser.getId() : null)
                 .build();
         entry.setLines(new ArrayList<>());
         return entry;

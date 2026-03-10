@@ -49,7 +49,11 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public Page<PaymentResponse> getAllPayments(Pageable pageable) {
-        // SUPER_ADMIN and ADMIN can see all payments
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId != null) {
+            return paymentRepository.findByDistributorMerchantId(merchantId, pageable)
+                    .map(PaymentResponse::fromEntity);
+        }
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
         if (distributorId != null) {
             return paymentRepository.findByDistributorId(distributorId, pageable)
@@ -110,9 +114,13 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public Page<PaymentResponse> searchPayments(UUID distributorId, String search, Pageable pageable) {
-        // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return paymentRepository.searchPaymentsByMerchant(merchantId, search, pageable)
+                        .map(PaymentResponse::fromEntity);
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 

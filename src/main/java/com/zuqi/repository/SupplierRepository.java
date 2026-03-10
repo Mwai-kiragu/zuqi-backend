@@ -49,4 +49,16 @@ public interface SupplierRepository extends JpaRepository<Supplier, UUID> {
     Page<Supplier> searchByDistributor(@Param("distributorId") UUID distributorId,
                                        @Param("searchTerm") String searchTerm,
                                        Pageable pageable);
+
+    /** Scope to a merchant brand (MERCHANT_ADMIN). */
+    Page<Supplier> findByDistributorMerchantIdAndActiveTrue(UUID merchantId, Pageable pageable);
+
+    Page<Supplier> findByDistributorMerchantIdAndBlacklistedTrue(UUID merchantId, Pageable pageable);
+
+    @Query("SELECT s FROM Supplier s WHERE s.distributor.merchant.id = :merchantId AND s.active = true AND " +
+            "(LOWER(s.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+            "s.phone LIKE CONCAT('%', :searchTerm, '%'))")
+    Page<Supplier> searchByMerchant(@Param("merchantId") UUID merchantId,
+                                    @Param("searchTerm") String searchTerm,
+                                    Pageable pageable);
 }

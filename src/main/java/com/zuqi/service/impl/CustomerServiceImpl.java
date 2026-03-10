@@ -16,6 +16,8 @@ import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.UserRepository;
 import com.zuqi.ai.event.MerchantCreatedEvent;
 import com.zuqi.ai.feature.FeatureStore;
+import com.zuqi.domain.audit.ActivityAction;
+import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.CustomerService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -40,6 +42,7 @@ public class CustomerServiceImpl implements CustomerService {
     private final DistributorRepository distributorRepository;
     private final UserRepository userRepository;
     private final SecurityUtils securityUtils;
+    private final ActivityLogService activityLogService;
     private final ApplicationEventPublisher eventPublisher;
     private final FeatureStore featureStore;
 
@@ -47,6 +50,11 @@ public class CustomerServiceImpl implements CustomerService {
     @Transactional(readOnly = true)
     public Page<CustomerResponse> getAllCustomers(Pageable pageable) {
         log.debug("Fetching all customers");
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId != null) {
+            return customerRepository.findByDistributorMerchantIdAndActiveTrue(merchantId, pageable)
+                    .map(CustomerResponse::fromEntity);
+        }
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
         if (distributorId != null) {
             return customerRepository.findByDistributorIdAndActiveTrue(distributorId, pageable)
@@ -81,6 +89,11 @@ public class CustomerServiceImpl implements CustomerService {
     public Page<CustomerResponse> searchCustomers(String searchTerm, UUID distributorId, Boolean active, Pageable pageable) {
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return customerRepository.searchByMerchantAndActive(merchantId, searchTerm, active, pageable)
+                        .map(CustomerResponse::fromEntity);
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
         if (effectiveDistributorId != null) {
@@ -155,6 +168,14 @@ public class CustomerServiceImpl implements CustomerService {
 
         Customer saved = customerRepository.save(customer);
         log.info("Customer created with ID: {}", saved.getId());
+
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(currentUser.getId(), currentUser.getEmail(),
+                    currentUser.getFirstName() + " " + currentUser.getLastName(),
+                    ActivityAction.CREATE, "CUSTOMER", saved.getId(),
+                    saved.getBusinessName(), "MERCHANTS", "Created customer: " + saved.getBusinessName());
+        }
 
         publishCustomerCreatedEvent(saved);
 
@@ -240,6 +261,11 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     @Transactional(readOnly = true)
     public Page<CustomerResponse> getInactiveCustomers(Pageable pageable) {
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId != null) {
+            return customerRepository.findByDistributorMerchantIdAndActiveFalse(merchantId, pageable)
+                    .map(CustomerResponse::fromEntity);
+        }
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
         if (distributorId != null) {
             return customerRepository.findByDistributorIdAndActiveFalse(distributorId, pageable)
@@ -308,6 +334,11 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     @Transactional(readOnly = true)
     public Page<CustomerResponse> getBlacklistedCustomers(Pageable pageable) {
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId != null) {
+            return customerRepository.findByDistributorMerchantIdAndBlacklistedTrue(merchantId, pageable)
+                    .map(CustomerResponse::fromEntity);
+        }
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
         if (distributorId != null) {
             return customerRepository.findByDistributorIdAndBlacklistedTrue(distributorId, pageable)
