@@ -6,6 +6,7 @@ import com.zuqi.domain.branch.BranchUser;
 import com.zuqi.domain.branch.BranchUserStatus;
 import com.zuqi.domain.branch.DistributorBranch;
 import com.zuqi.domain.distributor.Distributor;
+import com.zuqi.domain.inventory.Warehouse;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
@@ -13,6 +14,7 @@ import com.zuqi.repository.BranchUserRepository;
 import com.zuqi.repository.DistributorBranchRepository;
 import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.UserRepository;
+import com.zuqi.repository.WarehouseRepository;
 import com.zuqi.security.JwtService;
 import com.zuqi.service.BranchService;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +36,7 @@ public class BranchServiceImpl implements BranchService {
     private final BranchUserRepository branchUserRepository;
     private final DistributorRepository distributorRepository;
     private final UserRepository userRepository;
+    private final WarehouseRepository warehouseRepository;
     private final JwtService jwtService;
 
     @Override
@@ -78,6 +81,20 @@ public class BranchServiceImpl implements BranchService {
 
         branch = branchRepository.save(branch);
         log.info("Created branch {} for distributor {}", branch.getId(), distributorId);
+
+        // Auto-create a warehouse for this branch using the same contact details
+        Warehouse warehouse = Warehouse.builder()
+                .distributor(distributor)
+                .branch(branch)
+                .name(request.getName() + " - Warehouse")
+                .code(request.getCode())
+                .address(request.getAddress())
+                .city(request.getCity())
+                .active(true)
+                .build();
+        warehouseRepository.save(warehouse);
+        log.info("Auto-created warehouse for branch {}", branch.getId());
+
         return mapToResponse(branch);
     }
 
