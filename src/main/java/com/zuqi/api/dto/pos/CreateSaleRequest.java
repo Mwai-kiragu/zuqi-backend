@@ -13,6 +13,8 @@ public class CreateSaleRequest {
 
     private UUID shiftId;
 
+    private UUID customerId;
+
     private String customerName;
 
     private String customerPhone;

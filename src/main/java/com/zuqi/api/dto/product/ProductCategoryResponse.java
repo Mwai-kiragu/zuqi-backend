@@ -25,6 +25,7 @@ public class ProductCategoryResponse {
     private String deactivationReason;
     private LocalDateTime deactivatedAt;
     private String deactivatedByName;
+    private LocalDateTime createdAt;
 
     public static ProductCategoryResponse fromEntity(ProductCategory category) {
         return ProductCategoryResponse.builder()
@@ -38,6 +39,7 @@ public class ProductCategoryResponse {
                 .deactivationReason(category.getDeactivationReason())
                 .deactivatedAt(category.getDeactivatedAt())
                 .deactivatedByName(category.getDeactivatedBy() != null ? category.getDeactivatedBy().getFullName() : null)
+                .createdAt(category.getCreatedAt())
                 .build();
     }
 }

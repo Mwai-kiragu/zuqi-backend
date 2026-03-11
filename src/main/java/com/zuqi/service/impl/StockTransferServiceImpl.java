@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -98,32 +99,40 @@ public class StockTransferServiceImpl implements StockTransferService {
     }
 
     @Override
-    public Page<StockTransferResponse> getTransfers(String status, Pageable pageable) {
-        UUID effectiveBranchId = securityUtils.getEffectiveBranchId();
+    public Page<StockTransferResponse> getTransfers(String status, LocalDate startDate, LocalDate endDate, Pageable pageable) {
+        boolean hasDates = startDate != null && endDate != null;
+        LocalDateTime from = hasDates ? startDate.atStartOfDay() : null;
+        LocalDateTime to = hasDates ? endDate.plusDays(1).atStartOfDay() : null;
 
+        UUID effectiveBranchId = securityUtils.getEffectiveBranchId();
         if (effectiveBranchId != null) {
-            // Specific branch — show transfers where branch is source or destination
-            return transferRepository
-                    .findBySourceBranchIdOrDestinationBranchId(effectiveBranchId, effectiveBranchId, pageable)
-                    .map(this::mapToResponse);
+            if (hasDates)
+                return transferRepository.findByBranchIdAndDateRange(effectiveBranchId, from, to, pageable).map(this::mapToResponse);
+            return transferRepository.findBySourceBranchIdOrDestinationBranchId(effectiveBranchId, effectiveBranchId, pageable).map(this::mapToResponse);
         }
 
-        // Check MERCHANT_ADMIN scope
         UUID merchantId = securityUtils.getCurrentUserMerchantId();
         if (merchantId != null) {
             if (status != null && !status.isBlank()) {
                 StockTransferStatus transferStatus = StockTransferStatus.valueOf(status.toUpperCase());
-                return transferRepository.findByMerchantIdAndStatus(merchantId, transferStatus, pageable)
-                        .map(this::mapToResponse);
+                if (hasDates)
+                    return transferRepository.findByMerchantIdAndStatusAndDateRange(merchantId, transferStatus, from, to, pageable).map(this::mapToResponse);
+                return transferRepository.findByMerchantIdAndStatus(merchantId, transferStatus, pageable).map(this::mapToResponse);
             }
+            if (hasDates)
+                return transferRepository.findByMerchantIdAndDateRange(merchantId, from, to, pageable).map(this::mapToResponse);
             return transferRepository.findByMerchantId(merchantId, pageable).map(this::mapToResponse);
         }
 
-        // HQ distributor or SUPER_ADMIN — show all (or filtered by status)
+        // HQ distributor or SUPER_ADMIN
         if (status != null && !status.isBlank()) {
             StockTransferStatus transferStatus = StockTransferStatus.valueOf(status.toUpperCase());
+            if (hasDates)
+                return transferRepository.findByStatusAndCreatedAtBetween(transferStatus, from, to, pageable).map(this::mapToResponse);
             return transferRepository.findByStatus(transferStatus, pageable).map(this::mapToResponse);
         }
+        if (hasDates)
+            return transferRepository.findByCreatedAtBetween(from, to, pageable).map(this::mapToResponse);
         return transferRepository.findAll(pageable).map(this::mapToResponse);
     }
 

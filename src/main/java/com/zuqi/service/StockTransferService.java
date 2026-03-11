@@ -5,13 +5,14 @@ import com.zuqi.api.dto.inventory.StockTransferResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 public interface StockTransferService {
 
     StockTransferResponse createTransfer(StockTransferRequest request, UUID requestedByUserId);
 
-    Page<StockTransferResponse> getTransfers(String status, Pageable pageable);
+    Page<StockTransferResponse> getTransfers(String status, LocalDate startDate, LocalDate endDate, Pageable pageable);
 
     StockTransferResponse getTransferById(UUID transferId);
 

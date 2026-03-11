@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -124,6 +125,9 @@ public class InvoiceServiceImpl implements InvoiceService {
         Optional<Invoice> existing = invoiceRepository.findByPosOrderId(saleId);
         if (existing.isPresent()) {
             Invoice invoice = existing.get();
+            if (invoice.getMerchant() == null && sale.getCustomer() != null) {
+                invoice.setMerchant(sale.getCustomer());
+            }
             invoice.setAmount(sale.getTotalAmount());
             invoice.setSubtotal(sale.getSubtotal());
             invoice.setDiscountAmount(sale.getDiscountAmount());
@@ -132,8 +136,15 @@ public class InvoiceServiceImpl implements InvoiceService {
             invoice.setPaidAmount(paidAmount);
             invoice.setStatus(status);
             invoice.calculateBalanceDue();
-            log.info("POS invoice updated: {}", invoice.getInvoiceNumber());
-            return InvoiceResponse.fromEntity(invoiceRepository.save(invoice));
+            Invoice savedInvoice = invoiceRepository.save(invoice);
+            log.info("POS invoice updated: {}", savedInvoice.getInvoiceNumber());
+
+            // Send PAID receipt email when sale is completed and customer has email
+            if (isCompleted && sale.getCustomer() != null && sale.getCustomer().getEmail() != null) {
+                sendPosReceiptEmail(savedInvoice, sale, true);
+            }
+
+            return InvoiceResponse.fromEntity(savedInvoice);
         }
 
         // Create new invoice
@@ -143,6 +154,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                 .sourceType("POS_SALE")
                 .posOrder(sale)
                 .distributor(sale.getBranch().getDistributor())
+                .merchant(sale.getCustomer())
                 .amount(sale.getTotalAmount())
                 .subtotal(sale.getSubtotal())
                 .discountAmount(sale.getDiscountAmount())
@@ -156,6 +168,11 @@ public class InvoiceServiceImpl implements InvoiceService {
 
         invoice.calculateBalanceDue();
         invoice = invoiceRepository.save(invoice);
+
+        // Send receipt email to the customer immediately (e.g. when cashier clicks "Print Bill")
+        if (sale.getCustomer() != null && sale.getCustomer().getEmail() != null) {
+            sendPosReceiptEmail(invoice, sale, isCompleted);
+        }
 
         log.info("POS invoice created: {} ({})", invoice.getInvoiceNumber(), status);
         return InvoiceResponse.fromEntity(invoice);
@@ -230,13 +247,16 @@ public class InvoiceServiceImpl implements InvoiceService {
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
+        // Use unsorted pageable — ORDER BY is embedded in the native query
+        Pageable unsorted = org.springframework.data.domain.PageRequest.of(
+                pageable.getPageNumber(), pageable.getPageSize());
         return invoiceRepository.findByFilters(
                 effectiveDistributorId,
                 status != null ? status.name() : null,
                 merchantId,
                 startDate,
                 endDate,
-                pageable
+                unsorted
         ).map(InvoiceResponse::fromEntity);
     }
 
@@ -496,6 +516,60 @@ public class InvoiceServiceImpl implements InvoiceService {
         return prefix + String.format("%04d", nextNum);
     }
 
+    private void sendPosReceiptEmail(Invoice invoice, PosSale sale, boolean isPaid) {
+        try {
+            Map<String, Object> variables = new HashMap<>();
+
+            variables.put("invoiceNumber", invoice.getInvoiceNumber());
+            variables.put("isPaid", isPaid);
+            variables.put("issueDate", invoice.getIssueDate().format(DateTimeFormatter.ofPattern("MMMM d, yyyy")));
+            variables.put("dueDate", invoice.getDueDate().format(DateTimeFormatter.ofPattern("MMMM d, yyyy")));
+            variables.put("subtotal", invoice.getSubtotal());
+            variables.put("discountAmount", invoice.getDiscountAmount());
+            variables.put("taxAmount", invoice.getTaxAmount());
+            variables.put("totalAmount", invoice.getTotalAmount());
+            variables.put("balanceDue", invoice.getBalanceDue());
+            variables.put("orderNumber", sale.getReceiptNumber() != null ? sale.getReceiptNumber() : invoice.getInvoiceNumber());
+            variables.put("notes", sale.getNotes());
+            variables.put("companyName", emailConfig.getFromName());
+
+            if (invoice.getDistributor() != null) {
+                variables.put("distributorName", invoice.getDistributor().getName());
+                variables.put("distributorAddress", invoice.getDistributor().getAddress());
+                variables.put("distributorPhone", invoice.getDistributor().getPhone());
+                variables.put("distributorEmail", invoice.getDistributor().getEmail());
+            }
+
+            com.zuqi.domain.customer.Customer customer = sale.getCustomer();
+            variables.put("merchantName", customer.getBusinessName());
+            variables.put("merchantOwner", customer.getOwnerName());
+            variables.put("merchantAddress", customer.getAddress());
+            variables.put("merchantPhone", customer.getPhone());
+            variables.put("merchantEmail", customer.getEmail());
+
+            List<Map<String, Object>> items = sale.getItems().stream()
+                    .map(i -> {
+                        Map<String, Object> m = new HashMap<>();
+                        m.put("productName", i.getProductName());
+                        m.put("quantity", i.getQuantity());
+                        m.put("unitPrice", i.getUnitPrice());
+                        m.put("totalAmount", i.getLineTotal());
+                        return m;
+                    })
+                    .collect(Collectors.toList());
+            variables.put("items", items);
+
+            String subject = (isPaid ? "Payment Confirmed — " : "Receipt ") + invoice.getInvoiceNumber() + " from " +
+                    (invoice.getDistributor() != null ? invoice.getDistributor().getName() : emailConfig.getFromName());
+
+            emailService.sendInvoiceEmailAsync(customer.getEmail(), subject, variables);
+            log.info("Sent POS {} email to {} for sale {}", isPaid ? "PAID receipt" : "receipt",
+                    customer.getEmail(), sale.getId());
+        } catch (Exception e) {
+            log.warn("Failed to send POS receipt email for sale {}: {}", sale.getId(), e.getMessage());
+        }
+    }
+
     private void sendInvoiceEmailAsync(Invoice invoice, String email) {
         Map<String, Object> variables = new HashMap<>();
 
@@ -528,10 +602,20 @@ public class InvoiceServiceImpl implements InvoiceService {
             variables.put("merchantEmail", invoice.getMerchant().getEmail());
         }
 
-        // Order items
+        // Order items — mapped to a simple format compatible with the template
         if (invoice.getOrder() != null && invoice.getOrder().getItems() != null) {
             variables.put("orderNumber", invoice.getOrder().getOrderNumber());
-            variables.put("items", invoice.getOrder().getItems());
+            List<Map<String, Object>> items = invoice.getOrder().getItems().stream()
+                    .map(i -> {
+                        Map<String, Object> m = new HashMap<>();
+                        m.put("productName", i.getProduct() != null ? i.getProduct().getName() : "");
+                        m.put("quantity", i.getQuantity());
+                        m.put("unitPrice", i.getUnitPrice());
+                        m.put("totalAmount", i.getTotalAmount());
+                        return m;
+                    })
+                    .collect(Collectors.toList());
+            variables.put("items", items);
         }
 
         variables.put("companyName", emailConfig.getFromName());

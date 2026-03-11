@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,7 +19,11 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
 
     Page<Product> findByActiveTrue(Pageable pageable);
 
+    Page<Product> findByActiveTrueAndCreatedAtBetween(LocalDateTime from, LocalDateTime to, Pageable pageable);
+
     Page<Product> findByDistributorIdAndActiveTrue(UUID distributorId, Pageable pageable);
+
+    Page<Product> findByDistributorIdAndActiveTrueAndCreatedAtBetween(UUID distributorId, LocalDateTime from, LocalDateTime to, Pageable pageable);
 
     Page<Product> findByActiveFalse(Pageable pageable);
 
@@ -61,6 +66,8 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
     /** Scope to a merchant brand (MERCHANT_ADMIN). */
     Page<Product> findByDistributorMerchantIdAndActiveTrue(UUID merchantId, Pageable pageable);
 
+    Page<Product> findByDistributorMerchantIdAndActiveTrueAndCreatedAtBetween(UUID merchantId, LocalDateTime from, LocalDateTime to, Pageable pageable);
+
     Page<Product> findByDistributorMerchantIdAndActiveFalse(UUID merchantId, Pageable pageable);
 
     @Query("SELECT p FROM Product p WHERE p.distributor.merchant.id = :merchantId AND p.active = true AND " +
@@ -96,6 +103,37 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
     Page<Product> searchAvailableByDistributorAndBranch(
             @Param("distributorId") UUID distributorId,
             @Param("branchId") UUID branchId,
+            @Param("searchTerm") String searchTerm,
+            Pageable pageable);
+
+    /**
+     * Branch-available products filtered by category.
+     */
+    @Query("SELECT p FROM Product p WHERE p.distributor.id = :distributorId AND p.active = true " +
+            "AND p.category.id = :categoryId " +
+            "AND (p.allBranches = true OR EXISTS (" +
+            "  SELECT pbp FROM ProductBranchPrice pbp " +
+            "  WHERE pbp.product = p AND pbp.branch.id = :branchId AND pbp.active = true))")
+    Page<Product> findAvailableByDistributorAndBranchAndCategory(
+            @Param("distributorId") UUID distributorId,
+            @Param("branchId") UUID branchId,
+            @Param("categoryId") Long categoryId,
+            Pageable pageable);
+
+    /**
+     * Branch-available products filtered by category with search term.
+     */
+    @Query("SELECT p FROM Product p WHERE p.distributor.id = :distributorId AND p.active = true " +
+            "AND p.category.id = :categoryId " +
+            "AND (LOWER(p.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+            "     LOWER(p.sku)  LIKE LOWER(CONCAT('%', :searchTerm, '%'))) " +
+            "AND (p.allBranches = true OR EXISTS (" +
+            "  SELECT pbp FROM ProductBranchPrice pbp " +
+            "  WHERE pbp.product = p AND pbp.branch.id = :branchId AND pbp.active = true))")
+    Page<Product> searchAvailableByDistributorAndBranchAndCategory(
+            @Param("distributorId") UUID distributorId,
+            @Param("branchId") UUID branchId,
+            @Param("categoryId") Long categoryId,
             @Param("searchTerm") String searchTerm,
             Pageable pageable);
 }

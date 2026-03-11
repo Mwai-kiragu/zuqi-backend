@@ -44,4 +44,22 @@ public interface PosSaleRepository extends JpaRepository<PosSale, UUID> {
 
     List<PosSale> findByBranchIdAndStatusAndCreatedAtBetween(UUID branchId, PosSaleStatus status,
                                                               LocalDateTime from, LocalDateTime to);
+
+    // Paged date-range queries used by getSales with date filter
+    Page<PosSale> findByBranchIdAndCreatedAtBetween(UUID branchId, LocalDateTime from, LocalDateTime to, Pageable pageable);
+
+    @Query("SELECT s FROM PosSale s WHERE s.branch.id = :branchId AND s.status = :status AND s.createdAt BETWEEN :from AND :to")
+    Page<PosSale> findByBranchIdAndStatusAndDateRange(@Param("branchId") UUID branchId,
+                                                      @Param("status") PosSaleStatus status,
+                                                      @Param("from") LocalDateTime from,
+                                                      @Param("to") LocalDateTime to,
+                                                      Pageable pageable);
+
+    Page<PosSale> findByCreatedAtBetween(LocalDateTime from, LocalDateTime to, Pageable pageable);
+
+    @Query("SELECT s FROM PosSale s WHERE s.status = :status AND s.createdAt BETWEEN :from AND :to")
+    Page<PosSale> findByStatusAndDateRange(@Param("status") PosSaleStatus status,
+                                           @Param("from") LocalDateTime from,
+                                           @Param("to") LocalDateTime to,
+                                           Pageable pageable);
 }

@@ -43,28 +43,33 @@ public class ExpenseServiceImpl implements ExpenseService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ExpenseResponse> getAll(ExpenseStatus status, Pageable pageable) {
+    public Page<ExpenseResponse> getAll(ExpenseStatus status, LocalDate startDate, LocalDate endDate, Pageable pageable) {
+        boolean hasDates = startDate != null && endDate != null;
         UUID merchantId = securityUtils.getCurrentUserMerchantId();
         if (merchantId != null) {
-            if (status != null) {
-                return expenseRepository.findByDistributorMerchantIdAndStatus(merchantId, status, pageable)
-                        .map(ExpenseResponse::from);
-            }
-            return expenseRepository.findByDistributorMerchantId(merchantId, pageable)
-                    .map(ExpenseResponse::from);
+            if (status != null && hasDates)
+                return expenseRepository.findByDistributorMerchantIdAndStatusAndDateRange(merchantId, status, startDate, endDate, pageable).map(ExpenseResponse::from);
+            if (status != null)
+                return expenseRepository.findByDistributorMerchantIdAndStatus(merchantId, status, pageable).map(ExpenseResponse::from);
+            if (hasDates)
+                return expenseRepository.findByDistributorMerchantIdAndDateRange(merchantId, startDate, endDate, pageable).map(ExpenseResponse::from);
+            return expenseRepository.findByDistributorMerchantId(merchantId, pageable).map(ExpenseResponse::from);
         }
 
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
         if (distributorId != null) {
-            if (status != null) {
-                return expenseRepository.findByDistributorIdAndStatusOrderByExpenseDateDesc(distributorId, status, pageable)
-                        .map(ExpenseResponse::from);
-            }
-            return expenseRepository.findByDistributorIdOrderByExpenseDateDesc(distributorId, pageable)
-                    .map(ExpenseResponse::from);
+            if (status != null && hasDates)
+                return expenseRepository.findByDistributorIdAndStatusAndExpenseDateBetweenOrderByExpenseDateDesc(distributorId, status, startDate, endDate, pageable).map(ExpenseResponse::from);
+            if (status != null)
+                return expenseRepository.findByDistributorIdAndStatusOrderByExpenseDateDesc(distributorId, status, pageable).map(ExpenseResponse::from);
+            if (hasDates)
+                return expenseRepository.findByDistributorIdAndExpenseDateBetweenOrderByExpenseDateDesc(distributorId, startDate, endDate, pageable).map(ExpenseResponse::from);
+            return expenseRepository.findByDistributorIdOrderByExpenseDateDesc(distributorId, pageable).map(ExpenseResponse::from);
         }
 
-        // SUPER_ADMIN — no filter
+        // SUPER_ADMIN
+        if (hasDates)
+            return expenseRepository.findByExpenseDateBetweenOrderByExpenseDateDesc(startDate, endDate, pageable).map(ExpenseResponse::from);
         return expenseRepository.findAll(pageable).map(ExpenseResponse::from);
     }
 

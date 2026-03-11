@@ -6,11 +6,12 @@ import com.zuqi.domain.expense.ExpenseStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 public interface ExpenseService {
 
-    Page<ExpenseResponse> getAll(ExpenseStatus status, Pageable pageable);
+    Page<ExpenseResponse> getAll(ExpenseStatus status, LocalDate startDate, LocalDate endDate, Pageable pageable);
 
     ExpenseResponse getById(UUID id);
 

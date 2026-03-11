@@ -1,6 +1,7 @@
 package com.zuqi.domain.pos;
 
 import com.zuqi.domain.branch.DistributorBranch;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.user.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -76,6 +77,10 @@ public class PosSale {
     @Column(name = "change_given", precision = 15, scale = 2)
     @Builder.Default
     private BigDecimal changeGiven = BigDecimal.ZERO;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "customer_id")
+    private Customer customer;
 
     @Column(name = "customer_name")
     private String customerName;

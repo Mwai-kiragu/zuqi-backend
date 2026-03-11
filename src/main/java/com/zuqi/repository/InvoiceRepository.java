@@ -35,7 +35,8 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
            "AND (:status IS NULL OR i.status = CAST(:status AS VARCHAR)) " +
            "AND (CAST(:merchantId AS UUID) IS NULL OR i.merchant_id = CAST(:merchantId AS UUID)) " +
            "AND (CAST(:startDate AS DATE) IS NULL OR i.issue_date >= CAST(:startDate AS DATE)) " +
-           "AND (CAST(:endDate AS DATE) IS NULL OR i.issue_date <= CAST(:endDate AS DATE))",
+           "AND (CAST(:endDate AS DATE) IS NULL OR i.issue_date <= CAST(:endDate AS DATE)) " +
+           "ORDER BY i.created_at DESC",
            countQuery = "SELECT COUNT(*) FROM invoices i WHERE " +
            "(CAST(:distributorId AS UUID) IS NULL OR i.distributor_id = CAST(:distributorId AS UUID)) " +
            "AND (:status IS NULL OR i.status = CAST(:status AS VARCHAR)) " +

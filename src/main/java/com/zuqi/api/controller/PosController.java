@@ -10,6 +10,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -121,12 +123,14 @@ public class PosController {
     }
 
     @GetMapping("/sales")
-    @Operation(summary = "List sales (filter by branchId, status)")
+    @Operation(summary = "List sales (filter by branchId, status, date range)")
     public ResponseEntity<ApiResponse<Page<PosSaleResponse>>> getSales(
             @RequestParam(required = false) UUID branchId,
             @RequestParam(required = false) String status,
-            Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(posService.getSales(branchId, status, pageable)));
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(posService.getSales(branchId, status, startDate, endDate, pageable)));
     }
 
     @GetMapping("/sales/{saleId}")
@@ -138,11 +142,13 @@ public class PosController {
     // ---- Reports ----
 
     @GetMapping("/reports/summary")
-    @Operation(summary = "Daily sales summary by branch")
+    @Operation(summary = "Sales summary by branch and date range")
     public ResponseEntity<ApiResponse<PosSummaryResponse>> getDailySummary(
             @RequestParam UUID branchId,
-            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
-        if (date == null) date = LocalDate.now();
-        return ResponseEntity.ok(ApiResponse.success(posService.getDailySummary(branchId, date)));
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        LocalDate from = startDate != null ? startDate : LocalDate.now();
+        LocalDate to   = endDate   != null ? endDate   : from;
+        return ResponseEntity.ok(ApiResponse.success(posService.getDailySummary(branchId, from, to)));
     }
 }

@@ -2,6 +2,7 @@ package com.zuqi.service.impl;
 
 import com.zuqi.api.dto.pos.*;
 import com.zuqi.domain.branch.DistributorBranch;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.inventory.*;
 import com.zuqi.domain.pos.*;
 import com.zuqi.domain.product.Product;
@@ -26,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
@@ -49,6 +51,7 @@ public class PosServiceImpl implements PosService {
     private final StockMovementRepository stockMovementRepository;
     private final WarehouseRepository warehouseRepository;
     private final UserRepository userRepository;
+    private final CustomerRepository customerRepository;
     private final SecurityUtils securityUtils;
     private final InvoiceService invoiceService;
     private final PaymentService paymentService;
@@ -183,13 +186,20 @@ public class PosServiceImpl implements PosService {
                     .orElseThrow(() -> new ResourceNotFoundException("Shift", "id", request.getShiftId()));
         }
 
+        Customer customer = null;
+        if (request.getCustomerId() != null) {
+            customer = customerRepository.findById(request.getCustomerId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getCustomerId()));
+        }
+
         PosSale sale = PosSale.builder()
                 .branch(branch)
                 .shift(shift)
                 .cashier(cashier)
                 .status(PosSaleStatus.DRAFT)
-                .customerName(request.getCustomerName())
-                .customerPhone(request.getCustomerPhone())
+                .customer(customer)
+                .customerName(customer != null ? customer.getBusinessName() : request.getCustomerName())
+                .customerPhone(customer != null ? customer.getPhone() : request.getCustomerPhone())
                 .notes(request.getNotes())
                 .build();
 
@@ -372,24 +382,33 @@ public class PosServiceImpl implements PosService {
     }
 
     @Override
-    public Page<PosSaleResponse> getSales(UUID branchId, String status, Pageable pageable) {
+    public Page<PosSaleResponse> getSales(UUID branchId, String status, LocalDate startDate, LocalDate endDate, Pageable pageable) {
         UUID effectiveBranchId = securityUtils.getEffectiveBranchId();
-        // Enforce branch scope for non-HQ users; HQ/SUPER_ADMIN may filter by requested branchId or see all
         UUID filterBranchId = effectiveBranchId != null ? effectiveBranchId : branchId;
 
+        LocalDateTime from = startDate != null ? startDate.atStartOfDay() : null;
+        LocalDateTime to   = endDate   != null ? endDate.atTime(LocalTime.MAX) : null;
+        boolean hasDate = from != null && to != null;
+
+        PosSaleStatus saleStatus = (status != null && !status.isBlank())
+                ? PosSaleStatus.valueOf(status.toUpperCase()) : null;
+
         if (filterBranchId == null) {
-            // HQ or SUPER_ADMIN with no specific branch filter — return all
-            if (status != null && !status.isBlank()) {
-                PosSaleStatus saleStatus = PosSaleStatus.valueOf(status.toUpperCase());
+            if (hasDate && saleStatus != null)
+                return saleRepository.findByStatusAndDateRange(saleStatus, from, to, pageable).map(this::mapToSaleResponse);
+            if (hasDate)
+                return saleRepository.findByCreatedAtBetween(from, to, pageable).map(this::mapToSaleResponse);
+            if (saleStatus != null)
                 return saleRepository.findByStatus(saleStatus, pageable).map(this::mapToSaleResponse);
-            }
             return saleRepository.findAll(pageable).map(this::mapToSaleResponse);
         }
-        if (status != null && !status.isBlank()) {
-            PosSaleStatus saleStatus = PosSaleStatus.valueOf(status.toUpperCase());
-            return saleRepository.findByBranchIdAndStatus(filterBranchId, saleStatus, pageable)
-                    .map(this::mapToSaleResponse);
-        }
+
+        if (hasDate && saleStatus != null)
+            return saleRepository.findByBranchIdAndStatusAndDateRange(filterBranchId, saleStatus, from, to, pageable).map(this::mapToSaleResponse);
+        if (hasDate)
+            return saleRepository.findByBranchIdAndCreatedAtBetween(filterBranchId, from, to, pageable).map(this::mapToSaleResponse);
+        if (saleStatus != null)
+            return saleRepository.findByBranchIdAndStatus(filterBranchId, saleStatus, pageable).map(this::mapToSaleResponse);
         return saleRepository.findByBranchId(filterBranchId, pageable).map(this::mapToSaleResponse);
     }
 
@@ -399,12 +418,12 @@ public class PosServiceImpl implements PosService {
     }
 
     @Override
-    public PosSummaryResponse getDailySummary(UUID branchId, LocalDate date) {
+    public PosSummaryResponse getDailySummary(UUID branchId, LocalDate startDate, LocalDate endDate) {
         DistributorBranch branch = branchRepository.findById(branchId)
                 .orElseThrow(() -> new ResourceNotFoundException("Branch", "id", branchId));
 
-        LocalDateTime from = date.atStartOfDay();
-        LocalDateTime to = date.plusDays(1).atStartOfDay();
+        LocalDateTime from = startDate.atStartOfDay();
+        LocalDateTime to = endDate.plusDays(1).atStartOfDay();
 
         long total = saleRepository.countByBranchAndStatusAndDateRange(branchId, PosSaleStatus.COMPLETED, from, to) +
                 saleRepository.countByBranchAndStatusAndDateRange(branchId, PosSaleStatus.CANCELLED, from, to);
@@ -415,7 +434,7 @@ public class PosServiceImpl implements PosService {
         return PosSummaryResponse.builder()
                 .branchId(branchId)
                 .branchName(branch.getName())
-                .date(date)
+                .date(startDate)
                 .totalTransactions(total)
                 .completedTransactions(completed)
                 .cancelledTransactions(cancelled)
@@ -557,6 +576,8 @@ public class PosServiceImpl implements PosService {
                 .totalAmount(sale.getTotalAmount())
                 .amountPaid(sale.getAmountPaid())
                 .changeGiven(sale.getChangeGiven())
+                .customerId(sale.getCustomer() != null ? sale.getCustomer().getId() : null)
+                .customerBusinessName(sale.getCustomer() != null ? sale.getCustomer().getBusinessName() : null)
                 .customerName(sale.getCustomerName())
                 .customerPhone(sale.getCustomerPhone())
                 .notes(sale.getNotes())

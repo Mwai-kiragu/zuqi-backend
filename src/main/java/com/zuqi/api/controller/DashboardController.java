@@ -26,9 +26,10 @@ public class DashboardController {
     @GetMapping("/stats")
     @Operation(summary = "Get dashboard stats", description = "Retrieves role-specific dashboard statistics. If distributorId is null, returns aggregated data (admin only)")
     public ResponseEntity<ApiResponse<DashboardStatsResponse>> getStats(
-            @Parameter(description = "Distributor ID (optional for admins)") @RequestParam(required = false) UUID distributorId) {
+            @Parameter(description = "Distributor ID (optional for admins)") @RequestParam(required = false) UUID distributorId,
+            @Parameter(description = "Branch ID filter (optional)") @RequestParam(required = false) UUID branchId) {
 
-        DashboardStatsResponse stats = dashboardService.getStats(distributorId, null);
+        DashboardStatsResponse stats = dashboardService.getStats(distributorId, null, branchId);
         return ResponseEntity.ok(ApiResponse.success(stats));
     }
 
@@ -36,9 +37,10 @@ public class DashboardController {
     @Operation(summary = "Get recent orders", description = "Retrieves recent orders for dashboard display")
     public ResponseEntity<ApiResponse<List<RecentOrderResponse>>> getRecentOrders(
             @Parameter(description = "Distributor ID (optional for admins)") @RequestParam(required = false) UUID distributorId,
+            @Parameter(description = "Branch ID filter (optional)") @RequestParam(required = false) UUID branchId,
             @Parameter(description = "Number of orders to return") @RequestParam(defaultValue = "10") int limit) {
 
-        List<RecentOrderResponse> orders = dashboardService.getRecentOrders(distributorId, null, limit);
+        List<RecentOrderResponse> orders = dashboardService.getRecentOrders(distributorId, null, limit, branchId);
         return ResponseEntity.ok(ApiResponse.success(orders));
     }
 

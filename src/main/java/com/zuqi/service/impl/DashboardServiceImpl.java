@@ -37,7 +37,7 @@ public class DashboardServiceImpl implements DashboardService {
     private final SecurityUtils securityUtils;
 
     @Override
-    public DashboardStatsResponse getStats(UUID distributorId, UUID userId) {
+    public DashboardStatsResponse getStats(UUID distributorId, UUID userId, UUID branchId) {
         // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
@@ -108,7 +108,7 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     @Override
-    public List<RecentOrderResponse> getRecentOrders(UUID distributorId, UUID userId, int limit) {
+    public List<RecentOrderResponse> getRecentOrders(UUID distributorId, UUID userId, int limit, UUID branchId) {
         // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {

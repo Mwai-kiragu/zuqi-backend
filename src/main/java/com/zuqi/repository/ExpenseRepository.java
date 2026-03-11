@@ -19,7 +19,13 @@ public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
 
     Page<Expense> findByDistributorIdOrderByExpenseDateDesc(UUID distributorId, Pageable pageable);
 
+    Page<Expense> findByDistributorIdAndExpenseDateBetweenOrderByExpenseDateDesc(UUID distributorId, LocalDate from, LocalDate to, Pageable pageable);
+
     Page<Expense> findByDistributorIdAndStatusOrderByExpenseDateDesc(UUID distributorId, ExpenseStatus status, Pageable pageable);
+
+    Page<Expense> findByDistributorIdAndStatusAndExpenseDateBetweenOrderByExpenseDateDesc(UUID distributorId, ExpenseStatus status, LocalDate from, LocalDate to, Pageable pageable);
+
+    Page<Expense> findByExpenseDateBetweenOrderByExpenseDateDesc(LocalDate from, LocalDate to, Pageable pageable);
 
     Page<Expense> findByDistributorIdAndCategoryOrderByExpenseDateDesc(UUID distributorId, ExpenseCategory category, Pageable pageable);
 
@@ -31,11 +37,32 @@ public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
 
     @Query("SELECT e FROM Expense e WHERE e.distributorId IN " +
            "(SELECT d.id FROM Distributor d WHERE d.merchant.id = :merchantId) " +
+           "AND e.expenseDate BETWEEN :from AND :to " +
+           "ORDER BY e.expenseDate DESC")
+    Page<Expense> findByDistributorMerchantIdAndDateRange(
+            @Param("merchantId") UUID merchantId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to,
+            Pageable pageable);
+
+    @Query("SELECT e FROM Expense e WHERE e.distributorId IN " +
+           "(SELECT d.id FROM Distributor d WHERE d.merchant.id = :merchantId) " +
            "AND e.status = :status " +
            "ORDER BY e.expenseDate DESC")
     Page<Expense> findByDistributorMerchantIdAndStatus(
             @Param("merchantId") UUID merchantId,
             @Param("status") ExpenseStatus status,
+            Pageable pageable);
+
+    @Query("SELECT e FROM Expense e WHERE e.distributorId IN " +
+           "(SELECT d.id FROM Distributor d WHERE d.merchant.id = :merchantId) " +
+           "AND e.status = :status AND e.expenseDate BETWEEN :from AND :to " +
+           "ORDER BY e.expenseDate DESC")
+    Page<Expense> findByDistributorMerchantIdAndStatusAndDateRange(
+            @Param("merchantId") UUID merchantId,
+            @Param("status") ExpenseStatus status,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to,
             Pageable pageable);
 
     /** Sum of APPROVED + PAID expenses for a date range (used in Financial Overview). */

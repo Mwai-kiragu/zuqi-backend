@@ -11,10 +11,12 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 @RestController
@@ -39,8 +41,10 @@ public class StockTransferController {
     @Operation(summary = "List transfers")
     public ResponseEntity<ApiResponse<Page<StockTransferResponse>>> getTransfers(
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(stockTransferService.getTransfers(status, pageable)));
+        return ResponseEntity.ok(ApiResponse.success(stockTransferService.getTransfers(status, startDate, endDate, pageable)));
     }
 
     @GetMapping("/{id}")

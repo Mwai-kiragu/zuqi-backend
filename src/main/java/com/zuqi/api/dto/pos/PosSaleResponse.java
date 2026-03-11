@@ -27,6 +27,8 @@ public class PosSaleResponse {
     private BigDecimal totalAmount;
     private BigDecimal amountPaid;
     private BigDecimal changeGiven;
+    private UUID customerId;
+    private String customerBusinessName;
     private String customerName;
     private String customerPhone;
     private String notes;

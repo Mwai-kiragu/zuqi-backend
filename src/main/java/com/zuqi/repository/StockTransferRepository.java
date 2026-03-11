@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,6 +28,19 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, UU
 
     Page<StockTransfer> findByDestinationBranchIdAndStatus(UUID destBranchId, StockTransferStatus status, Pageable pageable);
 
+    Page<StockTransfer> findByStatusAndCreatedAtBetween(StockTransferStatus status, LocalDateTime from, LocalDateTime to, Pageable pageable);
+
+    Page<StockTransfer> findByCreatedAtBetween(LocalDateTime from, LocalDateTime to, Pageable pageable);
+
+    @Query("SELECT t FROM StockTransfer t WHERE " +
+            "(t.sourceBranch.id = :branchId OR t.destinationBranch.id = :branchId) " +
+            "AND t.createdAt BETWEEN :from AND :to")
+    Page<StockTransfer> findByBranchIdAndDateRange(
+            @Param("branchId") UUID branchId,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to,
+            Pageable pageable);
+
     /** Scope to a merchant brand (MERCHANT_ADMIN). */
     @Query("SELECT t FROM StockTransfer t WHERE " +
             "t.sourceWarehouse.distributor.merchant.id = :merchantId OR " +
@@ -39,5 +53,26 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, UU
     Page<StockTransfer> findByMerchantIdAndStatus(
             @Param("merchantId") UUID merchantId,
             @Param("status") StockTransferStatus status,
+            Pageable pageable);
+
+    @Query("SELECT t FROM StockTransfer t WHERE " +
+            "(t.sourceWarehouse.distributor.merchant.id = :merchantId OR " +
+            "t.destinationWarehouse.distributor.merchant.id = :merchantId) " +
+            "AND t.createdAt BETWEEN :from AND :to")
+    Page<StockTransfer> findByMerchantIdAndDateRange(
+            @Param("merchantId") UUID merchantId,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to,
+            Pageable pageable);
+
+    @Query("SELECT t FROM StockTransfer t WHERE t.status = :status AND (" +
+            "t.sourceWarehouse.distributor.merchant.id = :merchantId OR " +
+            "t.destinationWarehouse.distributor.merchant.id = :merchantId) " +
+            "AND t.createdAt BETWEEN :from AND :to")
+    Page<StockTransfer> findByMerchantIdAndStatusAndDateRange(
+            @Param("merchantId") UUID merchantId,
+            @Param("status") StockTransferStatus status,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to,
             Pageable pageable);
 }

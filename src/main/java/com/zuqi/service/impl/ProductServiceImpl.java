@@ -52,25 +52,40 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ProductResponse> getAllProducts(Pageable pageable) {
+    public Page<ProductResponse> getAllProducts(java.time.LocalDate startDate, java.time.LocalDate endDate, Pageable pageable) {
         log.debug("Fetching all products");
+        boolean hasDates = startDate != null && endDate != null;
+        java.time.LocalDateTime from = hasDates ? startDate.atStartOfDay() : null;
+        java.time.LocalDateTime to = hasDates ? endDate.plusDays(1).atStartOfDay() : null;
 
         UUID merchantId = securityUtils.getCurrentUserMerchantId();
         if (merchantId != null) {
+            if (hasDates)
+                return enrichWithStockAndBranchPrices(productRepository.findByDistributorMerchantIdAndActiveTrueAndCreatedAtBetween(merchantId, from, to, pageable));
             return enrichWithStockAndBranchPrices(productRepository.findByDistributorMerchantIdAndActiveTrue(merchantId, pageable));
         }
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
         if (distributorId != null) {
+            if (hasDates)
+                return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndActiveTrueAndCreatedAtBetween(distributorId, from, to, pageable));
             return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndActiveTrue(distributorId, pageable));
         }
 
+        if (hasDates)
+            return enrichWithStockAndBranchPrices(productRepository.findByActiveTrueAndCreatedAtBetween(from, to, pageable));
         return enrichWithStockAndBranchPrices(productRepository.findByActiveTrue(pageable));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ProductResponse> getProductsByDistributor(UUID distributorId, Pageable pageable) {
+    public Page<ProductResponse> getProductsByDistributor(UUID distributorId, java.time.LocalDate startDate, java.time.LocalDate endDate, Pageable pageable) {
         log.debug("Fetching products for distributor: {}", distributorId);
+        boolean hasDates = startDate != null && endDate != null;
+        if (hasDates) {
+            java.time.LocalDateTime from = startDate.atStartOfDay();
+            java.time.LocalDateTime to = endDate.plusDays(1).atStartOfDay();
+            return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndActiveTrueAndCreatedAtBetween(distributorId, from, to, pageable));
+        }
         return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndActiveTrue(distributorId, pageable));
     }
 
@@ -104,11 +119,16 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ProductResponse> getProductsForBranch(UUID distributorId, UUID branchId, String search, Pageable pageable) {
-        log.debug("Fetching products for distributor: {} branch: {} search: {}", distributorId, branchId, search);
+    public Page<ProductResponse> getProductsForBranch(UUID distributorId, UUID branchId, String search, Long categoryId, Pageable pageable) {
+        log.debug("Fetching products for distributor: {} branch: {} search: {} category: {}", distributorId, branchId, search, categoryId);
 
         Page<Product> page;
-        if (search != null && !search.isBlank()) {
+        boolean hasSearch = search != null && !search.isBlank();
+        if (categoryId != null && hasSearch) {
+            page = productRepository.searchAvailableByDistributorAndBranchAndCategory(distributorId, branchId, categoryId, search, pageable);
+        } else if (categoryId != null) {
+            page = productRepository.findAvailableByDistributorAndBranchAndCategory(distributorId, branchId, categoryId, pageable);
+        } else if (hasSearch) {
             page = productRepository.searchAvailableByDistributorAndBranch(distributorId, branchId, search, pageable);
         } else {
             page = productRepository.findAvailableByDistributorAndBranch(distributorId, branchId, pageable);

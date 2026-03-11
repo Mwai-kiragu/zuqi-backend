@@ -32,9 +32,9 @@ public interface PosService {
 
     PosSaleResponse refundSale(UUID saleId, UUID cashierId);
 
-    Page<PosSaleResponse> getSales(UUID branchId, String status, Pageable pageable);
+    Page<PosSaleResponse> getSales(UUID branchId, String status, LocalDate startDate, LocalDate endDate, Pageable pageable);
 
     PosSaleResponse getSaleById(UUID saleId);
 
-    PosSummaryResponse getDailySummary(UUID branchId, LocalDate date);
+    PosSummaryResponse getDailySummary(UUID branchId, LocalDate startDate, LocalDate endDate);
 }

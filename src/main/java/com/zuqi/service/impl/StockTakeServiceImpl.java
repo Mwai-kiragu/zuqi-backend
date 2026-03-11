@@ -21,7 +21,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 @Service
@@ -38,8 +37,6 @@ public class StockTakeServiceImpl implements StockTakeService {
     private final StockMovementRepository stockMovementRepository;
     private final UserRepository userRepository;
     private final SecurityUtils securityUtils;
-
-    private static final AtomicInteger batchCounter = new AtomicInteger(1);
 
     @Override
     @Transactional
@@ -166,28 +163,40 @@ public class StockTakeServiceImpl implements StockTakeService {
 
         User approvedBy = userRepository.findById(approvedByUserId).orElse(null);
 
-        // Post variances to stock
+        // Post counted quantities to stock (absolute set — stock take is the source of truth)
         for (StockTakeItem item : batch.getItems()) {
-            if (item.getVariance() != null && item.getVariance().compareTo(BigDecimal.ZERO) != 0) {
-                stockRepository.findByWarehouseIdAndProductId(batch.getWarehouse().getId(), item.getProduct().getId())
-                        .ifPresent(stock -> {
-                            BigDecimal newQty = stock.getQuantity().add(item.getVariance());
-                            stock.setQuantity(newQty.max(BigDecimal.ZERO));
-                            stockRepository.save(stock);
+            // Skip items that were never counted
+            if (item.getCountedQuantity() == null) continue;
 
+            // Ensure variance is calculated (handles case where user didn't click Save per item)
+            if (item.getVariance() == null && item.getSystemQuantity() != null) {
+                item.setVariance(item.getCountedQuantity().subtract(item.getSystemQuantity()));
+                itemRepository.save(item);
+            }
+
+            BigDecimal counted = item.getCountedQuantity();
+            BigDecimal variance = item.getVariance() != null ? item.getVariance() : BigDecimal.ZERO;
+
+            stockRepository.findByWarehouseIdAndProductId(batch.getWarehouse().getId(), item.getProduct().getId())
+                    .ifPresent(stock -> {
+                        // Absolute set: stock take defines the actual quantity
+                        stock.setQuantity(counted.max(BigDecimal.ZERO));
+                        stockRepository.save(stock);
+
+                        if (variance.compareTo(BigDecimal.ZERO) != 0) {
                             StockMovement movement = StockMovement.builder()
                                     .warehouse(batch.getWarehouse())
                                     .product(item.getProduct())
                                     .movementType(StockMovement.MovementType.ADJUSTMENT)
-                                    .quantity(item.getVariance())
+                                    .quantity(variance)
                                     .referenceType("STOCK_TAKE")
                                     .referenceId(batch.getId())
                                     .notes("Stock take variance: " + batch.getReferenceNumber())
                                     .createdBy(approvedBy)
                                     .build();
                             stockMovementRepository.save(movement);
-                        });
-            }
+                        }
+                    });
         }
 
         batch.setStatus(StockTakeBatchStatus.APPROVED);
@@ -221,8 +230,9 @@ public class StockTakeServiceImpl implements StockTakeService {
     }
 
     private String generateBatchRef() {
-        return "STK-" + DateTimeFormatter.ofPattern("yyyyMMdd").format(LocalDateTime.now())
-                + "-" + String.format("%05d", batchCounter.getAndIncrement());
+        String prefix = "STK-" + DateTimeFormatter.ofPattern("yyyyMMdd").format(LocalDateTime.now()) + "-";
+        int next = batchRepository.findMaxSequenceByPrefix(prefix) + 1;
+        return prefix + String.format("%05d", next);
     }
 
     private StockTakeResponse mapToResponse(StockTakeBatch batch) {

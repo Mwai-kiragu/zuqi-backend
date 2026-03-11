@@ -18,11 +18,13 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -42,13 +44,15 @@ public class ProductController {
             @Parameter(description = "Category ID filter") @RequestParam(required = false) Long categoryId,
             @Parameter(description = "Search term") @RequestParam(required = false) String search,
             @Parameter(description = "Filter by active status") @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @PageableDefault(size = 20, sort = "name", direction = Sort.Direction.ASC) Pageable pageable) {
 
         Page<ProductResponse> products;
 
         // Branch-scoped query takes precedence when branchId is provided
         if (branchId != null && distributorId != null) {
-            products = productService.getProductsForBranch(distributorId, branchId, search, pageable);
+            products = productService.getProductsForBranch(distributorId, branchId, search, categoryId, pageable);
         } else if (search != null && !search.isBlank()) {
             products = productService.searchProducts(search, distributorId, pageable);
         } else if (active != null && !active) {
@@ -59,11 +63,11 @@ public class ProductController {
                 products = productService.getInactiveProducts(pageable);
             }
         } else if (distributorId != null) {
-            products = productService.getProductsByDistributor(distributorId, pageable);
+            products = productService.getProductsByDistributor(distributorId, startDate, endDate, pageable);
         } else if (categoryId != null) {
             products = productService.getProductsByCategory(categoryId, pageable);
         } else {
-            products = productService.getAllProducts(pageable);
+            products = productService.getAllProducts(startDate, endDate, pageable);
         }
 
         return ResponseEntity.ok(ApiResponse.success(products));
