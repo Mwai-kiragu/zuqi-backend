@@ -26,7 +26,7 @@ public class AgingReportController {
     private final SecurityUtils securityUtils;
 
     @GetMapping("/ar")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get Accounts Receivable aging report")
     public ResponseEntity<ApiResponse<ArAgingResponse>> getArAging(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOfDate,
@@ -37,7 +37,7 @@ public class AgingReportController {
     }
 
     @GetMapping("/ap")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get Accounts Payable aging report")
     public ResponseEntity<ApiResponse<ApAgingResponse>> getApAging(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOfDate,

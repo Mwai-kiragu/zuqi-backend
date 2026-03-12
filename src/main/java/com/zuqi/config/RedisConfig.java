@@ -2,8 +2,11 @@ package com.zuqi.config;
 
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
+import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
+import org.springframework.cache.support.CompositeCacheManager;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
@@ -32,7 +35,19 @@ public class RedisConfig {
         return template;
     }
 
+    /**
+     * In-memory cache for AI/ML model objects.
+     * Tribuo models contain complex internal state (OffsetDateTime, native handles, etc.)
+     * that cannot be JSON-serialized into Redis. A simple ConcurrentMap is correct here:
+     * models are large, deserialization is expensive, and we want JVM-local reuse.
+     */
     @Bean
+    public ConcurrentMapCacheManager aiModelCacheManager() {
+        return new ConcurrentMapCacheManager("aiModels");
+    }
+
+    @Bean
+    @Primary
     public CacheManager cacheManager(RedisConnectionFactory connectionFactory) {
         RedisCacheConfiguration defaultConfig = RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(Duration.ofHours(1))
@@ -78,9 +93,15 @@ public class RedisConfig {
         // Sales rep features - 24 hour TTL for performance tracking
         cacheConfigurations.put("salesRepFeatures", defaultConfig.entryTtl(Duration.ofHours(24)));
 
-        return RedisCacheManager.builder(connectionFactory)
+        RedisCacheManager redisCacheManager = RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)
                 .withInitialCacheConfigurations(cacheConfigurations)
                 .build();
+
+        // Composite: aiModels → in-memory first; everything else → Redis
+        CompositeCacheManager composite = new CompositeCacheManager(
+                aiModelCacheManager(), redisCacheManager);
+        composite.setFallbackToNoOpCache(false);
+        return composite;
     }
 }

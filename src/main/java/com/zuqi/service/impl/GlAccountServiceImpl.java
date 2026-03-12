@@ -31,11 +31,13 @@ public class GlAccountServiceImpl implements GlAccountService {
     private final GlAccountRepository glAccountRepository;
 
     @Override
-    public List<GlAccountResponse> getAll(UUID distributorId) {
+    public List<GlAccountResponse> getAll(UUID distributorId, UUID merchantId) {
+        if (merchantId != null) {
+            return glAccountRepository.findByDistributorMerchantIdOrderByAccountCodeAsc(merchantId)
+                    .stream().map(GlAccountResponse::fromEntity).collect(Collectors.toList());
+        }
         return glAccountRepository.findByDistributorIdOrderByAccountCodeAsc(distributorId)
-                .stream()
-                .map(GlAccountResponse::fromEntity)
-                .collect(Collectors.toList());
+                .stream().map(GlAccountResponse::fromEntity).collect(Collectors.toList());
     }
 
     @Override

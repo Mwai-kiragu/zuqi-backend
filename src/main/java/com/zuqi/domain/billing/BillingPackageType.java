@@ -9,7 +9,7 @@ public enum BillingPackageType {
     FREE_TRIAL {
         @Override
         public List<String> getIncludedModules() {
-            return Arrays.asList("dashboard", "orders", "merchants", "products", "inventory");
+            return Arrays.asList("dashboard", "orders", "merchants", "customers", "products", "inventory");
         }
     },
 
@@ -17,7 +17,12 @@ public enum BillingPackageType {
         @Override
         public List<String> getIncludedModules() {
             List<String> modules = new java.util.ArrayList<>(FREE_TRIAL.getIncludedModules());
-            modules.addAll(Arrays.asList("suppliers", "procurement", "reports", "approvals"));
+            modules.addAll(Arrays.asList(
+                "payments", "invoices", "suppliers", "procurement",
+                "reports", "approvals", "pos", "branches",
+                "stockTransfers", "stockTakes", "accounting",
+                "expenses", "fundsTransfer", "warehouses", "paymentSetup"
+            ));
             return modules;
         }
     },

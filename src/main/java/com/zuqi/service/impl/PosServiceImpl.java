@@ -31,7 +31,6 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 @Service
@@ -58,7 +57,6 @@ public class PosServiceImpl implements PosService {
     private final GlAutoPostingService glAutoPostingService;
     private final ApplicationEventPublisher eventPublisher;
 
-    private static final AtomicInteger receiptCounter = new AtomicInteger(1);
 
     @Override
     @Transactional
@@ -313,7 +311,11 @@ public class PosServiceImpl implements PosService {
         paymentService.createPaymentsForPosSale(savedSale);
 
         // Auto-post to GL: DR Cash+AR / CR Revenue, and DR COGS / CR Inventory
-        glAutoPostingService.postPosSaleCompleted(savedSale);
+        try {
+            glAutoPostingService.postPosSaleCompleted(savedSale);
+        } catch (Exception e) {
+            log.warn("GL auto-post skipped (POS sale completed) for {}: {}", savedSale.getReceiptNumber(), e.getMessage());
+        }
 
         // Publish event — invoice is created AFTER this transaction commits
         // (TransactionalEventListener AFTER_COMMIT), keeping invoice failure
@@ -500,8 +502,10 @@ public class PosServiceImpl implements PosService {
     }
 
     private String generateReceiptNumber() {
-        return "RCP-" + DateTimeFormatter.ofPattern("yyyyMMdd").format(LocalDateTime.now())
-                + "-" + String.format("%05d", receiptCounter.getAndIncrement());
+        String prefix = "RCP-" + DateTimeFormatter.ofPattern("yyyyMMdd").format(LocalDateTime.now()) + "-";
+        Integer maxNum = saleRepository.findMaxReceiptNumberByPrefix(prefix);
+        int nextNum = (maxNum != null ? maxNum : 0) + 1;
+        return prefix + String.format("%05d", nextNum);
     }
 
     private PosTerminalResponse mapToTerminalResponse(PosTerminal terminal) {

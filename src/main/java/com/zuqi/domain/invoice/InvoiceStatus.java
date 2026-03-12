@@ -2,6 +2,7 @@ package com.zuqi.domain.invoice;
 
 public enum InvoiceStatus {
     DRAFT,
+    UNPAID,
     SENT,
     VIEWED,
     PAID,

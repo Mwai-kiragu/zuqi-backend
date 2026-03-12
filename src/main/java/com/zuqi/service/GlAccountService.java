@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.UUID;
 
 public interface GlAccountService {
-    List<GlAccountResponse> getAll(UUID distributorId);
+    List<GlAccountResponse> getAll(UUID distributorId, UUID merchantId);
     GlAccountResponse getById(UUID id);
     GlAccountResponse create(UUID distributorId, GlAccountRequest request, User currentUser);
     GlAccountResponse update(UUID id, GlAccountRequest request, User currentUser);

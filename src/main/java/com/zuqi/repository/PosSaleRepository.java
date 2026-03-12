@@ -28,6 +28,10 @@ public interface PosSaleRepository extends JpaRepository<PosSale, UUID> {
 
     Optional<PosSale> findByReceiptNumber(String receiptNumber);
 
+    @Query(value = "SELECT MAX(CAST(SUBSTRING(receipt_number FROM LENGTH(:prefix) + 1) AS INTEGER)) " +
+                   "FROM pos_sales WHERE receipt_number LIKE CONCAT(:prefix, '%')", nativeQuery = true)
+    Integer findMaxReceiptNumberByPrefix(@Param("prefix") String prefix);
+
     @Query("SELECT COUNT(s) FROM PosSale s WHERE s.branch.id = :branchId AND s.status = :status " +
            "AND s.createdAt BETWEEN :from AND :to")
     long countByBranchAndStatusAndDateRange(@Param("branchId") UUID branchId,

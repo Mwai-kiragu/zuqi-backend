@@ -12,7 +12,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 public interface JournalEntryService {
-    Page<JournalEntryResponse> getAll(UUID distributorId, JournalEntryStatus status,
+    Page<JournalEntryResponse> getAll(UUID distributorId, UUID merchantId, JournalEntryStatus status,
                                        LocalDate fromDate, LocalDate toDate,
                                        JournalSourceModule sourceModule, Pageable pageable);
     JournalEntryResponse getById(UUID id);

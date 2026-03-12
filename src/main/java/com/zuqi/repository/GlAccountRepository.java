@@ -25,4 +25,7 @@ public interface GlAccountRepository extends JpaRepository<GlAccount, UUID> {
     List<GlAccount> findByDistributorIdAndActiveOrderByAccountCodeAsc(UUID distributorId, boolean active);
 
     Optional<GlAccount> findByDistributorIdAndSystemAccountType(UUID distributorId, SystemAccountType systemAccountType);
+
+    @org.springframework.data.jpa.repository.Query("SELECT a FROM GlAccount a JOIN Distributor d ON a.distributorId = d.id WHERE d.merchant.id = :merchantId ORDER BY a.accountCode ASC")
+    List<GlAccount> findByDistributorMerchantIdOrderByAccountCodeAsc(@org.springframework.data.repository.query.Param("merchantId") UUID merchantId);
 }

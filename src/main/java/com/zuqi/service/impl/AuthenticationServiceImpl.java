@@ -41,6 +41,8 @@ import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.AuthenticationService;
 import com.zuqi.service.BillingService;
 import com.zuqi.service.EmailService;
+import com.zuqi.service.GlAccountService;
+import com.zuqi.service.GlPeriodService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -75,6 +77,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private final ActivityLogService activityLogService;
     private final DistributorBranchRepository distributorBranchRepository;
     private final BranchUserRepository branchUserRepository;
+    private final GlAccountService glAccountService;
+    private final GlPeriodService glPeriodService;
 
     // OTP expires in 10 minutes
     private static final int OTP_EXPIRY_MINUTES = 10;
@@ -240,6 +244,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         branchUserRepository.save(adminBranchUser);
         log.info("Created default HQ branch {} for distributor {}", savedHqBranch.getId(), savedDistributor.getId());
 
+        // Auto-seed GL accounts + create all 12 periods for the current year
+        autoSetupGl(savedDistributor, savedUser);
+
         // 4. Assign FREE_TRIAL subscription
         AssignSubscriptionRequest subRequest = new AssignSubscriptionRequest();
         subRequest.setDistributorId(savedDistributor.getId());
@@ -361,6 +368,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .status(BranchUserStatus.ACTIVE)
                 .build();
         branchUserRepository.save(adminBranchUser);
+
+        // Auto-seed GL accounts + create all 12 periods for the current year
+        autoSetupGl(savedDistributor, savedUser);
 
         // 7. Assign subscription package (defaults to FREE_TRIAL if not specified)
         AssignSubscriptionRequest subRequest = new AssignSubscriptionRequest();
@@ -700,6 +710,24 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         emailService.sendEmailVerificationOtpEmail(user, otp);
         log.info("Email verification OTP resent to: {}", user.getEmail());
         return true;
+    }
+
+    private void autoSetupGl(Distributor distributor, User user) {
+        try {
+            glAccountService.seedDefaultAccounts(distributor.getId(), user);
+            log.info("Auto-seeded GL accounts for distributor {}", distributor.getId());
+        } catch (Exception e) {
+            log.warn("Failed to auto-seed GL accounts for distributor {}: {}", distributor.getId(), e.getMessage());
+        }
+        try {
+            int year = java.time.LocalDate.now().getYear();
+            for (int month = 1; month <= 12; month++) {
+                glPeriodService.getOrCreate(distributor.getId(), year, month, user);
+            }
+            log.info("Auto-created GL periods for year {} for distributor {}", year, distributor.getId());
+        } catch (Exception e) {
+            log.warn("Failed to auto-create GL periods for distributor {}: {}", distributor.getId(), e.getMessage());
+        }
     }
 
     private String generateOtp() {

@@ -96,7 +96,11 @@ public class InvoiceServiceImpl implements InvoiceService {
         log.info("Invoice created successfully: {}", invoice.getInvoiceNumber());
 
         // Auto-post to GL: DR Accounts Receivable / CR Sales Revenue
-        glAutoPostingService.postInvoiceCreated(invoice);
+        try {
+            glAutoPostingService.postInvoiceCreated(invoice);
+        } catch (Exception e) {
+            log.warn("GL auto-post skipped (invoice created) for {}: {}", invoice.getInvoiceNumber(), e.getMessage());
+        }
 
         // Automatically send invoice if merchant has email
         if (order.getMerchant().getEmail() != null && !order.getMerchant().getEmail().isEmpty()) {
@@ -118,8 +122,18 @@ public class InvoiceServiceImpl implements InvoiceService {
                 .orElseThrow(() -> new ResourceNotFoundException("PosSale", "id", saleId));
 
         boolean isCompleted = sale.getStatus() == PosSaleStatus.COMPLETED;
-        InvoiceStatus status = isCompleted ? InvoiceStatus.PAID : InvoiceStatus.SENT;
-        BigDecimal paidAmount = isCompleted ? sale.getAmountPaid() : BigDecimal.ZERO;
+        BigDecimal paidAmount = isCompleted ? (sale.getAmountPaid() != null ? sale.getAmountPaid() : BigDecimal.ZERO) : BigDecimal.ZERO;
+        BigDecimal total = sale.getTotalAmount() != null ? sale.getTotalAmount() : BigDecimal.ZERO;
+        InvoiceStatus status;
+        if (!isCompleted) {
+            status = InvoiceStatus.UNPAID;
+        } else if (paidAmount.compareTo(total) >= 0) {
+            status = InvoiceStatus.PAID;
+        } else if (paidAmount.compareTo(BigDecimal.ZERO) > 0) {
+            status = InvoiceStatus.PARTIALLY_PAID;
+        } else {
+            status = InvoiceStatus.UNPAID;
+        }
 
         // Upsert: update existing invoice if found
         Optional<Invoice> existing = invoiceRepository.findByPosOrderId(saleId);
@@ -337,7 +351,11 @@ public class InvoiceServiceImpl implements InvoiceService {
         log.info("Payment of {} recorded for invoice {}", amount, invoice.getInvoiceNumber());
 
         // Auto-post to GL: DR Cash & Bank / CR Accounts Receivable
-        glAutoPostingService.postPaymentReceived(invoice, amount);
+        try {
+            glAutoPostingService.postPaymentReceived(invoice, amount);
+        } catch (Exception e) {
+            log.warn("GL auto-post skipped (payment received) for {}: {}", invoice.getInvoiceNumber(), e.getMessage());
+        }
 
         // Create a completed Payment record so transactions appear on the payments list
         if (invoice.getDistributor() != null && invoice.getMerchant() != null) {

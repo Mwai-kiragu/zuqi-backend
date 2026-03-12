@@ -39,9 +39,13 @@ public class JournalEntryServiceImpl implements JournalEntryService {
     private final ApprovalService approvalService;
 
     @Override
-    public Page<JournalEntryResponse> getAll(UUID distributorId, JournalEntryStatus status,
+    public Page<JournalEntryResponse> getAll(UUID distributorId, UUID merchantId, JournalEntryStatus status,
                                               LocalDate fromDate, LocalDate toDate,
                                               JournalSourceModule sourceModule, Pageable pageable) {
+        if (merchantId != null) {
+            return journalEntryRepository.findByMerchantIdWithFilters(merchantId, status, fromDate, toDate, sourceModule, pageable)
+                    .map(JournalEntryResponse::fromEntity);
+        }
         return journalEntryRepository.findByFilters(distributorId, status, fromDate, toDate, sourceModule, pageable)
                 .map(JournalEntryResponse::fromEntity);
     }
