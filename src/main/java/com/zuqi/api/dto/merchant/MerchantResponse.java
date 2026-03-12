@@ -27,6 +27,7 @@ public class MerchantResponse {
     private String country;
     private String logoUrl;
     private boolean active;
+    private boolean cashEnabled;
     private KycStatus kycStatus;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -43,6 +44,7 @@ public class MerchantResponse {
                 .country(merchant.getCountry())
                 .logoUrl(merchant.getLogoUrl())
                 .active(merchant.isActive())
+                .cashEnabled(merchant.isCashEnabled())
                 .kycStatus(merchant.getKycStatus())
                 .createdAt(merchant.getCreatedAt())
                 .updatedAt(merchant.getUpdatedAt())

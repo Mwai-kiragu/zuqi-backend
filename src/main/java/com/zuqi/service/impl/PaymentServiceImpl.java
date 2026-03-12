@@ -12,6 +12,7 @@ import com.zuqi.domain.pos.PosSalePayment;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.repository.*;
+import com.zuqi.domain.mpesa.MpesaConfigStatus;
 import com.zuqi.ai.event.PaymentRecordedEvent;
 import com.zuqi.ai.feature.FeatureStore;
 import com.zuqi.service.PaymentService;
@@ -43,6 +44,8 @@ public class PaymentServiceImpl implements PaymentService {
     private final OrderRepository orderRepository;
     private final CustomerRepository customerRepository;
     private final DistributorRepository distributorRepository;
+    private final MerchantRepository merchantRepository;
+    private final MpesaConfigRepository mpesaConfigRepository;
     private final SecurityUtils securityUtils;
     private final ApplicationEventPublisher eventPublisher;
     private final FeatureStore featureStore;
@@ -273,10 +276,38 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public List<PaymentMethodResponse> getActivePaymentMethods() {
-        return paymentMethodRepository.findByActiveTrue()
+        List<PaymentMethod> dbMethods = paymentMethodRepository.findByActiveTrue();
+
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId == null) {
+            // SUPER_ADMIN or no merchant context — return all as-is
+            return dbMethods.stream().map(PaymentMethodResponse::fromEntity).toList();
+        }
+
+        // Check merchant-specific availability
+        boolean cashEnabled = merchantRepository.findById(merchantId)
+                .map(m -> m.isCashEnabled())
+                .orElse(true);
+
+        boolean mpesaEnabled = mpesaConfigRepository.findByMerchantId(merchantId)
                 .stream()
-                .map(PaymentMethodResponse::fromEntity)
-                .toList();
+                .anyMatch(c -> c.getStatus() == com.zuqi.domain.mpesa.MpesaConfigStatus.ACTIVE);
+
+        return dbMethods.stream().map(m -> {
+            String code = m.getCode() != null ? m.getCode().toUpperCase() : "";
+            boolean available = switch (code) {
+                case "CASH"  -> cashEnabled;
+                case "MPESA" -> mpesaEnabled;
+                default      -> m.isActive();
+            };
+            return PaymentMethodResponse.builder()
+                    .id(m.getId())
+                    .name(m.getName())
+                    .code(m.getCode())
+                    .description(m.getDescription())
+                    .active(available)
+                    .build();
+        }).toList();
     }
 
     @Override

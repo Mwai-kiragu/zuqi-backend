@@ -1,0 +1,22 @@
+package com.zuqi.api.dto.mpesa;
+
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+
+import java.math.BigDecimal;
+
+public record StkPushRequest(
+
+        @NotBlank String businessId,
+
+        @NotBlank String phone,
+
+        @NotNull @DecimalMin("1") BigDecimal amount,
+
+        @NotBlank String referenceId,
+
+        @NotBlank String referenceType,
+
+        String description
+) {}

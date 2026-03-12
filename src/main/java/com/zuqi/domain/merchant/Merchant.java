@@ -56,6 +56,10 @@ public class Merchant {
     @Builder.Default
     private boolean active = true;
 
+    @Column(name = "cash_enabled", nullable = false)
+    @Builder.Default
+    private boolean cashEnabled = true;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "kyc_status", length = 20)
     @Builder.Default
