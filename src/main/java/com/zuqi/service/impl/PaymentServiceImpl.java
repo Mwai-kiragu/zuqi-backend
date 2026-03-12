@@ -13,6 +13,7 @@ import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.repository.*;
 import com.zuqi.domain.mpesa.MpesaConfigStatus;
+import com.zuqi.domain.kcb.KcbConfigStatus;
 import com.zuqi.ai.event.PaymentRecordedEvent;
 import com.zuqi.ai.feature.FeatureStore;
 import com.zuqi.service.PaymentService;
@@ -46,6 +47,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final DistributorRepository distributorRepository;
     private final MerchantRepository merchantRepository;
     private final MpesaConfigRepository mpesaConfigRepository;
+    private final KcbConfigRepository kcbConfigRepository;
     private final SecurityUtils securityUtils;
     private final ApplicationEventPublisher eventPublisher;
     private final FeatureStore featureStore;
@@ -291,13 +293,16 @@ public class PaymentServiceImpl implements PaymentService {
 
         boolean mpesaEnabled = mpesaConfigRepository.findByMerchantId(merchantId)
                 .stream()
-                .anyMatch(c -> c.getStatus() == com.zuqi.domain.mpesa.MpesaConfigStatus.ACTIVE);
+                .anyMatch(c -> c.getStatus() == MpesaConfigStatus.ACTIVE);
+
+        boolean kcbEnabled = kcbConfigRepository.existsByMerchantIdAndStatus(merchantId, KcbConfigStatus.ACTIVE);
 
         return dbMethods.stream().map(m -> {
             String code = m.getCode() != null ? m.getCode().toUpperCase() : "";
             boolean available = switch (code) {
                 case "CASH"  -> cashEnabled;
                 case "MPESA" -> mpesaEnabled;
+                case "KCB"   -> kcbEnabled;
                 default      -> m.isActive();
             };
             return PaymentMethodResponse.builder()

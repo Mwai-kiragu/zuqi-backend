@@ -241,10 +241,16 @@ resilience4j:
       aiService:
         timeout-duration: 30s
 
+kcb:
+  add-config-url: ${KCB_ADD_CONFIG_URL:https://stk.swerri.io/api/v1/add_business_configs}
+  stk-push-url: ${KCB_STK_PUSH_URL:https://stk.swerri.io/api/v1/kcb_acc_stkpush}
+#  callback-base-url: ${KCB_CALLBACK_BASE_URL:https://zuqi.pestoe.com/api/v1/kcb/callback}
+  callback-base-url: ${KCB_CALLBACK_BASE_URL:https://decimally-aposematic-librada.ngrok-free.dev/api/v1/kcb/callback}
+
 daraja:
   stk-push-url: ${DARAJA_STK_PUSH_URL:https://stk.swerri.io/api/v1/stkPush}
-#  callback-base-url: ${DARAJA_CALLBACK_BASE_URL:https://decimally-aposematic-librada.ngrok-free.dev/api/v1/mpesa/callback}
-  callback-base-url: ${DARAJA_CALLBACK_BASE_URL:https://zuqi.pestoe.com/api/v1/mpesa/callback}
+  callback-base-url: ${DARAJA_CALLBACK_BASE_URL:https://decimally-aposematic-librada.ngrok-free.dev/api/v1/mpesa/callback}
+#  callback-base-url: ${DARAJA_CALLBACK_BASE_URL:https://zuqi.pestoe.com/api/v1/mpesa/callback}
   business-config-url: ${DARAJA_BUSINESS_CONFIG_URL:https://stk.swerri.io/api/v1/business_config/all}
   edit-config-url: ${DARAJA_EDIT_CONFIG_URL:https://stk.swerri.io/api/v1/business_config/edit}
 
