@@ -467,7 +467,7 @@ public class OrderServiceImpl implements OrderService {
         }
     }
 
-    private void validateCreditLimit(Merchant merchant, OrderRequest request) {
+    private void validateCreditLimit(Customer merchant, OrderRequest request) {
         UUID distributorId = request.getDistributorId();
         creditLimitRepository.findByMerchantIdAndDistributorIdAndStatus(
                 merchant.getId(), distributorId, CreditLimitStatus.ACTIVE
