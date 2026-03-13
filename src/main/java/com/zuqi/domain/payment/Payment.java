@@ -2,6 +2,7 @@ package com.zuqi.domain.payment;
 
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.customer.Customer;
+import com.zuqi.domain.invoice.Invoice;
 import com.zuqi.domain.order.Order;
 import com.zuqi.domain.pos.PosSale;
 import com.zuqi.domain.user.User;
@@ -52,6 +53,10 @@ public class Payment {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "pos_sale_id")
     private PosSale posSale;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "invoice_id")
+    private Invoice invoice;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "merchant_id")
