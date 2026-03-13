@@ -1,7 +1,7 @@
 package com.zuqi.ai.feature;
 
-import com.zuqi.domain.merchant.Merchant;
-import com.zuqi.domain.merchant.MerchantCategory;
+import com.zuqi.domain.customer.Customer;
+import com.zuqi.domain.customer.CustomerCategory;
 import com.zuqi.domain.order.Order;
 import com.zuqi.domain.order.OrderItem;
 import com.zuqi.domain.order.OrderStatus;
@@ -9,7 +9,7 @@ import com.zuqi.domain.payment.Payment;
 import com.zuqi.domain.payment.PaymentStatus;
 import com.zuqi.domain.product.Product;
 import com.zuqi.domain.product.ProductCategory;
-import com.zuqi.repository.MerchantRepository;
+import com.zuqi.repository.CustomerRepository;
 import com.zuqi.repository.OrderRepository;
 import com.zuqi.repository.PaymentRepository;
 import com.zuqi.repository.ProductRepository;
@@ -58,7 +58,7 @@ import static org.mockito.Mockito.when;
 class OrderFeatureServiceIntegrationTest {
 
     @Mock
-    private MerchantRepository merchantRepository;
+    private CustomerRepository merchantRepository;
 
     @Mock
     private ProductRepository productRepository;
@@ -77,7 +77,7 @@ class OrderFeatureServiceIntegrationTest {
 
     private UUID merchantId;
     private UUID productId;
-    private Merchant merchant;
+    private Customer merchant;
     private Product product;
 
     @BeforeEach
@@ -85,8 +85,8 @@ class OrderFeatureServiceIntegrationTest {
         merchantId = UUID.randomUUID();
         productId = UUID.randomUUID();
 
-        MerchantCategory merchantCategory = MerchantCategory.builder().id(1L).name("RETAIL").build();
-        merchant = Merchant.builder()
+        CustomerCategory merchantCategory = CustomerCategory.builder().id(1L).name("RETAIL").build();
+        merchant = Customer.builder()
                 .id(merchantId)
                 .businessName("Wanjiku Groceries")
                 .city("Kisumu")

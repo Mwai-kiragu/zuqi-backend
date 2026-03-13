@@ -93,6 +93,11 @@ public class RedisConfig {
         // Sales rep features - 24 hour TTL for performance tracking
         cacheConfigurations.put("salesRepFeatures", defaultConfig.entryTtl(Duration.ofHours(24)));
 
+        // Chat conversation history - 30 min TTL (active session window)
+        // Stores pre-formatted history strings keyed by conversationId.
+        // Evicted on every new message save to stay fresh.
+        cacheConfigurations.put("chat-history", defaultConfig.entryTtl(Duration.ofMinutes(30)));
+
         RedisCacheManager redisCacheManager = RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)
                 .withInitialCacheConfigurations(cacheConfigurations)

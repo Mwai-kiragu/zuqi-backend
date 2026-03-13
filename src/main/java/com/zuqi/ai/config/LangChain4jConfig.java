@@ -5,9 +5,11 @@ import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.ollama.OllamaChatModel;
 import dev.langchain4j.model.ollama.OllamaEmbeddingModel;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 import java.time.Duration;
 
@@ -35,6 +37,15 @@ public class LangChain4jConfig {
     @Value("${langchain4j.ollama.chat-model.timeout}")
     private Duration chatTimeout;
 
+    @Value("${langchain4j.ollama.report-model.model-name}")
+    private String reportModelName;
+
+    @Value("${langchain4j.ollama.report-model.temperature}")
+    private Double reportTemperature;
+
+    @Value("${langchain4j.ollama.report-model.timeout}")
+    private Duration reportTimeout;
+
     @Value("${langchain4j.ollama.embedding-model.model-name}")
     private String embeddingModelName;
 
@@ -48,6 +59,7 @@ public class LangChain4jConfig {
      * for credit evaluation and operational recommendations.
      */
     @Bean
+    @Primary
     public ChatLanguageModel chatLanguageModel() {
         log.info("Initializing Ollama chat model: {} at {}", chatModelName, ollamaBaseUrl);
 
@@ -56,6 +68,27 @@ public class LangChain4jConfig {
                 .modelName(chatModelName)
                 .temperature(temperature)
                 .timeout(chatTimeout)
+                .build();
+    }
+
+    /**
+     * Long-timeout chat model for report generation.
+     *
+     * Report generation assembles large data blocks and asks the LLM to produce
+     * a full markdown report — qwen2.5-coder:32b can take 2-5 min for this.
+     * 300s (5 min) prevents premature timeouts.
+     */
+    @Bean
+    @Qualifier("reportChatLanguageModel")
+    public ChatLanguageModel reportChatLanguageModel() {
+        log.info("Initializing Ollama report chat model: {} at {} (timeout={})",
+                reportModelName, ollamaBaseUrl, reportTimeout);
+
+        return OllamaChatModel.builder()
+                .baseUrl(ollamaBaseUrl)
+                .modelName(reportModelName)
+                .temperature(reportTemperature)
+                .timeout(reportTimeout)
                 .build();
     }
 

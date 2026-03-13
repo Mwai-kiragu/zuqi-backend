@@ -3,9 +3,9 @@ package com.zuqi.ai.feature;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.inventory.Stock;
 import com.zuqi.domain.inventory.Warehouse;
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.product.Product;
-import com.zuqi.repository.MerchantRepository;
+import com.zuqi.repository.CustomerRepository;
 import com.zuqi.repository.ProductRepository;
 import com.zuqi.repository.StockRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,7 +42,7 @@ class FeatureStoreTest {
     private SalesRepFeatureService salesRepFeatureService;
 
     @Mock
-    private MerchantRepository merchantRepository;
+    private CustomerRepository merchantRepository;
 
     @Mock
     private ProductRepository productRepository;
@@ -191,7 +191,7 @@ class FeatureStoreTest {
     void shouldGetAllMerchantFeatures() {
         // Given
         Distributor distributor = Distributor.builder().id(distributorId).build();
-        List<Merchant> merchants = createMerchants(3, distributor);
+        List<Customer> merchants = createMerchants(3, distributor);
 
         MerchantFeatures mockFeatures = MerchantFeatures.builder().merchantId(merchantId).build();
 
@@ -210,7 +210,7 @@ class FeatureStoreTest {
     void shouldGetAllDemandFeatures() {
         // Given
         Distributor distributor = Distributor.builder().id(distributorId).build();
-        List<Merchant> merchants = createMerchants(2, distributor);
+        List<Customer> merchants = createMerchants(2, distributor);
         List<Product> products = createProducts(2, distributor);
 
         DemandFeatures mockFeatures = DemandFeatures.builder()
@@ -286,7 +286,7 @@ class FeatureStoreTest {
     void shouldRefreshAllMerchantFeatures() {
         // Given
         Distributor distributor = Distributor.builder().id(distributorId).build();
-        List<Merchant> merchants = createMerchants(3, distributor);
+        List<Customer> merchants = createMerchants(3, distributor);
 
         MerchantFeatures mockFeatures = MerchantFeatures.builder().merchantId(merchantId).build();
 
@@ -305,7 +305,7 @@ class FeatureStoreTest {
     void shouldWarmUpCache() {
         // Given
         Distributor distributor = Distributor.builder().id(distributorId).build();
-        List<Merchant> merchants = createMerchants(5, distributor);
+        List<Customer> merchants = createMerchants(5, distributor);
 
         MerchantFeatures mockFeatures = MerchantFeatures.builder().merchantId(merchantId).build();
 
@@ -323,7 +323,7 @@ class FeatureStoreTest {
     void shouldHandleExceptionsDuringBulkRetrieval() {
         // Given
         Distributor distributor = Distributor.builder().id(distributorId).build();
-        List<Merchant> merchants = createMerchants(3, distributor);
+        List<Customer> merchants = createMerchants(3, distributor);
 
         when(merchantRepository.findAll()).thenReturn(merchants);
         when(merchantFeatureService.computeFeatures(any(UUID.class)))
@@ -341,10 +341,10 @@ class FeatureStoreTest {
 
     // ==================== Helper Methods ====================
 
-    private List<Merchant> createMerchants(int count, Distributor distributor) {
-        List<Merchant> merchants = new ArrayList<>();
+    private List<Customer> createMerchants(int count, Distributor distributor) {
+        List<Customer> merchants = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            merchants.add(Merchant.builder()
+            merchants.add(Customer.builder()
                     .id(UUID.randomUUID())
                     .businessName("Merchant " + i)
                     .phone("+254700000" + i)

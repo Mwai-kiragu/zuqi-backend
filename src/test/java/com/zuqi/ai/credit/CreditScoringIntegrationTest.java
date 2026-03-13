@@ -5,8 +5,8 @@ import com.zuqi.ai.monitoring.LlmMetricsService;
 import com.zuqi.ai.monitoring.PredictionLogger;
 import com.zuqi.ai.service.MerchantEmbeddingService;
 import com.zuqi.domain.ai.EntityType;
-import com.zuqi.domain.merchant.Merchant;
-import com.zuqi.repository.MerchantRepository;
+import com.zuqi.domain.customer.Customer;
+import com.zuqi.repository.CustomerRepository;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,7 +45,7 @@ class CreditScoringIntegrationTest {
     private ChatLanguageModel chatLanguageModel;
 
     @MockBean
-    private MerchantRepository merchantRepository;
+    private CustomerRepository merchantRepository;
 
     @MockBean
     private MerchantFeatureService merchantFeatureService;
@@ -60,12 +60,12 @@ class CreditScoringIntegrationTest {
     private LlmMetricsService llmMetricsService;
 
     private UUID testMerchantId;
-    private Merchant testMerchant;
+    private Customer testMerchant;
 
     @BeforeEach
     void setUp() {
         testMerchantId = UUID.randomUUID();
-        testMerchant = new Merchant();
+        testMerchant = new Customer();
         testMerchant.setId(testMerchantId);
         testMerchant.setBusinessName("Test Hardware Store");
         testMerchant.setActive(true);
