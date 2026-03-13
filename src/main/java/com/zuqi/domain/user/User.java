@@ -73,8 +73,19 @@ public class User implements UserDetails {
     @Column(name = "distributor_id")
     private UUID distributorId;
 
+    @Column(name = "customer_id")
+    private UUID customerId;
+
     @Column(name = "merchant_id")
     private UUID merchantId;
+
+    /** Set at request-time from the JWT branchId claim. Not persisted. */
+    @Transient
+    private UUID activeBranchId;
+
+    /** True when the active branch is the headquarters branch. Set from JWT claim. Not persisted. */
+    @Transient
+    private boolean activeBranchHeadquarters;
 
     @Version
     private Long version;
@@ -92,6 +103,10 @@ public class User implements UserDetails {
 
     @Column(name = "password_changed_at")
     private LocalDateTime passwordChangedAt;
+
+    @Column(name = "must_change_password")
+    @Builder.Default
+    private boolean mustChangePassword = false;
 
     @Column(name = "two_factor_enabled")
     @Builder.Default

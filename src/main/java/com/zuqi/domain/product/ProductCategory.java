@@ -4,6 +4,8 @@ import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.user.User;
 import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.data.annotation.CreatedDate;
+import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDateTime;
 
@@ -12,6 +14,7 @@ import java.time.LocalDateTime;
         @Index(name = "idx_product_categories_distributor", columnList = "distributor_id"),
         @Index(name = "idx_product_categories_active", columnList = "active")
 })
+@EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter
 @Builder
@@ -49,4 +52,8 @@ public class ProductCategory {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "deactivated_by")
     private User deactivatedBy;
+
+    @CreatedDate
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
 }

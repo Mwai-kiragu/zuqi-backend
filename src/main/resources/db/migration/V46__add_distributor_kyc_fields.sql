@@ -1,0 +1,2 @@
+ALTER TABLE distributors ADD COLUMN IF NOT EXISTS kyc_status VARCHAR(20) DEFAULT 'PENDING';
+ALTER TABLE distributors ADD COLUMN IF NOT EXISTS kyc_documents jsonb DEFAULT '{}';

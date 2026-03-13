@@ -8,17 +8,18 @@ import com.zuqi.domain.user.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
 
 public interface ProductService {
 
-    Page<ProductResponse> getAllProducts(Pageable pageable);
+    Page<ProductResponse> getAllProducts(LocalDate startDate, LocalDate endDate, Pageable pageable);
 
     Page<ProductResponse> getInactiveProducts(Pageable pageable);
 
-    Page<ProductResponse> getProductsByDistributor(UUID distributorId, Pageable pageable);
+    Page<ProductResponse> getProductsByDistributor(UUID distributorId, LocalDate startDate, LocalDate endDate, Pageable pageable);
 
     Page<ProductResponse> getInactiveProductsByDistributor(UUID distributorId, Pageable pageable);
 
@@ -51,4 +52,6 @@ public interface ProductService {
     void deactivateCategory(Long id, String reason, User currentUser);
 
     void activateCategory(Long id);
+
+    Page<ProductResponse> getProductsForBranch(UUID distributorId, UUID branchId, String search, Long categoryId, Pageable pageable);
 }

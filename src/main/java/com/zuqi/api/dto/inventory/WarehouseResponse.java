@@ -26,6 +26,8 @@ public class WarehouseResponse {
     private String distributorName;
     private UUID managerId;
     private String managerName;
+    private UUID branchId;
+    private String branchName;
     private boolean active;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

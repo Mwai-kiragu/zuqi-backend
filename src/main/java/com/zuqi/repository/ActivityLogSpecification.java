@@ -20,7 +20,8 @@ public class ActivityLogSpecification {
             String entityType,
             String module,
             LocalDateTime from,
-            LocalDateTime to) {
+            LocalDateTime to,
+            Boolean success) {
 
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -42,6 +43,9 @@ public class ActivityLogSpecification {
             }
             if (to != null) {
                 predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), to));
+            }
+            if (success != null) {
+                predicates.add(cb.equal(root.get("success"), success));
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));

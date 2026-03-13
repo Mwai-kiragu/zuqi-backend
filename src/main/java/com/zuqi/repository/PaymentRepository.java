@@ -34,7 +34,8 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
             "AND (CAST(:merchantId AS UUID) IS NULL OR p.merchant_id = CAST(:merchantId AS UUID)) " +
             "AND (:reconciled IS NULL OR p.reconciled = :reconciled) " +
             "AND (CAST(:startDate AS TIMESTAMP) IS NULL OR p.created_at >= CAST(:startDate AS TIMESTAMP)) " +
-            "AND (CAST(:endDate AS TIMESTAMP) IS NULL OR p.created_at <= CAST(:endDate AS TIMESTAMP))",
+            "AND (CAST(:endDate AS TIMESTAMP) IS NULL OR p.created_at <= CAST(:endDate AS TIMESTAMP)) " +
+            "ORDER BY p.created_at DESC",
             countQuery = "SELECT COUNT(*) FROM payments p WHERE p.distributor_id = :distributorId " +
             "AND (:status IS NULL OR p.status = CAST(:status AS VARCHAR)) " +
             "AND (CAST(:merchantId AS UUID) IS NULL OR p.merchant_id = CAST(:merchantId AS UUID)) " +
@@ -71,6 +72,17 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     @Query(value = "SELECT COALESCE(MAX(CAST(SUBSTRING(payment_number, LENGTH(:prefix) + 1) AS INTEGER)), 0) " +
             "FROM payments WHERE payment_number LIKE :prefix%", nativeQuery = true)
     Integer findMaxPaymentNumberByPrefix(@Param("prefix") String prefix);
+
+    /** Scope to a merchant brand (MERCHANT_ADMIN). */
+    Page<Payment> findByDistributorMerchantId(UUID merchantId, Pageable pageable);
+
+    @Query("SELECT p FROM Payment p WHERE p.distributor.merchant.id = :merchantId " +
+            "AND (p.paymentNumber LIKE %:search% OR p.externalReference LIKE %:search% " +
+            "OR (p.merchant IS NOT NULL AND p.merchant.businessName LIKE %:search%))")
+    Page<Payment> searchPaymentsByMerchant(
+            @Param("merchantId") UUID merchantId,
+            @Param("search") String search,
+            Pageable pageable);
 
     // Global queries for SUPER_ADMIN/ADMIN (no distributor filter)
     @Query("SELECT COUNT(p) FROM Payment p WHERE p.reconciled = false")

@@ -2,6 +2,7 @@ package com.zuqi.api.dto.payment;
 
 import com.zuqi.domain.payment.Payment;
 import com.zuqi.domain.payment.PaymentStatus;
+import com.zuqi.domain.pos.PosSale;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -19,8 +20,11 @@ public class PaymentResponse {
 
     private UUID id;
     private String paymentNumber;
+    private String sourceType;
     private UUID orderId;
     private String orderNumber;
+    private UUID posSaleId;
+    private String posReceiptNumber;
     private UUID merchantId;
     private String merchantName;
     private UUID distributorId;
@@ -42,11 +46,15 @@ public class PaymentResponse {
     private LocalDateTime updatedAt;
 
     public static PaymentResponse fromEntity(Payment payment) {
+        PosSale posSale = payment.getPosSale();
         return PaymentResponse.builder()
                 .id(payment.getId())
                 .paymentNumber(payment.getPaymentNumber())
+                .sourceType(payment.getSourceType())
                 .orderId(payment.getOrder() != null ? payment.getOrder().getId() : null)
                 .orderNumber(payment.getOrder() != null ? payment.getOrder().getOrderNumber() : null)
+                .posSaleId(posSale != null ? posSale.getId() : null)
+                .posReceiptNumber(posSale != null ? posSale.getReceiptNumber() : null)
                 .merchantId(payment.getMerchant() != null ? payment.getMerchant().getId() : null)
                 .merchantName(payment.getMerchant() != null ? payment.getMerchant().getBusinessName() : null)
                 .distributorId(payment.getDistributor() != null ? payment.getDistributor().getId() : null)

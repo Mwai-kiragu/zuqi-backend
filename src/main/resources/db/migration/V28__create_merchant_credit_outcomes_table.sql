@@ -1,7 +1,7 @@
 -- V28: Create merchant_credit_outcomes table for real data tracking
 -- Blueprint: ML_IMPLEMENTATION_PLAN.md - Phase 3, Task 8
 
-CREATE TABLE merchant_credit_outcomes (
+CREATE TABLE IF NOT EXISTS merchant_credit_outcomes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     merchant_id UUID NOT NULL,
     credit_application_id UUID,
@@ -14,13 +14,13 @@ CREATE TABLE merchant_credit_outcomes (
 );
 
 -- Indexes for query performance
-CREATE INDEX idx_merchant_credit_outcomes_merchant_id ON merchant_credit_outcomes(merchant_id);
-CREATE INDEX idx_merchant_credit_outcomes_outcome ON merchant_credit_outcomes(outcome);
-CREATE INDEX idx_merchant_credit_outcomes_used_for_training ON merchant_credit_outcomes(used_for_training);
-CREATE INDEX idx_merchant_credit_outcomes_outcome_date ON merchant_credit_outcomes(outcome_date DESC);
+CREATE INDEX IF NOT EXISTS idx_merchant_credit_outcomes_merchant_id ON merchant_credit_outcomes(merchant_id);
+CREATE INDEX IF NOT EXISTS idx_merchant_credit_outcomes_outcome ON merchant_credit_outcomes(outcome);
+CREATE INDEX IF NOT EXISTS idx_merchant_credit_outcomes_used_for_training ON merchant_credit_outcomes(used_for_training);
+CREATE INDEX IF NOT EXISTS idx_merchant_credit_outcomes_outcome_date ON merchant_credit_outcomes(outcome_date DESC);
 
 -- Composite index for retraining queries
-CREATE INDEX idx_merchant_credit_outcomes_unused ON merchant_credit_outcomes(used_for_training, created_at)
+CREATE INDEX IF NOT EXISTS idx_merchant_credit_outcomes_unused ON merchant_credit_outcomes(used_for_training, created_at)
     WHERE used_for_training = FALSE;
 
 -- Comments

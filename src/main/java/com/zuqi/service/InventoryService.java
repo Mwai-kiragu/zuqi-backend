@@ -12,6 +12,8 @@ import java.util.UUID;
 public interface InventoryService {
 
     // Stock operations
+    Page<StockResponse> getStock(UUID distributorId, UUID warehouseId, Pageable pageable);
+
     Page<StockResponse> getStockByWarehouse(UUID warehouseId, Pageable pageable);
 
     StockResponse getStockByWarehouseAndProduct(UUID warehouseId, UUID productId);
@@ -24,6 +26,8 @@ public interface InventoryService {
 
     // Warehouse operations
     List<WarehouseResponse> getWarehousesByDistributor(UUID distributorId);
+
+    List<WarehouseResponse> getWarehousesByBranch(UUID branchId);
 
     Page<WarehouseResponse> getWarehousesByDistributor(UUID distributorId, Pageable pageable);
 

@@ -104,10 +104,11 @@ public class ActivityLogServiceImpl implements ActivityLogService {
     public PageResponse<ActivityLogResponse> getAll(UUID userId, ActivityAction action,
                                                      String entityType, String module,
                                                      LocalDateTime from, LocalDateTime to,
+                                                     Boolean success,
                                                      int page, int size) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
         Page<ActivityLog> result = activityLogRepository.findAll(
-                ActivityLogSpecification.withFilters(userId, action, entityType, module, from, to),
+                ActivityLogSpecification.withFilters(userId, action, entityType, module, from, to, success),
                 pageable);
         return toPageResponse(result);
     }

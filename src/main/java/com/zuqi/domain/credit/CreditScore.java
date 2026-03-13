@@ -1,6 +1,6 @@
 package com.zuqi.domain.credit;
 
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -27,7 +27,7 @@ public class CreditScore {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "merchant_id", nullable = false)
-    private Merchant merchant;
+    private Customer merchant;
 
     @Column(nullable = false, precision = 5, scale = 2)
     private BigDecimal score;

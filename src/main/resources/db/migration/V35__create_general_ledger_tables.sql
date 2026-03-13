@@ -2,7 +2,7 @@
 -- V35: Create GL accounts, periods, cost centers, journal entries, and budgets
 
 -- ─── Chart of Accounts ────────────────────────────────────────────────────────
-CREATE TABLE gl_accounts (
+CREATE TABLE IF NOT EXISTS gl_accounts (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     distributor_id  UUID NOT NULL REFERENCES distributors(id) ON DELETE CASCADE,
     account_code    VARCHAR(20)  NOT NULL,
@@ -22,13 +22,13 @@ CREATE TABLE gl_accounts (
     CONSTRAINT uq_gl_account_code_distributor UNIQUE (distributor_id, account_code)
 );
 
-CREATE INDEX idx_gl_accounts_distributor ON gl_accounts(distributor_id);
-CREATE INDEX idx_gl_accounts_parent     ON gl_accounts(parent_id);
-CREATE INDEX idx_gl_accounts_type       ON gl_accounts(account_type);
-CREATE INDEX idx_gl_accounts_active     ON gl_accounts(active);
+CREATE INDEX IF NOT EXISTS idx_gl_accounts_distributor ON gl_accounts(distributor_id);
+CREATE INDEX IF NOT EXISTS idx_gl_accounts_parent     ON gl_accounts(parent_id);
+CREATE INDEX IF NOT EXISTS idx_gl_accounts_type       ON gl_accounts(account_type);
+CREATE INDEX IF NOT EXISTS idx_gl_accounts_active     ON gl_accounts(active);
 
 -- ─── Accounting Periods ───────────────────────────────────────────────────────
-CREATE TABLE gl_periods (
+CREATE TABLE IF NOT EXISTS gl_periods (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     distributor_id  UUID NOT NULL REFERENCES distributors(id) ON DELETE CASCADE,
     period_name     VARCHAR(30)  NOT NULL,
@@ -47,12 +47,12 @@ CREATE TABLE gl_periods (
     CONSTRAINT uq_gl_period_distributor_ym UNIQUE (distributor_id, period_year, period_month)
 );
 
-CREATE INDEX idx_gl_periods_distributor ON gl_periods(distributor_id);
-CREATE INDEX idx_gl_periods_status      ON gl_periods(status);
-CREATE INDEX idx_gl_periods_year_month  ON gl_periods(period_year, period_month);
+CREATE INDEX IF NOT EXISTS idx_gl_periods_distributor ON gl_periods(distributor_id);
+CREATE INDEX IF NOT EXISTS idx_gl_periods_status      ON gl_periods(status);
+CREATE INDEX IF NOT EXISTS idx_gl_periods_year_month  ON gl_periods(period_year, period_month);
 
 -- ─── Cost Centres ─────────────────────────────────────────────────────────────
-CREATE TABLE cost_centers (
+CREATE TABLE IF NOT EXISTS cost_centers (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     distributor_id  UUID NOT NULL REFERENCES distributors(id) ON DELETE CASCADE,
     code            VARCHAR(20)  NOT NULL,
@@ -66,11 +66,11 @@ CREATE TABLE cost_centers (
     CONSTRAINT uq_cost_center_code_distributor UNIQUE (distributor_id, code)
 );
 
-CREATE INDEX idx_cost_centers_distributor ON cost_centers(distributor_id);
-CREATE INDEX idx_cost_centers_active      ON cost_centers(active);
+CREATE INDEX IF NOT EXISTS idx_cost_centers_distributor ON cost_centers(distributor_id);
+CREATE INDEX IF NOT EXISTS idx_cost_centers_active      ON cost_centers(active);
 
 -- ─── Journal Entries ──────────────────────────────────────────────────────────
-CREATE TABLE journal_entries (
+CREATE TABLE IF NOT EXISTS journal_entries (
     id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     distributor_id        UUID NOT NULL REFERENCES distributors(id) ON DELETE CASCADE,
     entry_number          VARCHAR(30)  NOT NULL UNIQUE,
@@ -96,15 +96,15 @@ CREATE TABLE journal_entries (
     updated_at            TIMESTAMP
 );
 
-CREATE INDEX idx_journal_entries_distributor   ON journal_entries(distributor_id);
-CREATE INDEX idx_journal_entries_period        ON journal_entries(period_id);
-CREATE INDEX idx_journal_entries_status        ON journal_entries(status);
-CREATE INDEX idx_journal_entries_entry_date    ON journal_entries(entry_date);
-CREATE INDEX idx_journal_entries_source_module ON journal_entries(source_module);
-CREATE INDEX idx_journal_entries_source_doc    ON journal_entries(source_document_id);
+CREATE INDEX IF NOT EXISTS idx_journal_entries_distributor   ON journal_entries(distributor_id);
+CREATE INDEX IF NOT EXISTS idx_journal_entries_period        ON journal_entries(period_id);
+CREATE INDEX IF NOT EXISTS idx_journal_entries_status        ON journal_entries(status);
+CREATE INDEX IF NOT EXISTS idx_journal_entries_entry_date    ON journal_entries(entry_date);
+CREATE INDEX IF NOT EXISTS idx_journal_entries_source_module ON journal_entries(source_module);
+CREATE INDEX IF NOT EXISTS idx_journal_entries_source_doc    ON journal_entries(source_document_id);
 
 -- ─── Journal Entry Lines ──────────────────────────────────────────────────────
-CREATE TABLE journal_entry_lines (
+CREATE TABLE IF NOT EXISTS journal_entry_lines (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     journal_entry_id UUID NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
     line_number      INT  NOT NULL,
@@ -117,12 +117,12 @@ CREATE TABLE journal_entry_lines (
     created_at       TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_jel_journal_entry ON journal_entry_lines(journal_entry_id);
-CREATE INDEX idx_jel_account       ON journal_entry_lines(account_id);
-CREATE INDEX idx_jel_cost_center   ON journal_entry_lines(cost_center_id);
+CREATE INDEX IF NOT EXISTS idx_jel_journal_entry ON journal_entry_lines(journal_entry_id);
+CREATE INDEX IF NOT EXISTS idx_jel_account       ON journal_entry_lines(account_id);
+CREATE INDEX IF NOT EXISTS idx_jel_cost_center   ON journal_entry_lines(cost_center_id);
 
 -- ─── Budgets ──────────────────────────────────────────────────────────────────
-CREATE TABLE budgets (
+CREATE TABLE IF NOT EXISTS budgets (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     distributor_id   UUID NOT NULL REFERENCES distributors(id) ON DELETE CASCADE,
     budget_year      INT  NOT NULL,
@@ -139,6 +139,6 @@ CREATE TABLE budgets (
         UNIQUE (distributor_id, budget_year, period_month, account_id, cost_center_id)
 );
 
-CREATE INDEX idx_budgets_distributor    ON budgets(distributor_id);
-CREATE INDEX idx_budgets_year_month     ON budgets(budget_year, period_month);
-CREATE INDEX idx_budgets_account        ON budgets(account_id);
+CREATE INDEX IF NOT EXISTS idx_budgets_distributor    ON budgets(distributor_id);
+CREATE INDEX IF NOT EXISTS idx_budgets_year_month     ON budgets(budget_year, period_month);
+CREATE INDEX IF NOT EXISTS idx_budgets_account        ON budgets(account_id);

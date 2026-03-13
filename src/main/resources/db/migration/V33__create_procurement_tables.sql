@@ -55,13 +55,13 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
 );
 
 -- Indexes
-CREATE INDEX idx_pr_distributor_id  ON purchase_requisitions(distributor_id);
-CREATE INDEX idx_pr_requested_by    ON purchase_requisitions(requested_by);
-CREATE INDEX idx_pr_status          ON purchase_requisitions(status);
-CREATE INDEX idx_pr_created_at      ON purchase_requisitions(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pr_distributor_id  ON purchase_requisitions(distributor_id);
+CREATE INDEX IF NOT EXISTS idx_pr_requested_by    ON purchase_requisitions(requested_by);
+CREATE INDEX IF NOT EXISTS idx_pr_status          ON purchase_requisitions(status);
+CREATE INDEX IF NOT EXISTS idx_pr_created_at      ON purchase_requisitions(created_at DESC);
 
-CREATE INDEX idx_po_distributor_id  ON purchase_orders(distributor_id);
-CREATE INDEX idx_po_supplier_id     ON purchase_orders(supplier_id);
-CREATE INDEX idx_po_pr_id           ON purchase_orders(purchase_requisition_id);
-CREATE INDEX idx_po_status          ON purchase_orders(status);
-CREATE INDEX idx_po_created_at      ON purchase_orders(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_po_distributor_id  ON purchase_orders(distributor_id);
+CREATE INDEX IF NOT EXISTS idx_po_supplier_id     ON purchase_orders(supplier_id);
+CREATE INDEX IF NOT EXISTS idx_po_pr_id           ON purchase_orders(purchase_requisition_id);
+CREATE INDEX IF NOT EXISTS idx_po_status          ON purchase_orders(status);
+CREATE INDEX IF NOT EXISTS idx_po_created_at      ON purchase_orders(created_at DESC);

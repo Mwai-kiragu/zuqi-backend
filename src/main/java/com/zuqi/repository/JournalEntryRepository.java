@@ -45,6 +45,23 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, UUID
             @Param("sourceModule") JournalSourceModule sourceModule,
             Pageable pageable);
 
+    @Query("""
+        SELECT je FROM JournalEntry je
+        WHERE je.distributorId IN (SELECT d.id FROM Distributor d WHERE d.merchant.id = :merchantId)
+          AND (:status IS NULL OR je.status = :status)
+          AND (:fromDate IS NULL OR je.entryDate >= :fromDate)
+          AND (:toDate IS NULL OR je.entryDate <= :toDate)
+          AND (:sourceModule IS NULL OR je.sourceModule = :sourceModule)
+        ORDER BY je.entryDate DESC, je.createdAt DESC
+        """)
+    Page<JournalEntry> findByMerchantIdWithFilters(
+            @Param("merchantId") UUID merchantId,
+            @Param("status") JournalEntryStatus status,
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate,
+            @Param("sourceModule") JournalSourceModule sourceModule,
+            Pageable pageable);
+
     @Query("SELECT COALESCE(MAX(CAST(SUBSTRING(je.entryNumber, 12) AS int)), 0) FROM JournalEntry je WHERE je.distributorId = :distributorId AND je.entryNumber LIKE :prefix%")
     int findMaxSequenceForPrefix(@Param("distributorId") UUID distributorId, @Param("prefix") String prefix);
 }

@@ -45,9 +45,14 @@ public class SupplierServiceImpl implements SupplierService {
     @Override
     @Transactional(readOnly = true)
     public Page<SupplierResponse> getAllSuppliers(String search, Pageable pageable) {
-        UUID distributorId = securityUtils.getDistributorIdForFiltering();
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        UUID distributorId = merchantId == null ? securityUtils.getDistributorIdForFiltering() : null;
 
         if (search != null && !search.isBlank()) {
+            if (merchantId != null) {
+                return supplierRepository.searchByMerchant(merchantId, search, pageable)
+                        .map(SupplierResponse::fromEntity);
+            }
             if (distributorId != null) {
                 return supplierRepository.searchByDistributor(distributorId, search, pageable)
                         .map(SupplierResponse::fromEntity);
@@ -55,6 +60,10 @@ public class SupplierServiceImpl implements SupplierService {
             return supplierRepository.searchActive(search, pageable).map(SupplierResponse::fromEntity);
         }
 
+        if (merchantId != null) {
+            return supplierRepository.findByDistributorMerchantIdAndActiveTrue(merchantId, pageable)
+                    .map(SupplierResponse::fromEntity);
+        }
         if (distributorId != null) {
             return supplierRepository.findByDistributorIdAndActiveTrue(distributorId, pageable)
                     .map(SupplierResponse::fromEntity);
@@ -65,6 +74,11 @@ public class SupplierServiceImpl implements SupplierService {
     @Override
     @Transactional(readOnly = true)
     public Page<SupplierResponse> getBlacklistedSuppliers(Pageable pageable) {
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId != null) {
+            return supplierRepository.findByDistributorMerchantIdAndBlacklistedTrue(merchantId, pageable)
+                    .map(SupplierResponse::fromEntity);
+        }
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
         if (distributorId != null) {
             return supplierRepository.findByDistributorIdAndBlacklistedTrue(distributorId, pageable)

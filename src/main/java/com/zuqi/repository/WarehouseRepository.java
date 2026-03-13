@@ -29,4 +29,13 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
     boolean existsByCodeAndDistributorId(String code, UUID distributorId);
 
     List<Warehouse> findByManagerIdAndActiveTrue(UUID managerId);
+
+    List<Warehouse> findByBranchIdAndActiveTrue(UUID branchId);
+
+    /** Scope to a merchant brand (MERCHANT_ADMIN). */
+    List<Warehouse> findByDistributorMerchantIdAndActiveTrue(UUID merchantId);
+
+    Page<Warehouse> findByDistributorMerchantIdAndActiveTrue(UUID merchantId, Pageable pageable);
+
+    Page<Warehouse> findByDistributorMerchantIdAndActiveFalse(UUID merchantId, Pageable pageable);
 }

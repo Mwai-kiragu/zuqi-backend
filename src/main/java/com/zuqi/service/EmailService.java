@@ -10,6 +10,8 @@ public interface EmailService {
 
     void sendPasswordResetOtpEmail(User user, String otp);
 
+    void sendEmailVerificationOtpEmail(User user, String otp);
+
     void sendPasswordChangedEmail(User user);
 
     void sendTemplatedEmail(String to, String subject, String templateName, java.util.Map<String, Object> context);

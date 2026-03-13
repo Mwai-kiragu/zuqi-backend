@@ -1,8 +1,8 @@
 package com.zuqi.ai.agent.tools;
 
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.order.Order;
-import com.zuqi.repository.MerchantRepository;
+import com.zuqi.repository.CustomerRepository;
 import com.zuqi.repository.OrderRepository;
 import dev.langchain4j.agent.tool.Tool;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +21,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class MerchantMetricsTool {
 
-    private final MerchantRepository merchantRepository;
+    private final CustomerRepository customerRepository;
     private final OrderRepository     orderRepository;
 
     @Tool("Get merchant metrics for a distributor. Returns totalMerchants, activeMerchants (those with " +
@@ -35,18 +35,18 @@ public class MerchantMetricsTool {
             UUID distId = UUID.fromString(distributorId.trim());
 
             // Total merchants for distributor
-            List<Merchant> allMerchants = merchantRepository.findByDistributorId(distId);
+            List<Customer> allMerchants = customerRepository.findByDistributorId(distId);
             long totalMerchants = allMerchants.size();
 
             // Active merchants (active flag = true)
             long activeFlaggedMerchants = allMerchants.stream()
-                    .filter(Merchant::isActive)
+                    .filter(Customer::isActive)
                     .count();
             long inactiveMerchants = totalMerchants - activeFlaggedMerchants;
 
             // New merchants registered in the last 30 days
             LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
-            long newMerchantsLast30Days = merchantRepository.countNewMerchantsFromDate(distId, thirtyDaysAgo);
+            long newMerchantsLast30Days = customerRepository.countNewCustomersFromDate(distId, thirtyDaysAgo);
 
             // Merchants with at least one order in the last 30 days (distinct merchant IDs)
             List<Order> recentOrders = orderRepository.findByDistributorIdAndDateRange(

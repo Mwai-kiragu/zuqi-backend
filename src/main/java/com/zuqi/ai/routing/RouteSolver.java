@@ -8,7 +8,7 @@ import com.zuqi.ai.routing.domain.Vehicle;
 import com.zuqi.domain.ai.DeliveryRoute;
 import com.zuqi.domain.ai.RouteStatus;
 import com.zuqi.domain.distributor.Distributor;
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.order.Order;
 import com.zuqi.domain.order.OrderStatus;
 import com.zuqi.domain.user.User;
@@ -191,7 +191,7 @@ public class RouteSolver {
 
         List<DeliveryStop> stops = new ArrayList<>();
         for (Map.Entry<UUID, List<Order>> entry : byMerchant.entrySet()) {
-            Merchant merchant = entry.getValue().get(0).getMerchant();
+            Customer merchant = entry.getValue().get(0).getMerchant();
             List<UUID> orderIds = entry.getValue().stream().map(Order::getId).collect(Collectors.toList());
 
             double lat = merchant.getLatitude() != null ? merchant.getLatitude().doubleValue() : -1.286389;

@@ -5,11 +5,21 @@ import com.zuqi.config.EmailConfig;
 import com.zuqi.domain.invoice.Invoice;
 import com.zuqi.domain.invoice.InvoiceStatus;
 import com.zuqi.domain.order.Order;
+import com.zuqi.domain.order.OrderItem;
+import com.zuqi.domain.pos.PosSale;
+import com.zuqi.domain.pos.PosSaleStatus;
+import com.zuqi.domain.inventory.Stock;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
+import com.zuqi.api.dto.payment.PaymentRequest;
+import com.zuqi.domain.payment.PaymentStatus;
 import com.zuqi.repository.InvoiceRepository;
+import com.zuqi.repository.PosSaleRepository;
+import com.zuqi.repository.StockRepository;
 import com.zuqi.service.EmailService;
+import com.zuqi.service.GlAutoPostingService;
 import com.zuqi.service.InvoiceService;
+import com.zuqi.service.PaymentService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,11 +30,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -33,9 +46,13 @@ import java.util.UUID;
 public class InvoiceServiceImpl implements InvoiceService {
 
     private final InvoiceRepository invoiceRepository;
+    private final PosSaleRepository posSaleRepository;
+    private final StockRepository stockRepository;
     private final EmailService emailService;
     private final EmailConfig emailConfig;
     private final SecurityUtils securityUtils;
+    private final PaymentService paymentService;
+    private final GlAutoPostingService glAutoPostingService;
 
     @Override
     @Transactional
@@ -78,6 +95,13 @@ public class InvoiceServiceImpl implements InvoiceService {
 
         log.info("Invoice created successfully: {}", invoice.getInvoiceNumber());
 
+        // Auto-post to GL: DR Accounts Receivable / CR Sales Revenue
+        try {
+            glAutoPostingService.postInvoiceCreated(invoice);
+        } catch (Exception e) {
+            log.warn("GL auto-post skipped (invoice created) for {}: {}", invoice.getInvoiceNumber(), e.getMessage());
+        }
+
         // Automatically send invoice if merchant has email
         if (order.getMerchant().getEmail() != null && !order.getMerchant().getEmail().isEmpty()) {
             sendInvoiceEmailAsync(invoice, order.getMerchant().getEmail());
@@ -86,6 +110,92 @@ public class InvoiceServiceImpl implements InvoiceService {
             invoice = invoiceRepository.save(invoice);
         }
 
+        return InvoiceResponse.fromEntity(invoice);
+    }
+
+    @Override
+    @Transactional
+    public InvoiceResponse createInvoiceFromPosSale(UUID saleId) {
+        log.info("Syncing invoice for POS sale: {}", saleId);
+
+        PosSale sale = posSaleRepository.findById(saleId)
+                .orElseThrow(() -> new ResourceNotFoundException("PosSale", "id", saleId));
+
+        boolean isCompleted = sale.getStatus() == PosSaleStatus.COMPLETED;
+        BigDecimal paidAmount = isCompleted ? (sale.getAmountPaid() != null ? sale.getAmountPaid() : BigDecimal.ZERO) : BigDecimal.ZERO;
+        BigDecimal total = sale.getTotalAmount() != null ? sale.getTotalAmount() : BigDecimal.ZERO;
+        InvoiceStatus status;
+        if (!isCompleted) {
+            status = InvoiceStatus.UNPAID;
+        } else if (paidAmount.compareTo(total) >= 0) {
+            status = InvoiceStatus.PAID;
+        } else if (paidAmount.compareTo(BigDecimal.ZERO) > 0) {
+            status = InvoiceStatus.PARTIALLY_PAID;
+        } else {
+            status = InvoiceStatus.UNPAID;
+        }
+
+        // Upsert: update existing invoice if found
+        Optional<Invoice> existing = invoiceRepository.findByPosOrderId(saleId);
+        if (existing.isPresent()) {
+            Invoice invoice = existing.get();
+            if (invoice.getMerchant() == null && sale.getCustomer() != null) {
+                invoice.setMerchant(sale.getCustomer());
+            }
+            invoice.setAmount(sale.getTotalAmount());
+            invoice.setSubtotal(sale.getSubtotal());
+            invoice.setDiscountAmount(sale.getDiscountAmount());
+            invoice.setTaxAmount(sale.getTaxAmount());
+            invoice.setTotalAmount(sale.getTotalAmount());
+            invoice.setPaidAmount(paidAmount);
+            invoice.setStatus(status);
+            invoice.calculateBalanceDue();
+            Invoice savedInvoice = invoiceRepository.save(invoice);
+            log.info("POS invoice updated: {}", savedInvoice.getInvoiceNumber());
+
+            // Send PAID receipt email when sale is completed and customer has email
+            if (isCompleted && sale.getCustomer() != null && sale.getCustomer().getEmail() != null) {
+                sendPosReceiptEmail(savedInvoice, sale, true);
+            }
+
+            return InvoiceResponse.fromEntity(savedInvoice);
+        }
+
+        // Create new invoice
+        String invoiceNumber = generateInvoiceNumber();
+        Invoice invoice = Invoice.builder()
+                .invoiceNumber(invoiceNumber)
+                .sourceType("POS_SALE")
+                .posOrder(sale)
+                .distributor(sale.getBranch().getDistributor())
+                .merchant(sale.getCustomer())
+                .amount(sale.getTotalAmount())
+                .subtotal(sale.getSubtotal())
+                .discountAmount(sale.getDiscountAmount())
+                .taxAmount(sale.getTaxAmount())
+                .totalAmount(sale.getTotalAmount())
+                .paidAmount(paidAmount)
+                .status(status)
+                .issueDate(LocalDate.now())
+                .dueDate(isCompleted ? LocalDate.now() : LocalDate.now().plusDays(30))
+                .build();
+
+        invoice.calculateBalanceDue();
+        invoice = invoiceRepository.save(invoice);
+
+        // Send receipt email to the customer immediately (e.g. when cashier clicks "Print Bill")
+        if (sale.getCustomer() != null && sale.getCustomer().getEmail() != null) {
+            sendPosReceiptEmail(invoice, sale, isCompleted);
+        }
+
+        log.info("POS invoice created: {} ({})", invoice.getInvoiceNumber(), status);
+        return InvoiceResponse.fromEntity(invoice);
+    }
+
+    @Override
+    public InvoiceResponse getInvoiceBySaleId(UUID saleId) {
+        Invoice invoice = invoiceRepository.findByPosOrderId(saleId)
+                .orElseThrow(() -> new ResourceNotFoundException("Invoice", "posOrderId", saleId));
         return InvoiceResponse.fromEntity(invoice);
     }
 
@@ -112,6 +222,11 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     @Override
     public Page<InvoiceResponse> getAllInvoices(Pageable pageable) {
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId != null) {
+            return invoiceRepository.findByDistributorMerchantId(merchantId, pageable)
+                    .map(InvoiceResponse::fromEntity);
+        }
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
         if (distributorId != null) {
             return invoiceRepository.findByDistributorId(distributorId, pageable)
@@ -146,13 +261,16 @@ public class InvoiceServiceImpl implements InvoiceService {
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
+        // Use unsorted pageable — ORDER BY is embedded in the native query
+        Pageable unsorted = org.springframework.data.domain.PageRequest.of(
+                pageable.getPageNumber(), pageable.getPageSize());
         return invoiceRepository.findByFilters(
                 effectiveDistributorId,
                 status != null ? status.name() : null,
                 merchantId,
                 startDate,
                 endDate,
-                pageable
+                unsorted
         ).map(InvoiceResponse::fromEntity);
     }
 
@@ -160,6 +278,11 @@ public class InvoiceServiceImpl implements InvoiceService {
     public Page<InvoiceResponse> searchInvoices(UUID distributorId, String search, Pageable pageable) {
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return invoiceRepository.searchInvoicesByMerchant(merchantId, search, pageable)
+                        .map(InvoiceResponse::fromEntity);
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
@@ -209,7 +332,7 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     @Override
     @Transactional
-    public InvoiceResponse recordPayment(UUID invoiceId, BigDecimal amount) {
+    public InvoiceResponse recordPayment(UUID invoiceId, BigDecimal amount, Long paymentMethodId, String externalReference) {
         Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
 
@@ -221,10 +344,55 @@ public class InvoiceServiceImpl implements InvoiceService {
             throw new ValidationException("Payment amount must be positive");
         }
 
+        InvoiceStatus previousStatus = invoice.getStatus();
         invoice.recordPayment(amount);
         invoice = invoiceRepository.save(invoice);
 
         log.info("Payment of {} recorded for invoice {}", amount, invoice.getInvoiceNumber());
+
+        // Auto-post to GL: DR Cash & Bank / CR Accounts Receivable
+        try {
+            glAutoPostingService.postPaymentReceived(invoice, amount);
+        } catch (Exception e) {
+            log.warn("GL auto-post skipped (payment received) for {}: {}", invoice.getInvoiceNumber(), e.getMessage());
+        }
+
+        // Create a completed Payment record so transactions appear on the payments list
+        if (invoice.getDistributor() != null && invoice.getMerchant() != null) {
+            PaymentRequest paymentRequest = PaymentRequest.builder()
+                    .orderId(invoice.getOrder() != null ? invoice.getOrder().getId() : null)
+                    .merchantId(invoice.getMerchant().getId())
+                    .distributorId(invoice.getDistributor().getId())
+                    .paymentMethodId(paymentMethodId)
+                    .amount(amount)
+                    .currency("KES")
+                    .externalReference(externalReference)
+                    .notes("Payment for " + invoice.getInvoiceNumber())
+                    .build();
+            var created = paymentService.createPayment(paymentRequest);
+            // Payment via invoice is already received — mark completed immediately
+            paymentService.updatePaymentStatus(created.getId(), PaymentStatus.COMPLETED);
+        }
+
+        // When a POS invoice is fully paid, mark the linked sale as COMPLETED
+        if (previousStatus != InvoiceStatus.PAID
+                && invoice.getStatus() == InvoiceStatus.PAID
+                && invoice.getPosOrder() != null) {
+            PosSale sale = posSaleRepository.findById(invoice.getPosOrder().getId()).orElse(null);
+            if (sale != null && sale.getStatus() == PosSaleStatus.DRAFT) {
+                sale.setStatus(PosSaleStatus.COMPLETED);
+                sale.setAmountPaid(invoice.getPaidAmount());
+                sale.setCompletedAt(LocalDateTime.now());
+                if (sale.getReceiptNumber() == null) {
+                    sale.setReceiptNumber("RCP-"
+                            + DateTimeFormatter.ofPattern("yyyyMMdd").format(LocalDateTime.now())
+                            + "-" + String.format("%05d", Math.abs(sale.getId().hashCode() % 100000)));
+                }
+                posSaleRepository.save(sale);
+                log.info("POS sale {} marked COMPLETED after invoice {} was fully paid",
+                        sale.getId(), invoice.getInvoiceNumber());
+            }
+        }
 
         return InvoiceResponse.fromEntity(invoice);
     }
@@ -272,6 +440,10 @@ public class InvoiceServiceImpl implements InvoiceService {
     public long getInvoiceCountByStatus(UUID distributorId, InvoiceStatus status) {
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return invoiceRepository.countByDistributorMerchantIdAndStatus(merchantId, status);
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
@@ -283,28 +455,36 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     @Override
     public Map<String, Long> getAllStatusCounts(UUID distributorId) {
+        UUID merchantId = null;
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
-            effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
+            merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId == null) {
+                effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
+            }
         }
 
+        final UUID finalDistributorId = effectiveDistributorId;
+        final UUID finalMerchantId = merchantId;
         Map<String, Long> counts = new HashMap<>();
 
-        // Get counts for all statuses
         for (InvoiceStatus status : InvoiceStatus.values()) {
             long count;
-            if (effectiveDistributorId != null) {
-                count = invoiceRepository.countByDistributorIdAndStatus(effectiveDistributorId, status);
+            if (finalMerchantId != null) {
+                count = invoiceRepository.countByDistributorMerchantIdAndStatus(finalMerchantId, status);
+            } else if (finalDistributorId != null) {
+                count = invoiceRepository.countByDistributorIdAndStatus(finalDistributorId, status);
             } else {
                 count = invoiceRepository.countByStatus(status);
             }
             counts.put(status.name(), count);
         }
 
-        // Add total count
         long total;
-        if (effectiveDistributorId != null) {
-            total = invoiceRepository.countByDistributorId(effectiveDistributorId);
+        if (finalMerchantId != null) {
+            total = invoiceRepository.countByDistributorMerchantId(finalMerchantId);
+        } else if (finalDistributorId != null) {
+            total = invoiceRepository.countByDistributorId(finalDistributorId);
         } else {
             total = invoiceRepository.count();
         }
@@ -315,11 +495,97 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     // Helper methods
 
+    private void deductStockForOrderInvoice(Invoice invoice) {
+        Order order = invoice.getOrder();
+        if (order == null || order.getWarehouse() == null || order.getItems() == null) {
+            log.warn("Cannot deduct stock for invoice {}: missing order, warehouse, or items",
+                    invoice.getInvoiceNumber());
+            return;
+        }
+
+        for (OrderItem item : order.getItems()) {
+            Stock stock = stockRepository
+                    .findByWarehouseIdAndProductId(order.getWarehouse().getId(), item.getProduct().getId())
+                    .orElse(null);
+
+            if (stock == null) {
+                log.warn("No stock entry for product '{}' in warehouse {} — creating with negative quantity",
+                        item.getProduct().getName(), order.getWarehouse().getId());
+                stock = Stock.builder()
+                        .warehouse(order.getWarehouse())
+                        .product(item.getProduct())
+                        .quantity(BigDecimal.ZERO)
+                        .reservedQuantity(BigDecimal.ZERO)
+                        .build();
+            }
+
+            stock.setQuantity(stock.getQuantity().subtract(item.getQuantity()));
+            stockRepository.save(stock);
+            log.info("Deducted {} units of '{}' for invoice {} (order {})",
+                    item.getQuantity(), item.getProduct().getName(),
+                    invoice.getInvoiceNumber(), order.getOrderNumber());
+        }
+    }
+
     private String generateInvoiceNumber() {
         String prefix = "INV-" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + "-";
         Integer maxNum = invoiceRepository.findMaxInvoiceNumberByPrefix(prefix);
         int nextNum = (maxNum != null ? maxNum : 0) + 1;
         return prefix + String.format("%04d", nextNum);
+    }
+
+    private void sendPosReceiptEmail(Invoice invoice, PosSale sale, boolean isPaid) {
+        try {
+            Map<String, Object> variables = new HashMap<>();
+
+            variables.put("invoiceNumber", invoice.getInvoiceNumber());
+            variables.put("isPaid", isPaid);
+            variables.put("issueDate", invoice.getIssueDate().format(DateTimeFormatter.ofPattern("MMMM d, yyyy")));
+            variables.put("dueDate", invoice.getDueDate().format(DateTimeFormatter.ofPattern("MMMM d, yyyy")));
+            variables.put("subtotal", invoice.getSubtotal());
+            variables.put("discountAmount", invoice.getDiscountAmount());
+            variables.put("taxAmount", invoice.getTaxAmount());
+            variables.put("totalAmount", invoice.getTotalAmount());
+            variables.put("balanceDue", invoice.getBalanceDue());
+            variables.put("orderNumber", sale.getReceiptNumber() != null ? sale.getReceiptNumber() : invoice.getInvoiceNumber());
+            variables.put("notes", sale.getNotes());
+            variables.put("companyName", emailConfig.getFromName());
+
+            if (invoice.getDistributor() != null) {
+                variables.put("distributorName", invoice.getDistributor().getName());
+                variables.put("distributorAddress", invoice.getDistributor().getAddress());
+                variables.put("distributorPhone", invoice.getDistributor().getPhone());
+                variables.put("distributorEmail", invoice.getDistributor().getEmail());
+            }
+
+            com.zuqi.domain.customer.Customer customer = sale.getCustomer();
+            variables.put("merchantName", customer.getBusinessName());
+            variables.put("merchantOwner", customer.getOwnerName());
+            variables.put("merchantAddress", customer.getAddress());
+            variables.put("merchantPhone", customer.getPhone());
+            variables.put("merchantEmail", customer.getEmail());
+
+            List<Map<String, Object>> items = sale.getItems().stream()
+                    .map(i -> {
+                        Map<String, Object> m = new HashMap<>();
+                        m.put("productName", i.getProductName());
+                        m.put("quantity", i.getQuantity());
+                        m.put("unitPrice", i.getUnitPrice());
+                        m.put("totalAmount", i.getLineTotal());
+                        return m;
+                    })
+                    .collect(Collectors.toList());
+            variables.put("items", items);
+
+            String subject = (isPaid ? "Payment Confirmed — " : "Receipt ") + invoice.getInvoiceNumber() + " from " +
+                    (invoice.getDistributor() != null ? invoice.getDistributor().getName() : emailConfig.getFromName());
+
+            emailService.sendInvoiceEmailAsync(customer.getEmail(), subject, variables);
+            log.info("Sent POS {} email to {} for sale {}", isPaid ? "PAID receipt" : "receipt",
+                    customer.getEmail(), sale.getId());
+        } catch (Exception e) {
+            log.warn("Failed to send POS receipt email for sale {}: {}", sale.getId(), e.getMessage());
+        }
     }
 
     private void sendInvoiceEmailAsync(Invoice invoice, String email) {
@@ -354,10 +620,20 @@ public class InvoiceServiceImpl implements InvoiceService {
             variables.put("merchantEmail", invoice.getMerchant().getEmail());
         }
 
-        // Order items
+        // Order items — mapped to a simple format compatible with the template
         if (invoice.getOrder() != null && invoice.getOrder().getItems() != null) {
             variables.put("orderNumber", invoice.getOrder().getOrderNumber());
-            variables.put("items", invoice.getOrder().getItems());
+            List<Map<String, Object>> items = invoice.getOrder().getItems().stream()
+                    .map(i -> {
+                        Map<String, Object> m = new HashMap<>();
+                        m.put("productName", i.getProduct() != null ? i.getProduct().getName() : "");
+                        m.put("quantity", i.getQuantity());
+                        m.put("unitPrice", i.getUnitPrice());
+                        m.put("totalAmount", i.getTotalAmount());
+                        return m;
+                    })
+                    .collect(Collectors.toList());
+            variables.put("items", items);
         }
 
         variables.put("companyName", emailConfig.getFromName());

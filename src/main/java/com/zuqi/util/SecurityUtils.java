@@ -74,4 +74,36 @@ public class SecurityUtils {
         UUID userDistributorId = getCurrentUserDistributorId();
         return userDistributorId != null && userDistributorId.equals(distributorId);
     }
+
+    /**
+     * Returns the active branch UUID from the JWT, or null if no branch context.
+     */
+    public UUID getCurrentBranchId() {
+        User user = getCurrentUser();
+        return user != null ? user.getActiveBranchId() : null;
+    }
+
+    /**
+     * Returns the effective branch filter to use in queries:
+     * - null  →  no branch filter (show all branches) for SUPER_ADMIN, HQ branch, or no branch selected
+     * - UUID  →  filter to this specific branch
+     *
+     * Business rule: the HQ branch represents the whole business, so it sees everything.
+     */
+    public UUID getEffectiveBranchId() {
+        if (canAccessAllData()) {
+            return null; // SUPER_ADMIN always sees everything
+        }
+        User user = getCurrentUser();
+        if (user == null) {
+            return null;
+        }
+        if (user.getActiveBranchId() == null) {
+            return null; // No branch selected yet — show all (pre-switch state)
+        }
+        if (user.isActiveBranchHeadquarters()) {
+            return null; // HQ branch sees all branches
+        }
+        return user.getActiveBranchId(); // specific non-HQ branch
+    }
 }

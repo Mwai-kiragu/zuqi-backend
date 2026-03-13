@@ -1,33 +1,20 @@
 package com.zuqi.service.impl;
 
-import com.zuqi.api.dto.merchant.MerchantCategoryRequest;
-import com.zuqi.api.dto.merchant.MerchantCategoryResponse;
 import com.zuqi.api.dto.merchant.MerchantRequest;
 import com.zuqi.api.dto.merchant.MerchantResponse;
-import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.merchant.Merchant;
-import com.zuqi.domain.merchant.MerchantCategory;
-import com.zuqi.domain.user.User;
 import com.zuqi.exception.DuplicateResourceException;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.repository.DistributorRepository;
-import com.zuqi.repository.MerchantCategoryRepository;
 import com.zuqi.repository.MerchantRepository;
-import com.zuqi.repository.UserRepository;
-import com.zuqi.ai.event.MerchantCreatedEvent;
-import com.zuqi.ai.feature.FeatureStore;
 import com.zuqi.service.MerchantService;
-import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -36,474 +23,91 @@ import java.util.UUID;
 public class MerchantServiceImpl implements MerchantService {
 
     private final MerchantRepository merchantRepository;
-    private final MerchantCategoryRepository categoryRepository;
     private final DistributorRepository distributorRepository;
-    private final UserRepository userRepository;
-    private final SecurityUtils securityUtils;
-    private final ApplicationEventPublisher eventPublisher;
-    private final FeatureStore featureStore;
+
+    private MerchantResponse toResponse(Merchant merchant) {
+        MerchantResponse response = MerchantResponse.fromEntity(merchant);
+        distributorRepository.findFirstByMerchantId(merchant.getId())
+                .ifPresent(d -> response.setDistributorId(d.getId()));
+        return response;
+    }
 
     @Override
     @Transactional(readOnly = true)
-    public Page<MerchantResponse> getAllMerchants(Pageable pageable) {
-        log.debug("Fetching all merchants");
-
-        // SUPER_ADMIN and ADMIN can see all merchants
-        UUID distributorId = securityUtils.getDistributorIdForFiltering();
-        if (distributorId != null) {
-            log.debug("Filtering merchants for distributor: {}", distributorId);
-            return merchantRepository.findByDistributorIdAndActiveTrue(distributorId, pageable)
-                    .map(MerchantResponse::fromEntity);
+    public Page<MerchantResponse> getAllMerchants(Boolean active, Pageable pageable) {
+        if (active == null) {
+            return merchantRepository.findAll(pageable).map(this::toResponse);
         }
-
-        return merchantRepository.findByActiveTrue(pageable)
-                .map(MerchantResponse::fromEntity);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Page<MerchantResponse> getMerchantsByDistributor(UUID distributorId, Pageable pageable) {
-        log.debug("Fetching merchants for distributor: {}", distributorId);
-        return merchantRepository.findByDistributorIdAndActiveTrue(distributorId, pageable)
-                .map(MerchantResponse::fromEntity);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Page<MerchantResponse> getMerchantsBySalesRep(UUID salesRepId, Pageable pageable) {
-        log.debug("Fetching merchants for sales rep: {}", salesRepId);
-        return merchantRepository.findByAssignedSalesRepIdAndActiveTrue(salesRepId, pageable)
-                .map(MerchantResponse::fromEntity);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Page<MerchantResponse> getMerchantsByCategory(Long categoryId, Pageable pageable) {
-        log.debug("Fetching merchants for category: {}", categoryId);
-        return merchantRepository.findByCategoryIdAndActiveTrue(categoryId, pageable)
-                .map(MerchantResponse::fromEntity);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Page<MerchantResponse> searchMerchants(String searchTerm, UUID distributorId, Boolean active, Pageable pageable) {
-        log.debug("Searching merchants with term: {}, distributor: {}, active: {}", searchTerm, distributorId, active);
-
-        // Determine effective distributor ID for filtering
-        UUID effectiveDistributorId = distributorId;
-        if (effectiveDistributorId == null) {
-            effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
-        }
-
-        if (effectiveDistributorId != null) {
-            return merchantRepository.searchByDistributorAndActive(effectiveDistributorId, searchTerm, active, pageable)
-                    .map(MerchantResponse::fromEntity);
-        }
-
-        // SUPER_ADMIN/ADMIN can search across all distributors
-        return merchantRepository.searchByBusinessNameAndActive(searchTerm, active, pageable)
-                .map(MerchantResponse::fromEntity);
+        return merchantRepository.findByActive(active, pageable).map(this::toResponse);
     }
 
     @Override
     @Transactional(readOnly = true)
     public MerchantResponse getMerchantById(UUID id) {
-        log.debug("Fetching merchant by ID: {}", id);
         Merchant merchant = merchantRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", id.toString()));
-        return MerchantResponse.fromEntity(merchant);
-    }
-
-    private String generateCustomerCode() {
-        long count = merchantRepository.countAll();
-        return String.format("CUST-%05d", count + 1);
+        return toResponse(merchant);
     }
 
     @Override
     @Transactional
     public MerchantResponse createMerchant(MerchantRequest request) {
-        log.info("Creating new merchant: {}", request.getBusinessName());
-
-        // Check for duplicate phone
-        if (merchantRepository.existsByPhone(request.getPhone())) {
-            throw new DuplicateResourceException("Merchant", "phone", request.getPhone());
+        if (merchantRepository.existsByName(request.getName())) {
+            throw new DuplicateResourceException("Merchant", "name", request.getName());
         }
-
-        // Check for duplicate email if provided
         if (request.getEmail() != null && merchantRepository.existsByEmail(request.getEmail())) {
             throw new DuplicateResourceException("Merchant", "email", request.getEmail());
         }
-
-        // Check for duplicate KRA PIN if provided
-        if (request.getKraPin() != null && merchantRepository.existsByKraPin(request.getKraPin())) {
-            throw new DuplicateResourceException("Merchant", "kraPin", request.getKraPin());
-        }
-
         Merchant merchant = Merchant.builder()
-                .customerCode(generateCustomerCode())
-                .businessName(request.getBusinessName())
-                .ownerName(request.getOwnerName())
+                .name(request.getName())
+                .registrationNumber(request.getRegistrationNumber())
                 .email(request.getEmail())
                 .phone(request.getPhone())
                 .address(request.getAddress())
                 .city(request.getCity())
-                .county(request.getCounty())
-                .subCounty(request.getSubCounty())
-                .kraPin(request.getKraPin())
-                .contactPersons(request.getContactPersons() != null ? request.getContactPersons() : new java.util.ArrayList<>())
-                .latitude(request.getLatitude())
-                .longitude(request.getLongitude())
-                .creditLimit(request.getCreditLimit())
-                .paymentTermsDays(request.getPaymentTermsDays() != null ? request.getPaymentTermsDays() : 0)
+                .country(request.getCountry() != null ? request.getCountry() : "Kenya")
+                .logoUrl(request.getLogoUrl())
+                .active(true)
                 .build();
-
-        // Set category if provided
-        if (request.getCategoryId() != null) {
-            MerchantCategory category = categoryRepository.findById(request.getCategoryId())
-                    .orElseThrow(() -> new ResourceNotFoundException("MerchantCategory", "id", request.getCategoryId().toString()));
-            merchant.setCategory(category);
-        }
-
-        // Set distributor if provided
-        if (request.getDistributorId() != null) {
-            Distributor distributor = distributorRepository.findById(request.getDistributorId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Distributor", "id", request.getDistributorId().toString()));
-            merchant.setDistributor(distributor);
-        }
-
-        // Set sales rep if provided
-        if (request.getAssignedSalesRepId() != null) {
-            User salesRep = userRepository.findById(request.getAssignedSalesRepId())
-                    .orElseThrow(() -> new ResourceNotFoundException("User", "id", request.getAssignedSalesRepId().toString()));
-            merchant.setAssignedSalesRep(salesRep);
-        }
-
-        Merchant savedMerchant = merchantRepository.save(merchant);
-        log.info("Merchant created successfully with ID: {}", savedMerchant.getId());
-
-        // Publish AI event for credit risk evaluation and embedding generation
-        publishMerchantCreatedEvent(savedMerchant);
-
-        return MerchantResponse.fromEntity(savedMerchant);
+        Merchant saved = merchantRepository.save(merchant);
+        log.info("Merchant brand created: {}", saved.getId());
+        return toResponse(saved);
     }
 
     @Override
     @Transactional
     public MerchantResponse updateMerchant(UUID id, MerchantRequest request) {
-        log.info("Updating merchant: {}", id);
-
         Merchant merchant = merchantRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", id.toString()));
-
-        // Check for duplicate phone if changed
-        if (!merchant.getPhone().equals(request.getPhone()) && merchantRepository.existsByPhone(request.getPhone())) {
-            throw new DuplicateResourceException("Merchant", "phone", request.getPhone());
+        if (!merchant.getName().equals(request.getName()) && merchantRepository.existsByName(request.getName())) {
+            throw new DuplicateResourceException("Merchant", "name", request.getName());
         }
-
-        // Check for duplicate email if changed
-        if (request.getEmail() != null && !request.getEmail().equals(merchant.getEmail())
-                && merchantRepository.existsByEmail(request.getEmail())) {
-            throw new DuplicateResourceException("Merchant", "email", request.getEmail());
-        }
-
-        // Check for duplicate KRA PIN if changed
-        if (request.getKraPin() != null && !request.getKraPin().equals(merchant.getKraPin())
-                && merchantRepository.existsByKraPin(request.getKraPin())) {
-            throw new DuplicateResourceException("Merchant", "kraPin", request.getKraPin());
-        }
-
-        merchant.setBusinessName(request.getBusinessName());
-        merchant.setOwnerName(request.getOwnerName());
+        merchant.setName(request.getName());
+        merchant.setRegistrationNumber(request.getRegistrationNumber());
         merchant.setEmail(request.getEmail());
         merchant.setPhone(request.getPhone());
         merchant.setAddress(request.getAddress());
         merchant.setCity(request.getCity());
-        merchant.setCounty(request.getCounty());
-        merchant.setSubCounty(request.getSubCounty());
-        merchant.setKraPin(request.getKraPin());
-        if (request.getContactPersons() != null) {
-            merchant.setContactPersons(request.getContactPersons());
-        }
-        merchant.setLatitude(request.getLatitude());
-        merchant.setLongitude(request.getLongitude());
-
-        if (request.getCreditLimit() != null) {
-            merchant.setCreditLimit(request.getCreditLimit());
-        }
-        if (request.getPaymentTermsDays() != null) {
-            merchant.setPaymentTermsDays(request.getPaymentTermsDays());
-        }
-
-        // Update category if provided
-        if (request.getCategoryId() != null) {
-            MerchantCategory category = categoryRepository.findById(request.getCategoryId())
-                    .orElseThrow(() -> new ResourceNotFoundException("MerchantCategory", "id", request.getCategoryId().toString()));
-            merchant.setCategory(category);
-        }
-
-        // Update distributor if provided
-        if (request.getDistributorId() != null) {
-            Distributor distributor = distributorRepository.findById(request.getDistributorId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Distributor", "id", request.getDistributorId().toString()));
-            merchant.setDistributor(distributor);
-        }
-
-        // Update sales rep if provided
-        if (request.getAssignedSalesRepId() != null) {
-            User salesRep = userRepository.findById(request.getAssignedSalesRepId())
-                    .orElseThrow(() -> new ResourceNotFoundException("User", "id", request.getAssignedSalesRepId().toString()));
-            merchant.setAssignedSalesRep(salesRep);
-        }
-
-        Merchant updatedMerchant = merchantRepository.save(merchant);
-        log.info("Merchant updated successfully: {}", id);
-
-        // Invalidate AI feature cache to ensure fresh data for ML models
-        featureStore.invalidateMerchantCache(id);
-        log.debug("Invalidated feature cache for merchant {}", id);
-
-        return MerchantResponse.fromEntity(updatedMerchant);
+        if (request.getCountry() != null) merchant.setCountry(request.getCountry());
+        merchant.setLogoUrl(request.getLogoUrl());
+        return toResponse(merchantRepository.save(merchant));
     }
 
     @Override
     @Transactional
-    public MerchantResponse assignSalesRep(UUID merchantId, UUID salesRepId) {
-        log.info("Assigning sales rep {} to merchant {}", salesRepId, merchantId);
-
-        Merchant merchant = merchantRepository.findById(merchantId)
-                .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", merchantId.toString()));
-
-        User salesRep = userRepository.findById(salesRepId)
-                .orElseThrow(() -> new ResourceNotFoundException("User", "id", salesRepId.toString()));
-
-        merchant.setAssignedSalesRep(salesRep);
-        Merchant updatedMerchant = merchantRepository.save(merchant);
-
-        log.info("Sales rep assigned successfully");
-        return MerchantResponse.fromEntity(updatedMerchant);
-    }
-
-    @Override
-    @Transactional
-    public MerchantResponse verifyMerchant(UUID merchantId) {
-        log.info("Verifying merchant: {}", merchantId);
-
-        Merchant merchant = merchantRepository.findById(merchantId)
-                .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", merchantId.toString()));
-
-        merchant.setVerified(true);
-        Merchant updatedMerchant = merchantRepository.save(merchant);
-
-        log.info("Merchant verified successfully");
-        return MerchantResponse.fromEntity(updatedMerchant);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Page<MerchantResponse> getInactiveMerchants(Pageable pageable) {
-        log.debug("Fetching all inactive merchants");
-
-        UUID distributorId = securityUtils.getDistributorIdForFiltering();
-        if (distributorId != null) {
-            return merchantRepository.findByDistributorIdAndActiveFalse(distributorId, pageable)
-                    .map(MerchantResponse::fromEntity);
-        }
-
-        return merchantRepository.findByActiveFalse(pageable)
-                .map(MerchantResponse::fromEntity);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Page<MerchantResponse> getInactiveMerchantsByDistributor(UUID distributorId, Pageable pageable) {
-        log.debug("Fetching inactive merchants for distributor: {}", distributorId);
-        return merchantRepository.findByDistributorIdAndActiveFalse(distributorId, pageable)
-                .map(MerchantResponse::fromEntity);
-    }
-
-    @Override
-    @Transactional
-    public void deactivateMerchant(UUID id, String reason, User currentUser) {
-        log.info("Deactivating merchant: {} with reason: {}", id, reason);
-
+    public void deactivateMerchant(UUID id) {
         Merchant merchant = merchantRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", id.toString()));
-
         merchant.setActive(false);
-        merchant.setDeactivationReason(reason);
-        merchant.setDeactivatedAt(java.time.LocalDateTime.now());
-        merchant.setDeactivatedBy(currentUser);
         merchantRepository.save(merchant);
-
-        log.info("Merchant deactivated successfully");
     }
 
     @Override
     @Transactional
     public void activateMerchant(UUID id) {
-        log.info("Activating merchant: {}", id);
-
         Merchant merchant = merchantRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", id.toString()));
-
         merchant.setActive(true);
-        merchant.setDeactivationReason(null);
-        merchant.setDeactivatedAt(null);
-        merchant.setDeactivatedBy(null);
         merchantRepository.save(merchant);
-
-        log.info("Merchant activated successfully");
-    }
-
-    @Override
-    @Transactional
-    public MerchantResponse blacklistMerchant(UUID id, String reason, User currentUser) {
-        log.info("Blacklisting merchant: {} with reason: {}", id, reason);
-
-        Merchant merchant = merchantRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", id.toString()));
-
-        merchant.setBlacklisted(true);
-        merchant.setBlacklistedReason(reason);
-        merchant.setBlacklistedAt(LocalDateTime.now());
-        merchant.setBlacklistedBy(currentUser);
-        merchant.setActive(false);
-
-        Merchant saved = merchantRepository.save(merchant);
-        log.info("Merchant blacklisted successfully: {}", id);
-        return MerchantResponse.fromEntity(saved);
-    }
-
-    @Override
-    @Transactional
-    public MerchantResponse unblacklistMerchant(UUID id) {
-        log.info("Removing merchant from blacklist: {}", id);
-
-        Merchant merchant = merchantRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", id.toString()));
-
-        merchant.setBlacklisted(false);
-        merchant.setBlacklistedReason(null);
-        merchant.setBlacklistedAt(null);
-        merchant.setBlacklistedBy(null);
-        merchant.setActive(true);
-
-        Merchant saved = merchantRepository.save(merchant);
-        log.info("Merchant removed from blacklist: {}", id);
-        return MerchantResponse.fromEntity(saved);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Page<MerchantResponse> getBlacklistedMerchants(Pageable pageable) {
-        log.debug("Fetching blacklisted merchants");
-
-        UUID distributorId = securityUtils.getDistributorIdForFiltering();
-        if (distributorId != null) {
-            return merchantRepository.findByDistributorIdAndBlacklistedTrue(distributorId, pageable)
-                    .map(MerchantResponse::fromEntity);
-        }
-
-        return merchantRepository.findByBlacklistedTrue(pageable)
-                .map(MerchantResponse::fromEntity);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<MerchantCategoryResponse> getAllCategories() {
-        log.debug("Fetching all merchant categories");
-        return categoryRepository.findAll().stream()
-                .map(MerchantCategoryResponse::fromEntity)
-                .toList();
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public MerchantCategoryResponse getCategoryById(Long id) {
-        log.debug("Fetching merchant category by ID: {}", id);
-        MerchantCategory category = categoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("MerchantCategory", "id", id.toString()));
-        return MerchantCategoryResponse.fromEntity(category);
-    }
-
-    @Override
-    @Transactional
-    public MerchantCategoryResponse createCategory(MerchantCategoryRequest request) {
-        log.info("Creating new merchant category: {}", request.getName());
-
-        if (categoryRepository.existsByName(request.getName())) {
-            throw new DuplicateResourceException("MerchantCategory", "name", request.getName());
-        }
-
-        MerchantCategory category = MerchantCategory.builder()
-                .name(request.getName())
-                .description(request.getDescription())
-                .build();
-
-        MerchantCategory savedCategory = categoryRepository.save(category);
-        log.info("Merchant category created successfully with ID: {}", savedCategory.getId());
-
-        return MerchantCategoryResponse.fromEntity(savedCategory);
-    }
-
-    @Override
-    @Transactional
-    public MerchantCategoryResponse updateCategory(Long id, MerchantCategoryRequest request) {
-        log.info("Updating merchant category: {}", id);
-
-        MerchantCategory category = categoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("MerchantCategory", "id", id.toString()));
-
-        // Check for duplicate name if changed
-        if (!category.getName().equals(request.getName()) && categoryRepository.existsByName(request.getName())) {
-            throw new DuplicateResourceException("MerchantCategory", "name", request.getName());
-        }
-
-        category.setName(request.getName());
-        category.setDescription(request.getDescription());
-
-        MerchantCategory updatedCategory = categoryRepository.save(category);
-        log.info("Merchant category updated successfully: {}", id);
-
-        return MerchantCategoryResponse.fromEntity(updatedCategory);
-    }
-
-    @Override
-    @Transactional
-    public void deleteCategory(Long id) {
-        log.info("Deleting merchant category: {}", id);
-
-        MerchantCategory category = categoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("MerchantCategory", "id", id.toString()));
-
-        // Check if category is in use
-        if (merchantRepository.existsByCategoryId(id)) {
-            throw new IllegalStateException("Cannot delete category that is assigned to merchants");
-        }
-
-        categoryRepository.delete(category);
-        log.info("Merchant category deleted successfully: {}", id);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<String> getDistinctCities() {
-        log.debug("Fetching distinct cities");
-        return merchantRepository.findDistinctCities();
-    }
-
-    private void publishMerchantCreatedEvent(Merchant merchant) {
-        MerchantCreatedEvent event = new MerchantCreatedEvent(
-                merchant.getId(),
-                merchant.getDistributor() != null ? merchant.getDistributor().getId() : null,
-                merchant.getBusinessName(),
-                merchant.getPhone(),
-                merchant.getAddress(),
-                merchant.getCategory() != null ? merchant.getCategory().getId() : null,
-                merchant.getAssignedSalesRep() != null ? merchant.getAssignedSalesRep().getId() : null,
-                merchant.getCreatedAt()
-        );
-        eventPublisher.publishEvent(event);
-        log.debug("Published MerchantCreatedEvent for merchant {}", merchant.getId());
     }
 }

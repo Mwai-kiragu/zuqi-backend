@@ -1,7 +1,6 @@
 package com.zuqi.domain.merchant;
 
-import com.zuqi.domain.distributor.Distributor;
-import com.zuqi.domain.user.User;
+import com.zuqi.domain.customer.KycStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -10,23 +9,14 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 @Entity
 @Table(name = "merchants", indexes = {
-        @Index(name = "idx_merchants_distributor", columnList = "distributor_id"),
-        @Index(name = "idx_merchants_category", columnList = "category_id"),
-        @Index(name = "idx_merchants_sales_rep", columnList = "assigned_sales_rep_id"),
-        @Index(name = "idx_merchants_active", columnList = "active"),
-        @Index(name = "idx_merchants_customer_code", columnList = "customer_code"),
-        @Index(name = "idx_merchants_kra_pin", columnList = "kra_pin"),
-        @Index(name = "idx_merchants_blacklisted", columnList = "blacklisted")
+        @Index(name = "idx_merchants_active", columnList = "active")
 })
 @EntityListeners(AuditingEntityListener.class)
 @Getter
@@ -40,18 +30,14 @@ public class Merchant {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "customer_code", length = 20, unique = true)
-    private String customerCode;
+    @Column(nullable = false)
+    private String name;
 
-    @Column(name = "business_name", nullable = false)
-    private String businessName;
-
-    @Column(name = "owner_name")
-    private String ownerName;
+    @Column(name = "registration_number")
+    private String registrationNumber;
 
     private String email;
 
-    @Column(nullable = false)
     private String phone;
 
     @Column(columnDefinition = "TEXT")
@@ -59,72 +45,20 @@ public class Merchant {
 
     private String city;
 
-    @Column(name = "county", length = 100)
-    private String county;
-
-    @Column(name = "sub_county", length = 100)
-    private String subCounty;
-
-    @Column(name = "kra_pin", length = 20, unique = true)
-    private String kraPin;
-
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "contact_persons", columnDefinition = "jsonb")
+    @Column(nullable = false)
     @Builder.Default
-    private List<Map<String, Object>> contactPersons = new ArrayList<>();
+    private String country = "Kenya";
 
-    private BigDecimal latitude;
-
-    private BigDecimal longitude;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "category_id")
-    private MerchantCategory category;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "distributor_id")
-    private Distributor distributor;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assigned_sales_rep_id")
-    private User assignedSalesRep;
-
-    @Column(name = "route_id")
-    private UUID routeId;
-
-    @Column(name = "credit_limit", precision = 15, scale = 2)
-    @Builder.Default
-    private BigDecimal creditLimit = BigDecimal.ZERO;
-
-    @Column(name = "current_balance", precision = 15, scale = 2)
-    @Builder.Default
-    private BigDecimal currentBalance = BigDecimal.ZERO;
-
-    @Column(name = "payment_terms_days")
-    @Builder.Default
-    private Integer paymentTermsDays = 0;
+    @Column(name = "logo_url")
+    private String logoUrl;
 
     @Column(nullable = false)
     @Builder.Default
     private boolean active = true;
 
-    @Column(nullable = false)
+    @Column(name = "cash_enabled", nullable = false)
     @Builder.Default
-    private boolean verified = false;
-
-    @Column(nullable = false)
-    @Builder.Default
-    private boolean blacklisted = false;
-
-    @Column(name = "blacklisted_reason", length = 500)
-    private String blacklistedReason;
-
-    @Column(name = "blacklisted_at")
-    private LocalDateTime blacklistedAt;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "blacklisted_by")
-    private User blacklistedBy;
+    private boolean cashEnabled = true;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "kyc_status", length = 20)
@@ -139,7 +73,7 @@ public class Merchant {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     @Builder.Default
-    private Map<String, Object> metadata = new HashMap<>();
+    private Map<String, Object> settings = new HashMap<>();
 
     @Version
     private Long version;
@@ -157,8 +91,4 @@ public class Merchant {
 
     @Column(name = "deactivated_at")
     private LocalDateTime deactivatedAt;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "deactivated_by")
-    private User deactivatedBy;
 }

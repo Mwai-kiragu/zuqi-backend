@@ -43,6 +43,18 @@ public class AuthenticationResponse {
     @JsonProperty("merchant_id")
     private UUID merchantId;
 
+    @JsonProperty("customer_id")
+    private UUID customerId;
+
     @JsonProperty("phone_number")
     private String phoneNumber;
+
+    @JsonProperty("email_verified")
+    private boolean emailVerified;
+
+    @JsonProperty("kyc_status")
+    private String kycStatus;
+
+    @JsonProperty("must_change_password")
+    private boolean mustChangePassword;
 }

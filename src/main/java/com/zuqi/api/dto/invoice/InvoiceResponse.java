@@ -3,6 +3,7 @@ package com.zuqi.api.dto.invoice;
 import com.zuqi.api.dto.order.OrderItemResponse;
 import com.zuqi.domain.invoice.Invoice;
 import com.zuqi.domain.invoice.InvoiceStatus;
+import com.zuqi.domain.pos.PosSaleItem;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -23,8 +24,14 @@ public class InvoiceResponse {
 
     private UUID id;
     private String invoiceNumber;
+    private String sourceType;
     private UUID orderId;
     private String orderNumber;
+    private UUID posOrderId;
+    private String posReceiptNumber;
+    private String posCustomerName;
+    private String posCustomerPhone;
+    private String posCashierName;
 
     // Distributor info
     private UUID distributorId;
@@ -72,6 +79,7 @@ public class InvoiceResponse {
         InvoiceResponseBuilder builder = InvoiceResponse.builder()
                 .id(invoice.getId())
                 .invoiceNumber(invoice.getInvoiceNumber())
+                .sourceType(invoice.getSourceType())
                 .subtotal(invoice.getSubtotal())
                 .discountAmount(invoice.getDiscountAmount())
                 .taxAmount(invoice.getTaxAmount())
@@ -100,6 +108,34 @@ public class InvoiceResponse {
             if (invoice.getOrder().getItems() != null) {
                 builder.items(invoice.getOrder().getItems().stream()
                         .map(OrderItemResponse::fromEntity)
+                        .toList());
+            }
+        }
+
+        // POS sale info
+        if (invoice.getPosOrder() != null) {
+            var pos = invoice.getPosOrder();
+            builder.posOrderId(pos.getId())
+                   .posReceiptNumber(pos.getReceiptNumber())
+                   .posCustomerName(pos.getCustomerName())
+                   .posCustomerPhone(pos.getCustomerPhone())
+                   .posCashierName(pos.getCashier() != null
+                           ? pos.getCashier().getFirstName() + " " + pos.getCashier().getLastName()
+                           : null);
+
+            // Map POS sale items to the shared items list
+            if (pos.getItems() != null && !pos.getItems().isEmpty()) {
+                builder.items(pos.getItems().stream()
+                        .map(item -> OrderItemResponse.builder()
+                                .id(item.getId())
+                                .productId(item.getProduct() != null ? item.getProduct().getId() : null)
+                                .productSku(item.getProductSku())
+                                .productName(item.getProductName())
+                                .quantity(item.getQuantity())
+                                .unitPrice(item.getUnitPrice())
+                                .discountPercent(BigDecimal.ZERO)
+                                .totalAmount(item.getLineTotal())
+                                .build())
                         .toList());
             }
         }

@@ -1,6 +1,6 @@
 package com.zuqi.ai.feature;
 
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.order.Order;
 import com.zuqi.domain.payment.Payment;
 import com.zuqi.repository.*;
@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
 public class SalesRepFeatureServiceImpl implements SalesRepFeatureService {
 
     private final UserRepository userRepository;
-    private final MerchantRepository merchantRepository;
+    private final CustomerRepository customerRepository;
     private final OrderRepository orderRepository;
     private final PaymentRepository paymentRepository;
 
@@ -50,10 +50,10 @@ public class SalesRepFeatureServiceImpl implements SalesRepFeatureService {
         List<Payment> payments = getPaymentsForPeriod(salesRepId, periodStart, periodEnd);
 
         // Get assigned merchants
-        List<Merchant> assignedMerchants = getAssignedMerchants(salesRepId);
+        List<Customer> assignedMerchants = getAssignedMerchants(salesRepId);
 
         // Get new merchants acquired in period
-        List<Merchant> newMerchants = getNewMerchantsInPeriod(salesRepId, periodStart, periodEnd);
+        List<Customer> newMerchants = getNewMerchantsInPeriod(salesRepId, periodStart, periodEnd);
 
         // Compute metrics
         int visitCount = computeVisitCount(orders, assignedMerchants);
@@ -123,16 +123,16 @@ public class SalesRepFeatureServiceImpl implements SalesRepFeatureService {
                 .collect(Collectors.toList());
     }
 
-    private List<Merchant> getAssignedMerchants(UUID salesRepId) {
+    private List<Customer> getAssignedMerchants(UUID salesRepId) {
         // Get all merchants assigned to this sales rep
-        return merchantRepository.findAll().stream()
+        return customerRepository.findAll().stream()
                 .filter(m -> m.getAssignedSalesRep() != null && m.getAssignedSalesRep().getId().equals(salesRepId))
-                .filter(Merchant::isActive)
+                .filter(Customer::isActive)
                 .collect(Collectors.toList());
     }
 
-    private List<Merchant> getNewMerchantsInPeriod(UUID salesRepId, LocalDateTime periodStart, LocalDateTime periodEnd) {
-        return merchantRepository.findAll().stream()
+    private List<Customer> getNewMerchantsInPeriod(UUID salesRepId, LocalDateTime periodStart, LocalDateTime periodEnd) {
+        return customerRepository.findAll().stream()
                 .filter(m -> m.getAssignedSalesRep() != null && m.getAssignedSalesRep().getId().equals(salesRepId))
                 .filter(m -> m.getCreatedAt() != null)
                 .filter(m -> !m.getCreatedAt().isBefore(periodStart) && !m.getCreatedAt().isAfter(periodEnd))
@@ -143,7 +143,7 @@ public class SalesRepFeatureServiceImpl implements SalesRepFeatureService {
      * Estimates visit count based on unique merchant-days with orders.
      * TODO: Replace with actual Visit entity tracking when implemented.
      */
-    private int computeVisitCount(List<Order> orders, List<Merchant> assignedMerchants) {
+    private int computeVisitCount(List<Order> orders, List<Customer> assignedMerchants) {
         // Estimate visits as unique merchant IDs in orders
         // In reality, a visit might not result in an order
         Set<UUID> merchantsWithOrders = orders.stream()
@@ -181,7 +181,7 @@ public class SalesRepFeatureServiceImpl implements SalesRepFeatureService {
         return total.divide(BigDecimal.valueOf(orders.size()), 2, RoundingMode.HALF_UP);
     }
 
-    private Double computeMerchantRetentionRate(List<Order> orders, List<Merchant> assignedMerchants) {
+    private Double computeMerchantRetentionRate(List<Order> orders, List<Customer> assignedMerchants) {
         if (assignedMerchants.isEmpty()) {
             return 0.0;
         }
@@ -225,7 +225,7 @@ public class SalesRepFeatureServiceImpl implements SalesRepFeatureService {
      * Computes planned route visits.
      * TODO: Replace with actual Route entity tracking when implemented.
      */
-    private int computeRouteVisitsPlanned(List<Merchant> assignedMerchants, LocalDateTime periodStart, LocalDateTime periodEnd) {
+    private int computeRouteVisitsPlanned(List<Customer> assignedMerchants, LocalDateTime periodStart, LocalDateTime periodEnd) {
         // Use same logic as visit target for now
         return computeVisitTarget(periodStart, periodEnd, assignedMerchants.size());
     }

@@ -1,9 +1,9 @@
--- Clear existing role_permissions and reassign properly
-DELETE FROM role_permissions;
+-- Assign role permissions (idempotent - skips existing assignments)
 
 -- ADMIN gets all permissions
 INSERT INTO role_permissions (role_id, permission_id)
-SELECT r.id, p.id FROM roles r, permissions p WHERE r.name = 'ADMIN';
+SELECT r.id, p.id FROM roles r, permissions p WHERE r.name = 'ADMIN'
+ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- DISTRIBUTOR_ADMIN gets most permissions except some admin-only ones
 INSERT INTO role_permissions (role_id, permission_id)
@@ -21,7 +21,8 @@ AND p.name IN (
     'reports:read', 'reports:export',
     'dashboard:view',
     'distributors:read'
-);
+)
+ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- SALES_REP permissions
 INSERT INTO role_permissions (role_id, permission_id)
@@ -34,7 +35,8 @@ AND p.name IN (
     'inventory:read',
     'credit:read',
     'dashboard:view'
-);
+)
+ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- WAREHOUSE_MANAGER permissions
 INSERT INTO role_permissions (role_id, permission_id)
@@ -45,7 +47,8 @@ AND p.name IN (
     'orders:read', 'orders:status',
     'inventory:read', 'inventory:adjust', 'warehouses:read', 'warehouses:manage',
     'dashboard:view'
-);
+)
+ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- MERCHANT permissions
 INSERT INTO role_permissions (role_id, permission_id)
@@ -57,7 +60,8 @@ AND p.name IN (
     'payments:read', 'payments:create',
     'credit:read',
     'dashboard:view'
-);
+)
+ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- FINANCE permissions
 INSERT INTO role_permissions (role_id, permission_id)
@@ -69,7 +73,8 @@ AND p.name IN (
     'credit:read',
     'reports:read', 'reports:export',
     'dashboard:view'
-);
+)
+ON CONFLICT (role_id, permission_id) DO NOTHING;
 
 -- DRIVER permissions
 INSERT INTO role_permissions (role_id, permission_id)
@@ -78,4 +83,5 @@ WHERE r.name = 'DRIVER'
 AND p.name IN (
     'orders:read', 'orders:status',
     'dashboard:view'
-);
+)
+ON CONFLICT (role_id, permission_id) DO NOTHING;

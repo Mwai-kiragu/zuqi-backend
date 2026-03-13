@@ -39,9 +39,13 @@ public class JournalEntryServiceImpl implements JournalEntryService {
     private final ApprovalService approvalService;
 
     @Override
-    public Page<JournalEntryResponse> getAll(UUID distributorId, JournalEntryStatus status,
+    public Page<JournalEntryResponse> getAll(UUID distributorId, UUID merchantId, JournalEntryStatus status,
                                               LocalDate fromDate, LocalDate toDate,
                                               JournalSourceModule sourceModule, Pageable pageable) {
+        if (merchantId != null) {
+            return journalEntryRepository.findByMerchantIdWithFilters(merchantId, status, fromDate, toDate, sourceModule, pageable)
+                    .map(JournalEntryResponse::fromEntity);
+        }
         return journalEntryRepository.findByFilters(distributorId, status, fromDate, toDate, sourceModule, pageable)
                 .map(JournalEntryResponse::fromEntity);
     }
@@ -199,7 +203,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
 
         JournalEntry entry = buildEntry(distributorId, request, period, currentUser, JournalEntryStatus.POSTED);
         entry.setPostedAt(LocalDateTime.now());
-        entry.setPostedBy(currentUser.getId());
+        entry.setPostedBy(currentUser != null ? currentUser.getId() : null);
         populateLines(entry, request.getLines());
 
         return JournalEntryResponse.fromEntity(journalEntryRepository.save(entry));
@@ -241,9 +245,10 @@ public class JournalEntryServiceImpl implements JournalEntryService {
                 .entryDate(request.getEntryDate())
                 .description(request.getDescription())
                 .reference(request.getReference())
-                .sourceModule(JournalSourceModule.MANUAL)
+                .sourceModule(request.getSourceModule() != null ? request.getSourceModule() : JournalSourceModule.MANUAL)
+                .sourceDocumentId(request.getSourceDocumentId())
                 .status(status)
-                .createdBy(currentUser.getId())
+                .createdBy(currentUser != null ? currentUser.getId() : null)
                 .build();
         entry.setLines(new ArrayList<>());
         return entry;

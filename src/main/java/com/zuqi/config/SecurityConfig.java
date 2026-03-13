@@ -40,6 +40,8 @@ public class SecurityConfig {
 
     private static final String[] PUBLIC_ENDPOINTS = {
             "/v1/auth/**",
+            "/v1/mpesa/callback",
+            "/v1/kcb/callback",
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",

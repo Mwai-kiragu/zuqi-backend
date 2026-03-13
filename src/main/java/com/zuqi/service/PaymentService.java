@@ -2,6 +2,7 @@ package com.zuqi.service;
 
 import com.zuqi.api.dto.payment.*;
 import com.zuqi.domain.payment.PaymentStatus;
+import com.zuqi.domain.pos.PosSale;
 import com.zuqi.domain.user.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -48,4 +49,6 @@ public interface PaymentService {
     List<PaymentMethodResponse> getAllPaymentMethods();
 
     List<PaymentMethodResponse> getActivePaymentMethods();
+
+    void createPaymentsForPosSale(PosSale sale);
 }

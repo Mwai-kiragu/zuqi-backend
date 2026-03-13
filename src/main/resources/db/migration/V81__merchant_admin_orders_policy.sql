@@ -1,0 +1,6 @@
+-- MERCHANT_ADMIN order management policies (create, update, cancel)
+INSERT INTO casbin_rule (ptype, v0, v1, v2) VALUES
+    ('p', 'MERCHANT_ADMIN', '/v1/orders',          'POST'),
+    ('p', 'MERCHANT_ADMIN', '/v1/orders/:id',       'PUT'),
+    ('p', 'MERCHANT_ADMIN', '/v1/orders/:id/cancel','POST')
+ON CONFLICT DO NOTHING;

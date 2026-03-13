@@ -2,14 +2,18 @@ package com.zuqi.service.impl;
 
 import com.zuqi.api.dto.payment.*;
 import com.zuqi.domain.distributor.Distributor;
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.order.Order;
 import com.zuqi.domain.payment.Payment;
 import com.zuqi.domain.payment.PaymentMethod;
 import com.zuqi.domain.payment.PaymentStatus;
+import com.zuqi.domain.pos.PosSale;
+import com.zuqi.domain.pos.PosSalePayment;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.repository.*;
+import com.zuqi.domain.mpesa.MpesaConfigStatus;
+import com.zuqi.domain.kcb.KcbConfigStatus;
 import com.zuqi.ai.event.PaymentRecordedEvent;
 import com.zuqi.ai.feature.FeatureStore;
 import com.zuqi.service.PaymentService;
@@ -18,6 +22,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,15 +43,22 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepository;
     private final PaymentMethodRepository paymentMethodRepository;
     private final OrderRepository orderRepository;
-    private final MerchantRepository merchantRepository;
+    private final CustomerRepository customerRepository;
     private final DistributorRepository distributorRepository;
+    private final MerchantRepository merchantRepository;
+    private final MpesaConfigRepository mpesaConfigRepository;
+    private final KcbConfigRepository kcbConfigRepository;
     private final SecurityUtils securityUtils;
     private final ApplicationEventPublisher eventPublisher;
     private final FeatureStore featureStore;
 
     @Override
     public Page<PaymentResponse> getAllPayments(Pageable pageable) {
-        // SUPER_ADMIN and ADMIN can see all payments
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId != null) {
+            return paymentRepository.findByDistributorMerchantId(merchantId, pageable)
+                    .map(PaymentResponse::fromEntity);
+        }
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
         if (distributorId != null) {
             return paymentRepository.findByDistributorId(distributorId, pageable)
@@ -92,6 +104,8 @@ public class PaymentServiceImpl implements PaymentService {
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
+        // Strip sort from pageable — native query has explicit ORDER BY p.created_at DESC
+        Pageable unsorted = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
         return paymentRepository.findByFilters(
                 effectiveDistributorId,
                 status != null ? status.name() : null,
@@ -99,15 +113,19 @@ public class PaymentServiceImpl implements PaymentService {
                 reconciled,
                 startDateTime,
                 endDateTime,
-                pageable
+                unsorted
         ).map(PaymentResponse::fromEntity);
     }
 
     @Override
     public Page<PaymentResponse> searchPayments(UUID distributorId, String search, Pageable pageable) {
-        // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return paymentRepository.searchPaymentsByMerchant(merchantId, search, pageable)
+                        .map(PaymentResponse::fromEntity);
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
@@ -138,8 +156,8 @@ public class PaymentServiceImpl implements PaymentService {
         Distributor distributor = distributorRepository.findById(request.getDistributorId())
                 .orElseThrow(() -> new ResourceNotFoundException("Distributor", "id", request.getDistributorId()));
 
-        Merchant merchant = merchantRepository.findById(request.getMerchantId())
-                .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", request.getMerchantId()));
+        Customer merchant = customerRepository.findById(request.getMerchantId())
+                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getMerchantId()));
 
         Order order = null;
         if (request.getOrderId() != null) {
@@ -159,6 +177,7 @@ public class PaymentServiceImpl implements PaymentService {
         // Create payment
         Payment payment = Payment.builder()
                 .paymentNumber(paymentNumber)
+                .sourceType(order != null ? "ORDER" : "MANUAL")
                 .order(order)
                 .merchant(merchant)
                 .distributor(distributor)
@@ -259,10 +278,72 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override
     public List<PaymentMethodResponse> getActivePaymentMethods() {
-        return paymentMethodRepository.findByActiveTrue()
+        List<PaymentMethod> dbMethods = paymentMethodRepository.findByActiveTrue();
+
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId == null) {
+            // SUPER_ADMIN or no merchant context — return all as-is
+            return dbMethods.stream().map(PaymentMethodResponse::fromEntity).toList();
+        }
+
+        // Check merchant-specific availability
+        boolean cashEnabled = merchantRepository.findById(merchantId)
+                .map(m -> m.isCashEnabled())
+                .orElse(true);
+
+        boolean mpesaEnabled = mpesaConfigRepository.findByMerchantId(merchantId)
                 .stream()
-                .map(PaymentMethodResponse::fromEntity)
-                .toList();
+                .anyMatch(c -> c.getStatus() == MpesaConfigStatus.ACTIVE);
+
+        boolean kcbEnabled = kcbConfigRepository.existsByMerchantIdAndStatus(merchantId, KcbConfigStatus.ACTIVE);
+
+        return dbMethods.stream().map(m -> {
+            String code = m.getCode() != null ? m.getCode().toUpperCase() : "";
+            boolean available = switch (code) {
+                case "CASH"  -> cashEnabled;
+                case "MPESA" -> mpesaEnabled;
+                case "KCB"   -> kcbEnabled;
+                default      -> m.isActive();
+            };
+            return PaymentMethodResponse.builder()
+                    .id(m.getId())
+                    .name(m.getName())
+                    .code(m.getCode())
+                    .description(m.getDescription())
+                    .active(available)
+                    .build();
+        }).toList();
+    }
+
+    @Override
+    @Transactional
+    public void createPaymentsForPosSale(PosSale sale) {
+        if (sale.getPayments() == null || sale.getPayments().isEmpty()) {
+            return;
+        }
+        for (PosSalePayment posPayment : sale.getPayments()) {
+            // Map PosPaymentMethod enum name → PaymentMethod entity by code
+            PaymentMethod method = paymentMethodRepository
+                    .findByCode(posPayment.getPaymentMethod().name())
+                    .orElse(null);
+
+            Payment payment = Payment.builder()
+                    .paymentNumber(generatePaymentNumber())
+                    .sourceType("POS_SALE")
+                    .posSale(sale)
+                    .distributor(sale.getBranch().getDistributor())
+                    .paymentMethod(method)
+                    .amount(posPayment.getAmount())
+                    .currency("KES")
+                    .status(PaymentStatus.COMPLETED)
+                    .paymentDate(sale.getCompletedAt())
+                    .externalReference(posPayment.getReferenceNumber())
+                    .notes(posPayment.getNotes())
+                    .build();
+
+            paymentRepository.save(payment);
+        }
+        log.info("Created {} payment record(s) for POS sale {}", sale.getPayments().size(), sale.getId());
     }
 
     // Helper methods

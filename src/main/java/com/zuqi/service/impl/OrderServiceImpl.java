@@ -2,15 +2,18 @@ package com.zuqi.service.impl;
 
 import com.zuqi.api.dto.order.*;
 import com.zuqi.domain.distributor.Distributor;
+import com.zuqi.domain.inventory.Stock;
 import com.zuqi.domain.inventory.Warehouse;
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.order.*;
 import com.zuqi.domain.product.Product;
 import com.zuqi.domain.user.User;
+import com.zuqi.domain.audit.ActivityAction;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
 import com.zuqi.ai.event.DeliveryCompletedEvent;
+import com.zuqi.service.ActivityLogService;
 import com.zuqi.ai.event.OrderCreatedEvent;
 import com.zuqi.ai.feature.FeatureStore;
 import com.zuqi.domain.credit.CreditLimit;
@@ -44,20 +47,26 @@ public class OrderServiceImpl implements OrderService {
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
     private final OrderStatusHistoryRepository statusHistoryRepository;
-    private final MerchantRepository merchantRepository;
+    private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
     private final DistributorRepository distributorRepository;
     private final WarehouseRepository warehouseRepository;
+    private final StockRepository stockRepository;
     private final UserRepository userRepository;
     private final CreditLimitRepository creditLimitRepository;
     private final SecurityUtils securityUtils;
+    private final ActivityLogService activityLogService;
     private final InvoiceService invoiceService;
     private final ApplicationEventPublisher eventPublisher;
     private final FeatureStore featureStore;
 
     @Override
     public Page<OrderResponse> getAllOrders(Pageable pageable) {
-        // SUPER_ADMIN and ADMIN can see all orders
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId != null) {
+            return orderRepository.findByDistributorMerchantId(merchantId, pageable)
+                    .map(OrderResponse::fromEntity);
+        }
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
         if (distributorId != null) {
             return orderRepository.findByDistributorId(distributorId, pageable)
@@ -121,9 +130,13 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     public Page<OrderResponse> searchOrders(UUID distributorId, String search, Pageable pageable) {
-        // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return orderRepository.searchOrdersByMerchant(merchantId, search, pageable)
+                        .map(OrderResponse::fromEntity);
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
@@ -154,8 +167,8 @@ public class OrderServiceImpl implements OrderService {
         Distributor distributor = distributorRepository.findById(request.getDistributorId())
                 .orElseThrow(() -> new ResourceNotFoundException("Distributor", "id", request.getDistributorId()));
 
-        Merchant merchant = merchantRepository.findById(request.getMerchantId())
-                .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", request.getMerchantId()));
+        Customer merchant = customerRepository.findById(request.getMerchantId())
+                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getMerchantId()));
 
         User salesRep = null;
         if (request.getSalesRepId() != null) {
@@ -228,6 +241,11 @@ public class OrderServiceImpl implements OrderService {
         // Add initial status history
         addStatusHistory(order, OrderStatus.PENDING, "Order created", currentUser);
 
+        // Deduct stock immediately at order creation
+        if (order.getWarehouse() != null) {
+            deductStockForOrder(order);
+        }
+
         // Create and send invoice
         try {
             invoiceService.createInvoiceFromOrder(order);
@@ -243,6 +261,11 @@ public class OrderServiceImpl implements OrderService {
 
         // Publish AI event for data quality validation and demand forecasting
         publishOrderCreatedEvent(order);
+
+        activityLogService.log(currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.CREATE, "ORDER", order.getId(),
+                order.getOrderNumber(), "ORDERS", "Created order: " + order.getOrderNumber());
 
         log.info("Order created successfully: {}", order.getOrderNumber());
         return OrderResponse.fromEntity(order);
@@ -341,6 +364,11 @@ public class OrderServiceImpl implements OrderService {
         order.setStatus(OrderStatus.CANCELLED);
         addStatusHistory(order, OrderStatus.CANCELLED, reason, currentUser);
 
+        // Restore stock when order is cancelled
+        if (order.getWarehouse() != null && order.getItems() != null) {
+            restoreStockForOrder(order);
+        }
+
         order = orderRepository.save(order);
         log.info("Order {} cancelled", order.getOrderNumber());
 
@@ -374,6 +402,37 @@ public class OrderServiceImpl implements OrderService {
     }
 
     // Helper methods
+
+    private void deductStockForOrder(Order order) {
+        for (OrderItem item : order.getItems()) {
+            Stock stock = stockRepository
+                    .findByWarehouseIdAndProductId(order.getWarehouse().getId(), item.getProduct().getId())
+                    .orElse(null);
+            if (stock == null) {
+                stock = Stock.builder()
+                        .warehouse(order.getWarehouse())
+                        .product(item.getProduct())
+                        .quantity(BigDecimal.ZERO)
+                        .reservedQuantity(BigDecimal.ZERO)
+                        .build();
+            }
+            stock.setQuantity(stock.getQuantity().subtract(item.getQuantity()));
+            stockRepository.save(stock);
+            log.info("Deducted {} of '{}' for order {}", item.getQuantity(), item.getProduct().getName(), order.getOrderNumber());
+        }
+    }
+
+    private void restoreStockForOrder(Order order) {
+        for (OrderItem item : order.getItems()) {
+            Stock stock = stockRepository
+                    .findByWarehouseIdAndProductId(order.getWarehouse().getId(), item.getProduct().getId())
+                    .orElse(null);
+            if (stock == null) return;
+            stock.setQuantity(stock.getQuantity().add(item.getQuantity()));
+            stockRepository.save(stock);
+            log.info("Restored {} of '{}' on cancellation of order {}", item.getQuantity(), item.getProduct().getName(), order.getOrderNumber());
+        }
+    }
 
     private String generateOrderNumber() {
         String prefix = "ORD-" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + "-";

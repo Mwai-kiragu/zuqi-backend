@@ -1,7 +1,7 @@
 package com.zuqi.domain.ai;
 
 import com.zuqi.domain.distributor.Distributor;
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.product.Product;
 import jakarta.persistence.*;
 import lombok.*;
@@ -42,7 +42,7 @@ public class DemandForecast {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "merchant_id", nullable = false)
-    private Merchant merchant;
+    private Customer merchant;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sku_id", nullable = false)

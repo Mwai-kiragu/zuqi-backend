@@ -1,9 +1,9 @@
 package com.zuqi.ai.feature;
 
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.order.Order;
 import com.zuqi.domain.payment.Payment;
-import com.zuqi.repository.MerchantRepository;
+import com.zuqi.repository.CustomerRepository;
 import com.zuqi.repository.OrderRepository;
 import com.zuqi.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +25,7 @@ import java.util.*;
 public class PaymentFeatureServiceImpl implements PaymentFeatureService {
 
     private final PaymentRepository paymentRepository;
-    private final MerchantRepository merchantRepository;
+    private final CustomerRepository customerRepository;
     private final OrderRepository orderRepository;
 
     @Override
@@ -43,7 +43,7 @@ public class PaymentFeatureServiceImpl implements PaymentFeatureService {
         Payment payment = paymentRepository.findById(paymentId)
                 .orElseThrow(() -> new IllegalArgumentException("Payment not found: " + paymentId));
 
-        Merchant merchant = payment.getMerchant();
+        Customer merchant = payment.getMerchant();
         if (merchant == null) {
             throw new IllegalArgumentException("Payment has no associated merchant: " + paymentId);
         }
@@ -92,7 +92,7 @@ public class PaymentFeatureServiceImpl implements PaymentFeatureService {
     public MerchantPaymentTrendFeatures computeMerchantTrendFeatures(UUID merchantId, LocalDateTime asOfDate) {
         log.debug("Computing merchant payment trend features for {} as of {}", merchantId, asOfDate);
 
-        Merchant merchant = merchantRepository.findById(merchantId)
+        Customer merchant = customerRepository.findById(merchantId)
                 .orElseThrow(() -> new IllegalArgumentException("Merchant not found: " + merchantId));
 
         // Get payments and orders for trend analysis
@@ -342,7 +342,7 @@ public class PaymentFeatureServiceImpl implements PaymentFeatureService {
         return (int) Math.max(0, weeksSinceLastOrder);
     }
 
-    private Double computeAvgCreditUtilization(List<Order> orders, Merchant merchant) {
+    private Double computeAvgCreditUtilization(List<Order> orders, Customer merchant) {
         if (merchant.getCreditLimit() == null || merchant.getCreditLimit().compareTo(BigDecimal.ZERO) == 0) {
             return null;
         }
@@ -360,7 +360,7 @@ public class PaymentFeatureServiceImpl implements PaymentFeatureService {
         return avgOutstanding.divide(merchant.getCreditLimit(), 4, RoundingMode.HALF_UP).doubleValue();
     }
 
-    private Double computeCreditUtilizationTrend(List<Order> orders, Merchant merchant) {
+    private Double computeCreditUtilizationTrend(List<Order> orders, Customer merchant) {
         if (merchant.getCreditLimit() == null || merchant.getCreditLimit().compareTo(BigDecimal.ZERO) == 0) {
             return null;
         }
@@ -385,7 +385,7 @@ public class PaymentFeatureServiceImpl implements PaymentFeatureService {
         return computeLinearRegressionSlope(x, y);
     }
 
-    private Double computePeakCreditUtilization(List<Order> orders, Merchant merchant) {
+    private Double computePeakCreditUtilization(List<Order> orders, Customer merchant) {
         if (merchant.getCreditLimit() == null || merchant.getCreditLimit().compareTo(BigDecimal.ZERO) == 0) {
             return null;
         }
@@ -402,7 +402,7 @@ public class PaymentFeatureServiceImpl implements PaymentFeatureService {
         return maxOutstanding.divide(merchant.getCreditLimit(), 4, RoundingMode.HALF_UP).doubleValue();
     }
 
-    private Boolean checkHitCreditLimit(List<Order> orders, Merchant merchant) {
+    private Boolean checkHitCreditLimit(List<Order> orders, Customer merchant) {
         Double peak = computePeakCreditUtilization(orders, merchant);
         return peak != null && peak >= 0.95;
     }

@@ -50,6 +50,8 @@ public class GlPostingServiceImpl implements GlPostingService {
                 .entryDate(date)
                 .description(description)
                 .reference(reference)
+                .sourceModule(sourceModule)
+                .sourceDocumentId(sourceDocumentId)
                 .lines(lineRequests)
                 .build();
 

@@ -11,8 +11,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.math.MathContext;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -129,5 +129,309 @@ public class GlReportServiceImpl implements GlReportService {
                 .periodMonth(month)
                 .rows(rows)
                 .build();
+    }
+
+    @Override
+    public GeneralLedgerResponse getGeneralLedger(UUID distributorId, LocalDate fromDate, LocalDate toDate) {
+        List<GlAccount> accounts = glAccountRepository.findByDistributorIdAndActiveOrderByAccountCodeAsc(distributorId, true);
+
+        // Opening balances: all posted lines before fromDate
+        List<JournalEntryLine> openingLines = journalEntryLineRepository.findPostedLinesBeforeDate(distributorId, fromDate);
+        Map<UUID, BigDecimal> openingBalances = new HashMap<>();
+        for (JournalEntryLine line : openingLines) {
+            UUID acctId = line.getAccount().getId();
+            BigDecimal net = line.getDebitAmount().subtract(line.getCreditAmount());
+            openingBalances.merge(acctId, net, BigDecimal::add);
+        }
+
+        // Period lines grouped by account
+        List<JournalEntryLine> periodLines = journalEntryLineRepository.findPostedLinesForDateRange(distributorId, fromDate, toDate);
+        Map<UUID, List<JournalEntryLine>> linesByAccount = new LinkedHashMap<>();
+        for (JournalEntryLine line : periodLines) {
+            linesByAccount.computeIfAbsent(line.getAccount().getId(), k -> new ArrayList<>()).add(line);
+        }
+
+        List<GeneralLedgerAccountRow> accountRows = new ArrayList<>();
+        for (GlAccount account : accounts) {
+            if (!account.isPostingAccount()) continue;
+            List<JournalEntryLine> acctLines = linesByAccount.get(account.getId());
+            BigDecimal openingBal = openingBalances.getOrDefault(account.getId(), BigDecimal.ZERO);
+            // Adjust opening balance sign for CREDIT normal balance accounts
+            if (account.getNormalBalance() == NormalBalance.CREDIT) {
+                openingBal = openingBal.negate();
+            }
+            if (acctLines == null && openingBal.compareTo(BigDecimal.ZERO) == 0) continue;
+
+            BigDecimal running = openingBal;
+            BigDecimal totalDr = BigDecimal.ZERO;
+            BigDecimal totalCr = BigDecimal.ZERO;
+            List<GeneralLedgerLine> glLines = new ArrayList<>();
+
+            if (acctLines != null) {
+                for (JournalEntryLine line : acctLines) {
+                    BigDecimal dr = line.getDebitAmount();
+                    BigDecimal cr = line.getCreditAmount();
+                    if (account.getNormalBalance() == NormalBalance.DEBIT) {
+                        running = running.add(dr).subtract(cr);
+                    } else {
+                        running = running.subtract(dr).add(cr);
+                    }
+                    totalDr = totalDr.add(dr);
+                    totalCr = totalCr.add(cr);
+                    glLines.add(GeneralLedgerLine.builder()
+                            .date(line.getJournalEntry().getEntryDate())
+                            .entryNumber(line.getJournalEntry().getEntryNumber())
+                            .description(line.getDescription() != null ? line.getDescription() : line.getJournalEntry().getDescription())
+                            .reference(line.getReference())
+                            .debit(dr)
+                            .credit(cr)
+                            .runningBalance(running)
+                            .build());
+                }
+            }
+
+            accountRows.add(GeneralLedgerAccountRow.builder()
+                    .accountId(account.getId())
+                    .accountCode(account.getAccountCode())
+                    .accountName(account.getAccountName())
+                    .accountType(account.getAccountType())
+                    .openingBalance(openingBal)
+                    .totalDebit(totalDr)
+                    .totalCredit(totalCr)
+                    .closingBalance(running)
+                    .lines(glLines)
+                    .build());
+        }
+
+        return GeneralLedgerResponse.builder()
+                .fromDate(fromDate)
+                .toDate(toDate)
+                .accounts(accountRows)
+                .build();
+    }
+
+    @Override
+    public BalanceSheetResponse getBalanceSheet(UUID distributorId, LocalDate asOfDate) {
+        List<JournalEntryLine> lines = journalEntryLineRepository.findPostedLinesUpToDate(distributorId, asOfDate);
+
+        Map<UUID, BigDecimal[]> accountTotals = new LinkedHashMap<>();
+        for (JournalEntryLine line : lines) {
+            UUID acctId = line.getAccount().getId();
+            accountTotals.computeIfAbsent(acctId, k -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
+            accountTotals.get(acctId)[0] = accountTotals.get(acctId)[0].add(line.getDebitAmount());
+            accountTotals.get(acctId)[1] = accountTotals.get(acctId)[1].add(line.getCreditAmount());
+        }
+
+        List<GlAccount> accounts = glAccountRepository.findByDistributorIdOrderByAccountCodeAsc(distributorId);
+
+        List<BalanceSheetRow> assetRows = new ArrayList<>();
+        List<BalanceSheetRow> liabilityRows = new ArrayList<>();
+        List<BalanceSheetRow> equityRows = new ArrayList<>();
+        BigDecimal totalAssets = BigDecimal.ZERO;
+        BigDecimal totalLiabilities = BigDecimal.ZERO;
+        BigDecimal totalEquity = BigDecimal.ZERO;
+
+        for (GlAccount account : accounts) {
+            if (!account.isPostingAccount()) continue;
+            AccountType type = account.getAccountType();
+            if (type == AccountType.REVENUE || type == AccountType.EXPENSE) continue;
+
+            BigDecimal[] totals = accountTotals.getOrDefault(account.getId(), new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
+            BigDecimal dr = totals[0];
+            BigDecimal cr = totals[1];
+            // Balance: ASSET/EXPENSE normal=DEBIT → balance = debit - credit; LIABILITY/EQUITY/REVENUE normal=CREDIT → credit - debit
+            BigDecimal balance = account.getNormalBalance() == NormalBalance.DEBIT
+                    ? dr.subtract(cr) : cr.subtract(dr);
+            if (balance.compareTo(BigDecimal.ZERO) == 0) continue;
+
+            BalanceSheetRow row = BalanceSheetRow.builder()
+                    .accountId(account.getId())
+                    .accountCode(account.getAccountCode())
+                    .accountName(account.getAccountName())
+                    .balance(balance)
+                    .build();
+
+            if (type == AccountType.ASSET) {
+                assetRows.add(row);
+                totalAssets = totalAssets.add(balance);
+            } else if (type == AccountType.LIABILITY) {
+                liabilityRows.add(row);
+                totalLiabilities = totalLiabilities.add(balance);
+            } else if (type == AccountType.EQUITY) {
+                equityRows.add(row);
+                totalEquity = totalEquity.add(balance);
+            }
+        }
+
+        return BalanceSheetResponse.builder()
+                .asOfDate(asOfDate)
+                .assets(BalanceSheetSection.builder().name("Assets").rows(assetRows).total(totalAssets).build())
+                .liabilities(BalanceSheetSection.builder().name("Liabilities").rows(liabilityRows).total(totalLiabilities).build())
+                .equity(BalanceSheetSection.builder().name("Equity").rows(equityRows).total(totalEquity).build())
+                .totalLiabilitiesAndEquity(totalLiabilities.add(totalEquity))
+                .build();
+    }
+
+    @Override
+    public ProfitLossResponse getProfitAndLoss(UUID distributorId, LocalDate fromDate, LocalDate toDate) {
+        List<JournalEntryLine> lines = journalEntryLineRepository.findPostedLinesForDateRange(distributorId, fromDate, toDate);
+
+        Map<UUID, BigDecimal[]> accountTotals = new LinkedHashMap<>();
+        for (JournalEntryLine line : lines) {
+            UUID acctId = line.getAccount().getId();
+            accountTotals.computeIfAbsent(acctId, k -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
+            accountTotals.get(acctId)[0] = accountTotals.get(acctId)[0].add(line.getDebitAmount());
+            accountTotals.get(acctId)[1] = accountTotals.get(acctId)[1].add(line.getCreditAmount());
+        }
+
+        List<GlAccount> accounts = glAccountRepository.findByDistributorIdOrderByAccountCodeAsc(distributorId);
+
+        List<ProfitLossRow> revenueRows = new ArrayList<>();
+        List<ProfitLossRow> cogsRows = new ArrayList<>();
+        List<ProfitLossRow> expenseRows = new ArrayList<>();
+        BigDecimal totalRevenue = BigDecimal.ZERO;
+        BigDecimal totalCogs = BigDecimal.ZERO;
+        BigDecimal totalExpenses = BigDecimal.ZERO;
+
+        for (GlAccount account : accounts) {
+            if (!account.isPostingAccount()) continue;
+            AccountType type = account.getAccountType();
+            if (type != AccountType.REVENUE && type != AccountType.EXPENSE) continue;
+
+            BigDecimal[] totals = accountTotals.getOrDefault(account.getId(), new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
+            BigDecimal dr = totals[0];
+            BigDecimal cr = totals[1];
+            // REVENUE: normal=CREDIT → amount = cr - dr; EXPENSE: normal=DEBIT → amount = dr - cr
+            BigDecimal amount = account.getNormalBalance() == NormalBalance.CREDIT
+                    ? cr.subtract(dr) : dr.subtract(cr);
+            if (amount.compareTo(BigDecimal.ZERO) == 0) continue;
+
+            ProfitLossRow row = ProfitLossRow.builder()
+                    .accountId(account.getId())
+                    .accountCode(account.getAccountCode())
+                    .accountName(account.getAccountName())
+                    .amount(amount)
+                    .build();
+
+            if (type == AccountType.REVENUE) {
+                revenueRows.add(row);
+                totalRevenue = totalRevenue.add(amount);
+            } else {
+                // COGS or Operating Expense
+                if (account.getAccountSubType() == AccountSubType.COGS) {
+                    cogsRows.add(row);
+                    totalCogs = totalCogs.add(amount);
+                } else {
+                    expenseRows.add(row);
+                    totalExpenses = totalExpenses.add(amount);
+                }
+            }
+        }
+
+        BigDecimal grossProfit = totalRevenue.subtract(totalCogs);
+        BigDecimal netIncome = grossProfit.subtract(totalExpenses);
+
+        return ProfitLossResponse.builder()
+                .fromDate(fromDate)
+                .toDate(toDate)
+                .revenue(ProfitLossSection.builder().name("Revenue").rows(revenueRows).total(totalRevenue).build())
+                .costOfGoods(ProfitLossSection.builder().name("Cost of Goods Sold").rows(cogsRows).total(totalCogs).build())
+                .expenses(ProfitLossSection.builder().name("Operating Expenses").rows(expenseRows).total(totalExpenses).build())
+                .grossProfit(grossProfit)
+                .netIncome(netIncome)
+                .build();
+    }
+
+    @Override
+    public CashFlowResponse getCashFlowStatement(UUID distributorId, LocalDate fromDate, LocalDate toDate) {
+        // Compute account balances at period start (before fromDate) and end (up to toDate)
+        Map<UUID, BigDecimal[]> openingTotals = buildAccountTotals(
+                journalEntryLineRepository.findPostedLinesBeforeDate(distributorId, fromDate));
+        Map<UUID, BigDecimal[]> closingTotals = buildAccountTotals(
+                journalEntryLineRepository.findPostedLinesUpToDate(distributorId, toDate));
+
+        List<GlAccount> accounts = glAccountRepository.findByDistributorIdOrderByAccountCodeAsc(distributorId);
+
+        // Get net income from P&L
+        ProfitLossResponse pl = getProfitAndLoss(distributorId, fromDate, toDate);
+        BigDecimal netIncome = pl.getNetIncome();
+
+        List<CashFlowRow> operatingRows = new ArrayList<>();
+        List<CashFlowRow> investingRows = new ArrayList<>();
+        List<CashFlowRow> financingRows = new ArrayList<>();
+
+        operatingRows.add(CashFlowRow.builder().label("Net Income").amount(netIncome).build());
+
+        BigDecimal totalOperating = netIncome;
+        BigDecimal totalInvesting = BigDecimal.ZERO;
+        BigDecimal totalFinancing = BigDecimal.ZERO;
+
+        for (GlAccount account : accounts) {
+            if (!account.isPostingAccount()) continue;
+            AccountType type = account.getAccountType();
+            AccountSubType subType = account.getAccountSubType();
+            if (type == AccountType.REVENUE || type == AccountType.EXPENSE) continue;
+
+            BigDecimal openBal = computeBalance(openingTotals.getOrDefault(account.getId(),
+                    new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO}), account.getNormalBalance());
+            BigDecimal closeBal = computeBalance(closingTotals.getOrDefault(account.getId(),
+                    new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO}), account.getNormalBalance());
+            BigDecimal change = closeBal.subtract(openBal);
+            if (change.compareTo(BigDecimal.ZERO) == 0) continue;
+
+            if (type == AccountType.ASSET && subType == AccountSubType.CURRENT_ASSET) {
+                // Increase in current asset = use of cash (negative operating)
+                BigDecimal cashEffect = change.negate();
+                operatingRows.add(CashFlowRow.builder().label("Change in " + account.getAccountName()).amount(cashEffect).build());
+                totalOperating = totalOperating.add(cashEffect);
+            } else if (type == AccountType.LIABILITY && subType == AccountSubType.CURRENT_LIABILITY) {
+                // Increase in current liability = source of cash (positive operating)
+                operatingRows.add(CashFlowRow.builder().label("Change in " + account.getAccountName()).amount(change).build());
+                totalOperating = totalOperating.add(change);
+            } else if (type == AccountType.ASSET && subType == AccountSubType.FIXED_ASSET) {
+                // Increase in fixed assets = investing outflow (negative)
+                BigDecimal cashEffect = change.negate();
+                investingRows.add(CashFlowRow.builder().label(account.getAccountName()).amount(cashEffect).build());
+                totalInvesting = totalInvesting.add(cashEffect);
+            } else if (type == AccountType.LIABILITY && subType == AccountSubType.LONG_TERM_LIABILITY) {
+                // Increase in long-term debt = financing inflow
+                financingRows.add(CashFlowRow.builder().label(account.getAccountName()).amount(change).build());
+                totalFinancing = totalFinancing.add(change);
+            } else if (type == AccountType.EQUITY && subType != AccountSubType.RETAINED_EARNINGS) {
+                // Equity contributions / withdrawals
+                financingRows.add(CashFlowRow.builder().label(account.getAccountName()).amount(change).build());
+                totalFinancing = totalFinancing.add(change);
+            }
+        }
+
+        BigDecimal netCashChange = totalOperating.add(totalInvesting).add(totalFinancing);
+
+        return CashFlowResponse.builder()
+                .fromDate(fromDate)
+                .toDate(toDate)
+                .operatingActivities(CashFlowSection.builder().name("Operating Activities").rows(operatingRows).total(totalOperating).build())
+                .investingActivities(CashFlowSection.builder().name("Investing Activities").rows(investingRows).total(totalInvesting).build())
+                .financingActivities(CashFlowSection.builder().name("Financing Activities").rows(financingRows).total(totalFinancing).build())
+                .netCashChange(netCashChange)
+                .build();
+    }
+
+    // ─── helpers ────────────────────────────────────────────────────────────────
+
+    private Map<UUID, BigDecimal[]> buildAccountTotals(List<JournalEntryLine> lines) {
+        Map<UUID, BigDecimal[]> totals = new HashMap<>();
+        for (JournalEntryLine line : lines) {
+            UUID acctId = line.getAccount().getId();
+            totals.computeIfAbsent(acctId, k -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
+            totals.get(acctId)[0] = totals.get(acctId)[0].add(line.getDebitAmount());
+            totals.get(acctId)[1] = totals.get(acctId)[1].add(line.getCreditAmount());
+        }
+        return totals;
+    }
+
+    private BigDecimal computeBalance(BigDecimal[] drCr, NormalBalance normalBalance) {
+        return normalBalance == NormalBalance.DEBIT
+                ? drCr[0].subtract(drCr[1])
+                : drCr[1].subtract(drCr[0]);
     }
 }

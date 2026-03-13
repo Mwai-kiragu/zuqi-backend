@@ -1,18 +1,25 @@
 package com.zuqi.service.impl;
 
+import com.zuqi.api.dto.product.ProductBranchPriceRequest;
+import com.zuqi.api.dto.product.ProductBranchPriceResponse;
 import com.zuqi.api.dto.product.ProductCategoryRequest;
 import com.zuqi.api.dto.product.ProductCategoryResponse;
 import com.zuqi.api.dto.product.ProductRequest;
 import com.zuqi.api.dto.product.ProductResponse;
+import com.zuqi.domain.branch.DistributorBranch;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.product.Product;
+import com.zuqi.domain.product.ProductBranchPrice;
 import com.zuqi.domain.product.ProductCategory;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.DuplicateResourceException;
 import com.zuqi.exception.ResourceNotFoundException;
+import com.zuqi.repository.DistributorBranchRepository;
 import com.zuqi.repository.DistributorRepository;
+import com.zuqi.repository.ProductBranchPriceRepository;
 import com.zuqi.repository.ProductCategoryRepository;
 import com.zuqi.repository.ProductRepository;
+import com.zuqi.repository.StockRepository;
 import com.zuqi.service.ProductService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -22,9 +29,13 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -34,38 +45,55 @@ public class ProductServiceImpl implements ProductService {
     private final ProductRepository productRepository;
     private final ProductCategoryRepository categoryRepository;
     private final DistributorRepository distributorRepository;
+    private final DistributorBranchRepository branchRepository;
+    private final ProductBranchPriceRepository branchPriceRepository;
+    private final StockRepository stockRepository;
     private final SecurityUtils securityUtils;
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ProductResponse> getAllProducts(Pageable pageable) {
+    public Page<ProductResponse> getAllProducts(java.time.LocalDate startDate, java.time.LocalDate endDate, Pageable pageable) {
         log.debug("Fetching all products");
+        boolean hasDates = startDate != null && endDate != null;
+        java.time.LocalDateTime from = hasDates ? startDate.atStartOfDay() : null;
+        java.time.LocalDateTime to = hasDates ? endDate.plusDays(1).atStartOfDay() : null;
 
-        // SUPER_ADMIN and ADMIN can see all products
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId != null) {
+            if (hasDates)
+                return enrichWithStockAndBranchPrices(productRepository.findByDistributorMerchantIdAndActiveTrueAndCreatedAtBetween(merchantId, from, to, pageable));
+            return enrichWithStockAndBranchPrices(productRepository.findByDistributorMerchantIdAndActiveTrue(merchantId, pageable));
+        }
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
         if (distributorId != null) {
-            return productRepository.findByDistributorIdAndActiveTrue(distributorId, pageable)
-                    .map(ProductResponse::fromEntity);
+            if (hasDates)
+                return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndActiveTrueAndCreatedAtBetween(distributorId, from, to, pageable));
+            return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndActiveTrue(distributorId, pageable));
         }
 
-        return productRepository.findByActiveTrue(pageable)
-                .map(ProductResponse::fromEntity);
+        if (hasDates)
+            return enrichWithStockAndBranchPrices(productRepository.findByActiveTrueAndCreatedAtBetween(from, to, pageable));
+        return enrichWithStockAndBranchPrices(productRepository.findByActiveTrue(pageable));
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Page<ProductResponse> getProductsByDistributor(UUID distributorId, Pageable pageable) {
+    public Page<ProductResponse> getProductsByDistributor(UUID distributorId, java.time.LocalDate startDate, java.time.LocalDate endDate, Pageable pageable) {
         log.debug("Fetching products for distributor: {}", distributorId);
-        return productRepository.findByDistributorIdAndActiveTrue(distributorId, pageable)
-                .map(ProductResponse::fromEntity);
+        boolean hasDates = startDate != null && endDate != null;
+        if (hasDates) {
+            java.time.LocalDateTime from = startDate.atStartOfDay();
+            java.time.LocalDateTime to = endDate.plusDays(1).atStartOfDay();
+            return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndActiveTrueAndCreatedAtBetween(distributorId, from, to, pageable));
+        }
+        return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndActiveTrue(distributorId, pageable));
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<ProductResponse> getProductsByCategory(Long categoryId, Pageable pageable) {
         log.debug("Fetching products for category: {}", categoryId);
-        return productRepository.findByCategoryIdAndActiveTrue(categoryId, pageable)
-                .map(ProductResponse::fromEntity);
+        return enrichWithStockAndBranchPrices(productRepository.findByCategoryIdAndActiveTrue(categoryId, pageable));
     }
 
     @Override
@@ -73,20 +101,40 @@ public class ProductServiceImpl implements ProductService {
     public Page<ProductResponse> searchProducts(String searchTerm, UUID distributorId, Pageable pageable) {
         log.debug("Searching products with term: {}, distributor: {}", searchTerm, distributorId);
 
-        // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return enrichWithStockAndBranchPrices(productRepository.searchByMerchant(merchantId, searchTerm, pageable));
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
         if (effectiveDistributorId != null) {
-            return productRepository.searchByDistributor(effectiveDistributorId, searchTerm, pageable)
-                    .map(ProductResponse::fromEntity);
+            return enrichWithStockAndBranchPrices(productRepository.searchByDistributor(effectiveDistributorId, searchTerm, pageable));
         }
 
-        // SUPER_ADMIN/ADMIN can search across all distributors
-        return productRepository.searchByNameOrSku(searchTerm, pageable)
-                .map(ProductResponse::fromEntity);
+        return enrichWithStockAndBranchPrices(productRepository.searchByNameOrSku(searchTerm, pageable));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProductResponse> getProductsForBranch(UUID distributorId, UUID branchId, String search, Long categoryId, Pageable pageable) {
+        log.debug("Fetching products for distributor: {} branch: {} search: {} category: {}", distributorId, branchId, search, categoryId);
+
+        Page<Product> page;
+        boolean hasSearch = search != null && !search.isBlank();
+        if (categoryId != null && hasSearch) {
+            page = productRepository.searchAvailableByDistributorAndBranchAndCategory(distributorId, branchId, categoryId, search, pageable);
+        } else if (categoryId != null) {
+            page = productRepository.findAvailableByDistributorAndBranchAndCategory(distributorId, branchId, categoryId, pageable);
+        } else if (hasSearch) {
+            page = productRepository.searchAvailableByDistributorAndBranch(distributorId, branchId, search, pageable);
+        } else {
+            page = productRepository.findAvailableByDistributorAndBranch(distributorId, branchId, pageable);
+        }
+
+        return enrichWithStockAndBranchPrices(page);
     }
 
     @Override
@@ -95,7 +143,14 @@ public class ProductServiceImpl implements ProductService {
         log.debug("Fetching product by ID: {}", id);
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id.toString()));
-        return ProductResponse.fromEntity(product);
+        ProductResponse response = ProductResponse.fromEntity(product);
+        List<ProductBranchPrice> prices = branchPriceRepository.findByProductId(id);
+        if (!prices.isEmpty()) {
+            response.setBranchPrices(prices.stream()
+                    .map(ProductBranchPriceResponse::fromEntity)
+                    .collect(Collectors.toList()));
+        }
+        return response;
     }
 
     @Override
@@ -112,11 +167,9 @@ public class ProductServiceImpl implements ProductService {
     public ProductResponse createProduct(ProductRequest request) {
         log.info("Creating new product: {}", request.getName());
 
-        // Get distributor
         Distributor distributor = distributorRepository.findById(request.getDistributorId())
                 .orElseThrow(() -> new ResourceNotFoundException("Distributor", "id", request.getDistributorId().toString()));
 
-        // Check for duplicate SKU
         if (productRepository.existsBySkuAndDistributorId(request.getSku(), request.getDistributorId())) {
             throw new DuplicateResourceException("Product", "sku", request.getSku());
         }
@@ -131,9 +184,9 @@ public class ProductServiceImpl implements ProductService {
                 .costPrice(request.getCostPrice())
                 .imageUrl(request.getImageUrl())
                 .barcode(request.getBarcode())
+                .allBranches(request.isAllBranches())
                 .build();
 
-        // Set category if provided
         if (request.getCategoryId() != null) {
             ProductCategory category = categoryRepository.findById(request.getCategoryId())
                     .orElseThrow(() -> new ResourceNotFoundException("ProductCategory", "id", request.getCategoryId().toString()));
@@ -143,7 +196,18 @@ public class ProductServiceImpl implements ProductService {
         Product savedProduct = productRepository.save(product);
         log.info("Product created successfully with ID: {}", savedProduct.getId());
 
-        return ProductResponse.fromEntity(savedProduct);
+        if (request.getBranchPrices() != null && !request.getBranchPrices().isEmpty()) {
+            saveBranchPrices(savedProduct, request.getBranchPrices());
+        }
+
+        ProductResponse response = ProductResponse.fromEntity(savedProduct);
+        List<ProductBranchPrice> prices = branchPriceRepository.findByProductId(savedProduct.getId());
+        if (!prices.isEmpty()) {
+            response.setBranchPrices(prices.stream()
+                    .map(ProductBranchPriceResponse::fromEntity)
+                    .collect(Collectors.toList()));
+        }
+        return response;
     }
 
     @Override
@@ -154,7 +218,6 @@ public class ProductServiceImpl implements ProductService {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product", "id", id.toString()));
 
-        // Check for duplicate SKU if changed
         if (!product.getSku().equals(request.getSku()) &&
                 productRepository.existsBySkuAndDistributorId(request.getSku(), product.getDistributor().getId())) {
             throw new DuplicateResourceException("Product", "sku", request.getSku());
@@ -164,6 +227,7 @@ public class ProductServiceImpl implements ProductService {
         product.setName(request.getName());
         product.setDescription(request.getDescription());
         product.setUnitPrice(request.getUnitPrice());
+        product.setAllBranches(request.isAllBranches());
 
         if (request.getUnitOfMeasure() != null) {
             product.setUnitOfMeasure(request.getUnitOfMeasure());
@@ -178,7 +242,6 @@ public class ProductServiceImpl implements ProductService {
             product.setBarcode(request.getBarcode());
         }
 
-        // Update category if provided
         if (request.getCategoryId() != null) {
             ProductCategory category = categoryRepository.findById(request.getCategoryId())
                     .orElseThrow(() -> new ResourceNotFoundException("ProductCategory", "id", request.getCategoryId().toString()));
@@ -188,7 +251,20 @@ public class ProductServiceImpl implements ProductService {
         Product updatedProduct = productRepository.save(product);
         log.info("Product updated successfully: {}", id);
 
-        return ProductResponse.fromEntity(updatedProduct);
+        // Replace branch prices
+        branchPriceRepository.deleteByProductId(id);
+        if (request.getBranchPrices() != null && !request.getBranchPrices().isEmpty()) {
+            saveBranchPrices(updatedProduct, request.getBranchPrices());
+        }
+
+        ProductResponse response = ProductResponse.fromEntity(updatedProduct);
+        List<ProductBranchPrice> prices = branchPriceRepository.findByProductId(id);
+        if (!prices.isEmpty()) {
+            response.setBranchPrices(prices.stream()
+                    .map(ProductBranchPriceResponse::fromEntity)
+                    .collect(Collectors.toList()));
+        }
+        return response;
     }
 
     @Override
@@ -196,22 +272,23 @@ public class ProductServiceImpl implements ProductService {
     public Page<ProductResponse> getInactiveProducts(Pageable pageable) {
         log.debug("Fetching all inactive products");
 
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId != null) {
+            return enrichWithStockAndBranchPrices(productRepository.findByDistributorMerchantIdAndActiveFalse(merchantId, pageable));
+        }
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
         if (distributorId != null) {
-            return productRepository.findByDistributorIdAndActiveFalse(distributorId, pageable)
-                    .map(ProductResponse::fromEntity);
+            return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndActiveFalse(distributorId, pageable));
         }
 
-        return productRepository.findByActiveFalse(pageable)
-                .map(ProductResponse::fromEntity);
+        return enrichWithStockAndBranchPrices(productRepository.findByActiveFalse(pageable));
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<ProductResponse> getInactiveProductsByDistributor(UUID distributorId, Pageable pageable) {
         log.debug("Fetching inactive products for distributor: {}", distributorId);
-        return productRepository.findByDistributorIdAndActiveFalse(distributorId, pageable)
-                .map(ProductResponse::fromEntity);
+        return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndActiveFalse(distributorId, pageable));
     }
 
     @Override
@@ -253,9 +330,14 @@ public class ProductServiceImpl implements ProductService {
     public List<ProductCategoryResponse> getAllCategories(UUID distributorId) {
         log.debug("Fetching active product categories for distributor: {}", distributorId);
 
-        // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return categoryRepository.findByDistributorMerchantIdAndActiveTrue(merchantId).stream()
+                        .map(ProductCategoryResponse::fromEntity)
+                        .toList();
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
@@ -265,7 +347,6 @@ public class ProductServiceImpl implements ProductService {
                     .toList();
         }
 
-        // SUPER_ADMIN/ADMIN can see all categories
         return categoryRepository.findAll().stream()
                 .filter(ProductCategory::isActive)
                 .map(ProductCategoryResponse::fromEntity)
@@ -277,9 +358,14 @@ public class ProductServiceImpl implements ProductService {
     public List<ProductCategoryResponse> getInactiveCategories(UUID distributorId) {
         log.debug("Fetching inactive product categories for distributor: {}", distributorId);
 
-        // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return categoryRepository.findByDistributorMerchantIdAndActiveFalse(merchantId).stream()
+                        .map(ProductCategoryResponse::fromEntity)
+                        .toList();
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
@@ -289,7 +375,6 @@ public class ProductServiceImpl implements ProductService {
                     .toList();
         }
 
-        // SUPER_ADMIN/ADMIN can see all inactive categories
         return categoryRepository.findAll().stream()
                 .filter(c -> !c.isActive())
                 .map(ProductCategoryResponse::fromEntity)
@@ -310,11 +395,9 @@ public class ProductServiceImpl implements ProductService {
     public ProductCategoryResponse createCategory(ProductCategoryRequest request) {
         log.info("Creating new product category: {}", request.getName());
 
-        // Get distributor
         Distributor distributor = distributorRepository.findById(request.getDistributorId())
                 .orElseThrow(() -> new ResourceNotFoundException("Distributor", "id", request.getDistributorId().toString()));
 
-        // Check for duplicate name
         if (categoryRepository.existsByNameAndDistributorId(request.getName(), request.getDistributorId())) {
             throw new DuplicateResourceException("ProductCategory", "name", request.getName());
         }
@@ -325,7 +408,6 @@ public class ProductServiceImpl implements ProductService {
                 .distributor(distributor)
                 .build();
 
-        // Set parent if provided
         if (request.getParentId() != null) {
             ProductCategory parent = categoryRepository.findById(request.getParentId())
                     .orElseThrow(() -> new ResourceNotFoundException("ProductCategory", "id", request.getParentId().toString()));
@@ -346,7 +428,6 @@ public class ProductServiceImpl implements ProductService {
         ProductCategory category = categoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("ProductCategory", "id", id.toString()));
 
-        // Check for duplicate name if changed
         if (!category.getName().equals(request.getName()) &&
                 categoryRepository.existsByNameAndDistributorId(request.getName(), category.getDistributor().getId())) {
             throw new DuplicateResourceException("ProductCategory", "name", request.getName());
@@ -355,7 +436,6 @@ public class ProductServiceImpl implements ProductService {
         category.setName(request.getName());
         category.setDescription(request.getDescription());
 
-        // Update parent if provided
         if (request.getParentId() != null) {
             ProductCategory parent = categoryRepository.findById(request.getParentId())
                     .orElseThrow(() -> new ResourceNotFoundException("ProductCategory", "id", request.getParentId().toString()));
@@ -402,5 +482,51 @@ public class ProductServiceImpl implements ProductService {
         categoryRepository.save(category);
 
         log.info("Product category activated successfully: {}", id);
+    }
+
+    // -------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------
+
+    private void saveBranchPrices(Product product, List<ProductBranchPriceRequest> requests) {
+        for (ProductBranchPriceRequest req : requests) {
+            DistributorBranch branch = branchRepository.findById(req.getBranchId())
+                    .orElseThrow(() -> new ResourceNotFoundException("DistributorBranch", "id", req.getBranchId().toString()));
+            ProductBranchPrice pbp = ProductBranchPrice.builder()
+                    .product(product)
+                    .branch(branch)
+                    .unitPrice(req.getUnitPrice())
+                    .active(req.isActive())
+                    .build();
+            branchPriceRepository.save(pbp);
+        }
+    }
+
+    private Page<ProductResponse> enrichWithStockAndBranchPrices(Page<Product> page) {
+        if (page.isEmpty()) {
+            return page.map(ProductResponse::fromEntity);
+        }
+        List<UUID> ids = page.stream().map(Product::getId).collect(Collectors.toList());
+
+        // Stock
+        Map<UUID, BigDecimal> stockMap = stockRepository.findTotalStockByProductIds(ids).stream()
+                .collect(Collectors.toMap(
+                        row -> (UUID) row[0],
+                        row -> (BigDecimal) row[1]
+                ));
+
+        // Branch prices (batch load to avoid N+1)
+        Map<UUID, List<ProductBranchPriceResponse>> branchPricesMap = branchPriceRepository.findByProductIdIn(ids).stream()
+                .collect(Collectors.groupingBy(
+                        pbp -> pbp.getProduct().getId(),
+                        Collectors.mapping(ProductBranchPriceResponse::fromEntity, Collectors.toList())
+                ));
+
+        return page.map(p -> {
+            ProductResponse r = ProductResponse.fromEntity(p);
+            r.setTotalStock(stockMap.getOrDefault(p.getId(), BigDecimal.ZERO));
+            r.setBranchPrices(branchPricesMap.getOrDefault(p.getId(), Collections.emptyList()));
+            return r;
+        });
     }
 }

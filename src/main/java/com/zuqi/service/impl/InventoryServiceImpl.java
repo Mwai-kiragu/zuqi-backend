@@ -9,6 +9,7 @@ import com.zuqi.domain.product.Product;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
+import com.zuqi.domain.branch.DistributorBranch;
 import com.zuqi.repository.*;
 import com.zuqi.ai.event.StockAdjustedEvent;
 import com.zuqi.ai.feature.FeatureStore;
@@ -39,11 +40,18 @@ public class InventoryServiceImpl implements InventoryService {
     private final WarehouseRepository warehouseRepository;
     private final ProductRepository productRepository;
     private final DistributorRepository distributorRepository;
+    private final DistributorBranchRepository branchRepository;
     private final UserRepository userRepository;
     private final SecurityUtils securityUtils;
     private final ApplicationEventPublisher eventPublisher;
     private final FeatureStore featureStore;
 
+
+    @Override
+    public Page<StockResponse> getStock(UUID distributorId, UUID warehouseId, Pageable pageable) {
+        return stockRepository.findByFilters(distributorId, warehouseId, pageable)
+                .map(this::mapToStockResponse);
+    }
 
     @Override
     public Page<StockResponse> getStockByWarehouse(UUID warehouseId, Pageable pageable) {
@@ -150,9 +158,13 @@ public class InventoryServiceImpl implements InventoryService {
 
     @Override
     public Page<StockResponse> getLowStock(UUID distributorId, Pageable pageable) {
-        // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return stockRepository.findLowStockByMerchantId(merchantId, pageable)
+                        .map(this::mapToStockResponse);
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
@@ -162,7 +174,7 @@ public class InventoryServiceImpl implements InventoryService {
                     .map(this::mapToStockResponse);
         }
 
-        // SUPER_ADMIN/ADMIN can see all low stock items
+        // SUPER_ADMIN can see all low stock items
         return stockRepository.findAllLowStock(pageable)
                 .map(this::mapToStockResponse);
     }
@@ -170,9 +182,14 @@ public class InventoryServiceImpl implements InventoryService {
 
     @Override
     public List<WarehouseResponse> getWarehousesByDistributor(UUID distributorId) {
-        // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return warehouseRepository.findByDistributorMerchantIdAndActiveTrue(merchantId).stream()
+                        .map(this::mapToWarehouseResponse)
+                        .collect(Collectors.toList());
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
@@ -183,17 +200,28 @@ public class InventoryServiceImpl implements InventoryService {
                     .collect(Collectors.toList());
         }
 
-        // SUPER_ADMIN/ADMIN can see all warehouses
+        // SUPER_ADMIN can see all warehouses
         return warehouseRepository.findByActiveTrue().stream()
                 .map(this::mapToWarehouseResponse)
                 .collect(Collectors.toList());
     }
 
     @Override
+    public List<WarehouseResponse> getWarehousesByBranch(UUID branchId) {
+        return warehouseRepository.findByBranchIdAndActiveTrue(branchId).stream()
+                .map(this::mapToWarehouseResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
     public Page<WarehouseResponse> getWarehousesByDistributor(UUID distributorId, Pageable pageable) {
-        // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return warehouseRepository.findByDistributorMerchantIdAndActiveTrue(merchantId, pageable)
+                        .map(this::mapToWarehouseResponse);
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
@@ -203,16 +231,20 @@ public class InventoryServiceImpl implements InventoryService {
                     .map(this::mapToWarehouseResponse);
         }
 
-        // SUPER_ADMIN/ADMIN can see all warehouses
+        // SUPER_ADMIN can see all warehouses
         return warehouseRepository.findByActiveTrue(pageable)
                 .map(this::mapToWarehouseResponse);
     }
 
     @Override
     public Page<WarehouseResponse> getInactiveWarehousesByDistributor(UUID distributorId, Pageable pageable) {
-        // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return warehouseRepository.findByDistributorMerchantIdAndActiveFalse(merchantId, pageable)
+                        .map(this::mapToWarehouseResponse);
+            }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
@@ -222,7 +254,7 @@ public class InventoryServiceImpl implements InventoryService {
                     .map(this::mapToWarehouseResponse);
         }
 
-        // SUPER_ADMIN/ADMIN can see all inactive warehouses
+        // SUPER_ADMIN can see all inactive warehouses
         return warehouseRepository.findByActiveFalse(pageable)
                 .map(this::mapToWarehouseResponse);
     }
@@ -257,6 +289,13 @@ public class InventoryServiceImpl implements InventoryService {
                 .active(request.isActive())
                 .build();
 
+        // Set branch if provided
+        if (request.getBranchId() != null) {
+            DistributorBranch branch = branchRepository.findById(request.getBranchId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Branch", "id", request.getBranchId()));
+            warehouse.setBranch(branch);
+        }
+
         // Set manager if provided
         if (request.getManagerId() != null) {
             User manager = userRepository.findById(request.getManagerId())
@@ -289,6 +328,15 @@ public class InventoryServiceImpl implements InventoryService {
         warehouse.setLatitude(request.getLatitude());
         warehouse.setLongitude(request.getLongitude());
         warehouse.setActive(request.isActive());
+
+        // Update branch if provided
+        if (request.getBranchId() != null) {
+            DistributorBranch branch = branchRepository.findById(request.getBranchId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Branch", "id", request.getBranchId()));
+            warehouse.setBranch(branch);
+        } else {
+            warehouse.setBranch(null);
+        }
 
         // Update manager if provided
         if (request.getManagerId() != null) {
@@ -374,8 +422,11 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     private StockResponse mapToStockResponse(Stock stock) {
+        var distributor = stock.getWarehouse().getDistributor();
         return StockResponse.builder()
                 .id(stock.getId())
+                .distributorId(distributor != null ? distributor.getId() : null)
+                .distributorName(distributor != null ? distributor.getName() : null)
                 .warehouseId(stock.getWarehouse().getId())
                 .warehouseName(stock.getWarehouse().getName())
                 .warehouseCode(stock.getWarehouse().getCode())
@@ -405,6 +456,8 @@ public class InventoryServiceImpl implements InventoryService {
                 .distributorName(warehouse.getDistributor().getName())
                 .managerId(warehouse.getManager() != null ? warehouse.getManager().getId() : null)
                 .managerName(warehouse.getManager() != null ? warehouse.getManager().getFullName() : null)
+                .branchId(warehouse.getBranch() != null ? warehouse.getBranch().getId() : null)
+                .branchName(warehouse.getBranch() != null ? warehouse.getBranch().getName() : null)
                 .active(warehouse.isActive())
                 .createdAt(warehouse.getCreatedAt())
                 .updatedAt(warehouse.getUpdatedAt())

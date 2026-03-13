@@ -150,6 +150,16 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     @Query("SELECT o FROM Order o ORDER BY o.createdAt DESC")
     Page<Order> findRecentOrdersAll(Pageable pageable);
 
+    /** Scope to all orders for a merchant brand (MERCHANT_ADMIN). */
+    Page<Order> findByDistributorMerchantId(UUID merchantId, Pageable pageable);
+
+    @Query("SELECT o FROM Order o WHERE o.distributor.merchant.id = :merchantId " +
+            "AND (o.orderNumber LIKE %:search% OR o.merchant.businessName LIKE %:search%)")
+    Page<Order> searchOrdersByMerchant(
+            @Param("merchantId") UUID merchantId,
+            @Param("search") String search,
+            Pageable pageable);
+
     // AI Feature Engineering - Historical queries
     @Query("SELECT o FROM Order o WHERE o.merchant.id = :merchantId AND o.createdAt < :asOfDate")
     List<Order> findByMerchantIdAndCreatedAtBefore(

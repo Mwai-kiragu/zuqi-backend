@@ -32,6 +32,16 @@ public class InventoryController {
 
     private final InventoryService inventoryService;
 
+    @GetMapping
+    @Operation(summary = "Get stock with optional filters", description = "Get all stock, optionally filtered by distributor and/or warehouse")
+    public ResponseEntity<ApiResponse<Page<StockResponse>>> getStock(
+            @Parameter(description = "Distributor ID (optional)") @RequestParam(required = false) UUID distributorId,
+            @Parameter(description = "Warehouse ID (optional)") @RequestParam(required = false) UUID warehouseId,
+            @PageableDefault(size = 20) Pageable pageable) {
+        Page<StockResponse> stock = inventoryService.getStock(distributorId, warehouseId, pageable);
+        return ResponseEntity.ok(ApiResponse.success(stock));
+    }
+
     @GetMapping("/warehouse/{warehouseId}")
     @Operation(summary = "Get stock by warehouse", description = "Get all stock levels for a warehouse")
     public ResponseEntity<ApiResponse<Page<StockResponse>>> getStockByWarehouse(
@@ -78,10 +88,13 @@ public class InventoryController {
     }
 
     @GetMapping("/warehouses")
-    @Operation(summary = "List warehouses", description = "Get all active warehouses for a distributor")
+    @Operation(summary = "List warehouses", description = "Get all active warehouses for a distributor or branch")
     public ResponseEntity<ApiResponse<List<WarehouseResponse>>> getWarehouses(
-            @Parameter(description = "Distributor ID (optional for admins)") @RequestParam(required = false) UUID distributorId) {
-        List<WarehouseResponse> warehouses = inventoryService.getWarehousesByDistributor(distributorId);
+            @Parameter(description = "Distributor ID (optional for admins)") @RequestParam(required = false) UUID distributorId,
+            @Parameter(description = "Branch ID filter") @RequestParam(required = false) UUID branchId) {
+        List<WarehouseResponse> warehouses = branchId != null
+                ? inventoryService.getWarehousesByBranch(branchId)
+                : inventoryService.getWarehousesByDistributor(distributorId);
         return ResponseEntity.ok(ApiResponse.success(warehouses));
     }
 

@@ -2,10 +2,10 @@ package com.zuqi.ai.demand;
 
 import com.zuqi.domain.credit.CreditLimit;
 import com.zuqi.domain.credit.CreditLimitStatus;
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.product.Product;
 import com.zuqi.repository.CreditLimitRepository;
-import com.zuqi.repository.MerchantRepository;
+import com.zuqi.repository.CustomerRepository;
 import com.zuqi.repository.ProductRepository;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
@@ -38,7 +38,7 @@ import java.util.stream.Collectors;
 public class OrderSuggestionService {
 
     private final DemandForecaster demandForecaster;
-    private final MerchantRepository merchantRepository;
+    private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
     private final CreditLimitRepository creditLimitRepository;
 
@@ -54,7 +54,7 @@ public class OrderSuggestionService {
 
         try {
             // 1. Load merchant
-            Merchant merchant = merchantRepository.findById(merchantId)
+            Customer merchant = customerRepository.findById(merchantId)
                     .orElseThrow(() -> new IllegalArgumentException("Merchant not found: " + merchantId));
 
             // 2. Get active products (simplified - in production, filter by distributor, availability, etc.)
@@ -140,7 +140,7 @@ public class OrderSuggestionService {
     /**
      * Check if suggestion is within merchant's available credit limit.
      */
-    private boolean isWithinCreditLimit(Merchant merchant, OrderSuggestion suggestion) {
+    private boolean isWithinCreditLimit(Customer merchant, OrderSuggestion suggestion) {
         if (merchant.getDistributor() == null) {
             return true;
         }

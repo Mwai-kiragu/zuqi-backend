@@ -4,9 +4,9 @@ import com.zuqi.ai.feature.MerchantFeatureService;
 import com.zuqi.ai.feature.MerchantFeatures;
 import com.zuqi.ai.service.MerchantEmbeddingService;
 import com.zuqi.domain.ai.MerchantEmbedding;
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
+import com.zuqi.repository.CustomerRepository;
 import com.zuqi.repository.MerchantEmbeddingRepository;
-import com.zuqi.repository.MerchantRepository;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -31,7 +31,7 @@ import java.util.stream.Collectors;
 public class MerchantEmbeddingServiceImpl implements MerchantEmbeddingService {
 
     private final MerchantEmbeddingRepository embeddingRepository;
-    private final MerchantRepository merchantRepository;
+    private final CustomerRepository customerRepository;
     private final MerchantFeatureService merchantFeatureService;
     private final EmbeddingModel embeddingModel;
 
@@ -42,9 +42,9 @@ public class MerchantEmbeddingServiceImpl implements MerchantEmbeddingService {
     public MerchantEmbedding embedMerchant(UUID merchantId) {
         log.info("Generating embedding for merchant {}", merchantId);
 
-        // Fetch merchant
-        Merchant merchant = merchantRepository.findById(merchantId)
-                .orElseThrow(() -> new IllegalArgumentException("Merchant not found: " + merchantId));
+        // Fetch customer (formerly merchant in old architecture)
+        Customer merchant = customerRepository.findById(merchantId)
+                .orElseThrow(() -> new IllegalArgumentException("Customer not found: " + merchantId));
 
         // Compute features
         MerchantFeatures features = merchantFeatureService.computeFeatures(merchantId);
@@ -101,10 +101,10 @@ public class MerchantEmbeddingServiceImpl implements MerchantEmbeddingService {
     public int embedAllMerchants(UUID distributorId) {
         log.info("Batch embedding all merchants for distributor {}", distributorId);
 
-        List<Merchant> merchants = merchantRepository.findByDistributorId(distributorId);
+        List<Customer> merchants = customerRepository.findByDistributorId(distributorId);
         int embedded = 0;
 
-        for (Merchant merchant : merchants) {
+        for (Customer merchant : merchants) {
             try {
                 embedMerchant(merchant.getId());
                 embedded++;
@@ -164,7 +164,7 @@ public class MerchantEmbeddingServiceImpl implements MerchantEmbeddingService {
      * Converts structured merchant features into natural language text
      * optimized for semantic embedding.
      */
-    private String buildFeatureSummary(Merchant merchant, MerchantFeatures features) {
+    private String buildFeatureSummary(Customer merchant, MerchantFeatures features) {
         StringBuilder summary = new StringBuilder();
 
         summary.append("Merchant Profile: ").append(merchant.getBusinessName()).append(". ");

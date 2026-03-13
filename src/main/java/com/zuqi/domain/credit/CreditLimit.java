@@ -1,7 +1,7 @@
 package com.zuqi.domain.credit;
 
 import com.zuqi.domain.distributor.Distributor;
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.user.User;
 import jakarta.persistence.*;
 import lombok.*;
@@ -27,7 +27,7 @@ public class CreditLimit {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "merchant_id", nullable = false)
-    private Merchant merchant;
+    private Customer merchant;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "distributor_id", nullable = false)

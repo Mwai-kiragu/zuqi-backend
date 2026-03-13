@@ -30,14 +30,14 @@ import java.util.UUID;
 public class DashboardServiceImpl implements DashboardService {
 
     private final OrderRepository orderRepository;
-    private final MerchantRepository merchantRepository;
+    private final CustomerRepository customerRepository;
     private final PaymentRepository paymentRepository;
     private final StockRepository stockRepository;
     private final UserRepository userRepository;
     private final SecurityUtils securityUtils;
 
     @Override
-    public DashboardStatsResponse getStats(UUID distributorId, UUID userId) {
+    public DashboardStatsResponse getStats(UUID distributorId, UUID userId, UUID branchId) {
         // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
@@ -66,8 +66,8 @@ public class DashboardServiceImpl implements DashboardService {
         BigDecimal totalOutstanding = isGlobalView ? orderRepository.sumOutstandingAmountAll() : orderRepository.sumOutstandingAmount(effectiveDistributorId);
 
         // Merchant statistics
-        long totalMerchants = isGlobalView ? merchantRepository.countByActiveTrue() : merchantRepository.countByDistributorIdAndActiveTrue(effectiveDistributorId);
-        long newMerchantsThisMonth = isGlobalView ? merchantRepository.countNewMerchantsFromDateAll(startOfMonth) : merchantRepository.countNewMerchantsFromDate(effectiveDistributorId, startOfMonth);
+        long totalMerchants = isGlobalView ? customerRepository.countByActiveTrue() : customerRepository.countByDistributorIdAndActiveTrue(effectiveDistributorId);
+        long newMerchantsThisMonth = isGlobalView ? customerRepository.countNewCustomersFromDateAll(startOfMonth) : customerRepository.countNewCustomersFromDate(effectiveDistributorId, startOfMonth);
 
         // Payment statistics
         long unreconciledPayments = isGlobalView ? paymentRepository.countAllUnreconciledPayments() : paymentRepository.countUnreconciledPayments(effectiveDistributorId);
@@ -108,7 +108,7 @@ public class DashboardServiceImpl implements DashboardService {
     }
 
     @Override
-    public List<RecentOrderResponse> getRecentOrders(UUID distributorId, UUID userId, int limit) {
+    public List<RecentOrderResponse> getRecentOrders(UUID distributorId, UUID userId, int limit, UUID branchId) {
         // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {

@@ -32,6 +32,11 @@ public class PasswordResetToken {
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "purpose")
+    @Builder.Default
+    private TokenPurpose purpose = TokenPurpose.PASSWORD_RESET;
+
     @Column(name = "used")
     @Builder.Default
     private boolean used = false;

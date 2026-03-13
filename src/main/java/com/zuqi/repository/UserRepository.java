@@ -61,4 +61,63 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     // Global queries for SUPER_ADMIN/ADMIN (no distributor filter)
     @Query("SELECT COUNT(u) FROM User u JOIN u.roles r WHERE r.name = :roleName AND u.active = true")
     long countByRole(@Param("roleName") String roleName);
+
+    /** Scope to a merchant brand (MERCHANT_ADMIN) — users who belong to the brand or its distributors. */
+    @Query("SELECT u FROM User u WHERE u.merchantId = :merchantId OR " +
+            "u.distributorId IN (SELECT d.id FROM Distributor d WHERE d.merchant.id = :merchantId)")
+    Page<User> findByMerchantScope(@Param("merchantId") UUID merchantId, Pageable pageable);
+
+    @Query("SELECT u FROM User u WHERE u.active = false AND (u.merchantId = :merchantId OR " +
+            "u.distributorId IN (SELECT d.id FROM Distributor d WHERE d.merchant.id = :merchantId))")
+    Page<User> findInactiveByMerchantScope(@Param("merchantId") UUID merchantId, Pageable pageable);
+
+    @Query("SELECT u FROM User u WHERE u.active = true AND (u.merchantId = :merchantId OR " +
+            "u.distributorId IN (SELECT d.id FROM Distributor d WHERE d.merchant.id = :merchantId))")
+    List<User> findActiveByMerchantScope(@Param("merchantId") UUID merchantId);
+
+    // ── Search queries (name / email / phone) ──────────────────────────────
+
+    @Query("SELECT u FROM User u WHERE " +
+            "(LOWER(u.firstName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(u.lastName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<User> searchAllUsers(@Param("search") String search, Pageable pageable);
+
+    @Query("SELECT u FROM User u WHERE u.active = :active AND " +
+            "(LOWER(u.firstName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(u.lastName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<User> searchAllUsersByActive(@Param("search") String search, @Param("active") boolean active, Pageable pageable);
+
+    @Query("SELECT u FROM User u WHERE u.distributorId = :distributorId AND " +
+            "(LOWER(u.firstName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(u.lastName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<User> searchByDistributor(@Param("distributorId") UUID distributorId, @Param("search") String search, Pageable pageable);
+
+    @Query("SELECT u FROM User u WHERE u.distributorId = :distributorId AND u.active = :active AND " +
+            "(LOWER(u.firstName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(u.lastName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<User> searchByDistributorAndActive(@Param("distributorId") UUID distributorId, @Param("search") String search, @Param("active") boolean active, Pageable pageable);
+
+    @Query("SELECT u FROM User u WHERE (u.merchantId = :merchantId OR " +
+            "u.distributorId IN (SELECT d.id FROM Distributor d WHERE d.merchant.id = :merchantId)) AND " +
+            "(LOWER(u.firstName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(u.lastName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<User> searchByMerchantScope(@Param("merchantId") UUID merchantId, @Param("search") String search, Pageable pageable);
+
+    @Query("SELECT u FROM User u WHERE u.active = false AND (u.merchantId = :merchantId OR " +
+            "u.distributorId IN (SELECT d.id FROM Distributor d WHERE d.merchant.id = :merchantId)) AND " +
+            "(LOWER(u.firstName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(u.lastName) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+            "LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<User> searchInactiveByMerchantScope(@Param("merchantId") UUID merchantId, @Param("search") String search, Pageable pageable);
 }

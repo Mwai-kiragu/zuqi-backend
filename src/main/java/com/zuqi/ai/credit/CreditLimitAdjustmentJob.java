@@ -3,10 +3,10 @@ package com.zuqi.ai.credit;
 import com.zuqi.domain.credit.CreditLimit;
 import com.zuqi.domain.credit.CreditLimitStatus;
 import com.zuqi.domain.distributor.Distributor;
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.repository.CreditLimitRepository;
 import com.zuqi.repository.DistributorRepository;
-import com.zuqi.repository.MerchantRepository;
+import com.zuqi.repository.CustomerRepository;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,7 +42,7 @@ import java.util.UUID;
 public class CreditLimitAdjustmentJob {
 
     private final CreditLimitRegressor   creditLimitRegressor;
-    private final MerchantRepository     merchantRepository;
+    private final CustomerRepository     customerRepository;
     private final CreditLimitRepository  creditLimitRepository;
     private final DistributorRepository  distributorRepository;
     private final MeterRegistry          meterRegistry;
@@ -82,13 +82,13 @@ public class CreditLimitAdjustmentJob {
         log.info("Processing {} active distributors", distributors.size());
 
         for (Distributor distributor : distributors) {
-            List<Merchant> merchants =
-                    merchantRepository.findByDistributorIdAndActiveTrue(distributor.getId());
+            List<Customer> merchants =
+                    customerRepository.findByDistributorIdAndActiveTrue(distributor.getId());
 
             log.info("Distributor [{}] '{}': adjusting {} merchant credit limits",
                     distributor.getId(), distributor.getName(), merchants.size());
 
-            for (Merchant merchant : merchants) {
+            for (Customer merchant : merchants) {
                 try {
                     adjustCreditLimit(merchant, distributor.getId());
                     totalSuccess++;
@@ -123,7 +123,7 @@ public class CreditLimitAdjustmentJob {
      */
     @Transactional
     public CreditAdjustmentResult adjustCreditLimit(UUID merchantId) {
-        Merchant merchant = merchantRepository.findById(merchantId)
+        Customer merchant = customerRepository.findById(merchantId)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Merchant not found: " + merchantId));
 
@@ -145,7 +145,7 @@ public class CreditLimitAdjustmentJob {
      * @return {@link CreditAdjustmentResult}
      */
     @Transactional
-    CreditAdjustmentResult adjustCreditLimit(Merchant merchant, UUID distributorId) {
+    CreditAdjustmentResult adjustCreditLimit(Customer merchant, UUID distributorId) {
         UUID merchantId = merchant.getId();
 
         // 1. Predict new limit via ML regressor (returns BigDecimal in KES)
@@ -239,7 +239,7 @@ public class CreditLimitAdjustmentJob {
         return available.max(BigDecimal.ZERO);
     }
 
-    private CreditLimit buildNewCreditLimit(Merchant merchant, UUID distributorId,
+    private CreditLimit buildNewCreditLimit(Customer merchant, UUID distributorId,
                                             BigDecimal approvedLimit) {
         return CreditLimit.builder()
                 .merchant(merchant)

@@ -42,6 +42,9 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
 
     boolean existsByWarehouseIdAndProductId(UUID warehouseId, UUID productId);
 
+    @Query("SELECT s.product.id, COALESCE(SUM(s.quantity), 0) FROM Stock s WHERE s.product.id IN :productIds GROUP BY s.product.id")
+    List<Object[]> findTotalStockByProductIds(@Param("productIds") List<UUID> productIds);
+
     @Query("SELECT COALESCE(SUM(s.quantity), 0) FROM Stock s WHERE s.product.id = :productId")
     java.math.BigDecimal getTotalQuantityByProductId(@Param("productId") UUID productId);
 
@@ -53,10 +56,23 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
             "AND s.quantity <= 0")
     long countOutOfStockByDistributorId(@Param("distributorId") UUID distributorId);
 
+    /** Scope to a merchant brand (MERCHANT_ADMIN) — low stock items. */
+    @Query("SELECT s FROM Stock s WHERE s.warehouse.distributor.merchant.id = :merchantId " +
+            "AND s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel")
+    Page<Stock> findLowStockByMerchantId(@Param("merchantId") UUID merchantId, Pageable pageable);
+
     // Global queries for SUPER_ADMIN/ADMIN (no distributor filter)
     @Query("SELECT COUNT(s) FROM Stock s WHERE s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel AND s.quantity > 0")
     long countAllLowStock();
 
     @Query("SELECT COUNT(s) FROM Stock s WHERE s.quantity <= 0")
     long countAllOutOfStock();
+
+    @Query("SELECT s FROM Stock s WHERE " +
+            "(:distributorId IS NULL OR s.warehouse.distributor.id = :distributorId) AND " +
+            "(:warehouseId IS NULL OR s.warehouse.id = :warehouseId)")
+    Page<Stock> findByFilters(
+            @Param("distributorId") UUID distributorId,
+            @Param("warehouseId") UUID warehouseId,
+            Pageable pageable);
 }
