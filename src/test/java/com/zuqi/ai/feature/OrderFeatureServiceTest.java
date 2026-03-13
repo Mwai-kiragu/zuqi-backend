@@ -1,13 +1,14 @@
 package com.zuqi.ai.feature;
 
-import com.zuqi.domain.merchant.Merchant;
-import com.zuqi.domain.merchant.MerchantCategory;
+import com.zuqi.domain.customer.Customer;
+import com.zuqi.domain.customer.CustomerCategory;
 import com.zuqi.domain.order.Order;
 import com.zuqi.domain.order.OrderItem;
 import com.zuqi.domain.payment.Payment;
 import com.zuqi.domain.product.Product;
 import com.zuqi.domain.product.ProductCategory;
 import com.zuqi.repository.*;
+import com.zuqi.repository.CustomerRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,7 +30,7 @@ import static org.mockito.Mockito.*;
 class OrderFeatureServiceTest {
 
     @Mock
-    private MerchantRepository merchantRepository;
+    private CustomerRepository merchantRepository;
 
     @Mock
     private ProductRepository productRepository;
@@ -45,22 +46,22 @@ class OrderFeatureServiceTest {
 
     private UUID merchantId;
     private UUID productId;
-    private Merchant merchant;
+    private Customer merchant;
     private Product product;
     private ProductCategory productCategory;
-    private MerchantCategory merchantCategory;
+    private CustomerCategory merchantCategory;
 
     @BeforeEach
     void setUp() {
         merchantId = UUID.randomUUID();
         productId = UUID.randomUUID();
 
-        merchantCategory = MerchantCategory.builder()
+        merchantCategory = CustomerCategory.builder()
                 .id(1L)
                 .name("RETAIL")
                 .build();
 
-        merchant = Merchant.builder()
+        merchant = Customer.builder()
                 .id(merchantId)
                 .businessName("Test Merchant")
                 .phone("+254700000000")

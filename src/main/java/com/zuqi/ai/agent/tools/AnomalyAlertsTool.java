@@ -4,6 +4,7 @@ import com.zuqi.domain.ai.AlertSeverity;
 import com.zuqi.domain.ai.AlertStatus;
 import com.zuqi.domain.ai.AnomalyAlert;
 import com.zuqi.repository.AnomalyAlertRepository;
+import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +29,9 @@ public class AnomalyAlertsTool {
           "Parameters: distributorId (UUID string), periodDays (informational only — all OPEN alerts " +
           "are returned regardless, as they represent unresolved issues).")
     @Transactional(readOnly = true)
-    public String getAnomalyAlerts(String distributorId, String periodDays) {
+    public String getAnomalyAlerts(
+            @P("The distributor UUID") String distributorId,
+            @P("Number of days to look back (e.g. 7, 30, 90). Default is 30.") String periodDays) {
         try {
             UUID distId = UUID.fromString(distributorId.trim());
 

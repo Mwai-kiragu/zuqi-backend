@@ -5,6 +5,7 @@ import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.inventory.Stock;
 import com.zuqi.domain.inventory.StockMovement;
 import com.zuqi.domain.inventory.Warehouse;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.merchant.Merchant;
 import com.zuqi.domain.order.Order;
 import com.zuqi.domain.order.OrderItem;
@@ -16,6 +17,7 @@ import com.zuqi.domain.payment.PaymentStatus;
 import com.zuqi.domain.product.Product;
 import com.zuqi.domain.user.User;
 import com.zuqi.repository.*;
+import com.zuqi.repository.CustomerRepository;
 import com.zuqi.service.InvoiceService;
 import com.zuqi.service.impl.InventoryServiceImpl;
 import com.zuqi.service.impl.MerchantServiceImpl;
@@ -78,6 +80,9 @@ class EventPublishingTest {
     private MerchantRepository merchantRepository;
 
     @MockBean
+    private CustomerRepository customerRepository;
+
+    @MockBean
     private StockRepository stockRepository;
 
     @MockBean
@@ -132,6 +137,7 @@ class EventPublishingTest {
     private UUID userId;
     private Distributor distributor;
     private Merchant merchant;
+    private Customer customer;
     private Product product;
     private Warehouse warehouse;
     private User user;
@@ -150,6 +156,13 @@ class EventPublishingTest {
                 .build();
 
         merchant = Merchant.builder()
+                .id(merchantId)
+                .name("Test Merchant")
+                .phone("+254700000000")
+                .active(true)
+                .build();
+
+        customer = Customer.builder()
                 .id(merchantId)
                 .businessName("Test Merchant")
                 .phone("+254700000000")
@@ -189,7 +202,7 @@ class EventPublishingTest {
         Payment payment = Payment.builder()
                 .id(UUID.randomUUID())
                 .paymentNumber("PAY-001")
-                .merchant(merchant)
+                .merchant(customer)
                 .distributor(distributor)
                 .amount(BigDecimal.valueOf(1000))
                 .status(PaymentStatus.PENDING)
@@ -197,7 +210,7 @@ class EventPublishingTest {
                 .build();
 
         when(distributorRepository.findById(distributorId)).thenReturn(Optional.of(distributor));
-        when(merchantRepository.findById(merchantId)).thenReturn(Optional.of(merchant));
+        when(customerRepository.findById(merchantId)).thenReturn(Optional.of(customer));
         when(paymentRepository.save(any(Payment.class))).thenReturn(payment);
         when(paymentRepository.findMaxPaymentNumberByPrefix(anyString())).thenReturn(0);
 
@@ -215,7 +228,7 @@ class EventPublishingTest {
         Payment payment = Payment.builder()
                 .id(UUID.randomUUID())
                 .paymentNumber("PAY-002")
-                .merchant(merchant)
+                .merchant(customer)
                 .distributor(distributor)
                 .amount(BigDecimal.valueOf(1000))
                 .status(PaymentStatus.PENDING)
@@ -267,7 +280,7 @@ class EventPublishingTest {
                 .id(UUID.randomUUID())
                 .orderNumber("ORD-001")
                 .distributor(distributor)
-                .merchant(merchant)
+                .merchant(customer)
                 .salesRep(user)
                 .orderType(OrderType.STANDARD)
                 .status(OrderStatus.PENDING)
@@ -287,7 +300,7 @@ class EventPublishingTest {
         order.getItems().add(item);
 
         when(distributorRepository.findById(distributorId)).thenReturn(Optional.of(distributor));
-        when(merchantRepository.findById(merchantId)).thenReturn(Optional.of(merchant));
+        when(customerRepository.findById(merchantId)).thenReturn(Optional.of(customer));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(productRepository.findById(productId)).thenReturn(Optional.of(product));
         when(orderRepository.save(any(Order.class))).thenReturn(order);
@@ -305,7 +318,7 @@ class EventPublishingTest {
     void shouldPublishMerchantCreatedEventWhenMerchantCreated() {
         // Given
         when(distributorRepository.findById(distributorId)).thenReturn(Optional.of(distributor));
-        when(merchantRepository.existsByPhone(anyString())).thenReturn(false);
+        when(merchantRepository.existsByName(anyString())).thenReturn(false);
         when(merchantRepository.save(any(Merchant.class))).thenReturn(merchant);
 
         // When
@@ -353,10 +366,8 @@ class EventPublishingTest {
 
     private com.zuqi.api.dto.merchant.MerchantRequest createMerchantRequest() {
         return com.zuqi.api.dto.merchant.MerchantRequest.builder()
-                .distributorId(distributorId)
-                .businessName("New Merchant")
+                .name("New Merchant")
                 .phone("+254700000001")
-                .ownerName("Owner Name")
                 .address("Test Address")
                 .build();
     }

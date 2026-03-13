@@ -1,14 +1,14 @@
 package com.zuqi.ai.feature;
 
-import com.zuqi.domain.merchant.Merchant;
-import com.zuqi.domain.merchant.MerchantCategory;
+import com.zuqi.domain.customer.Customer;
+import com.zuqi.domain.customer.CustomerCategory;
 import com.zuqi.domain.order.Order;
 import com.zuqi.domain.order.OrderStatus;
 import com.zuqi.domain.payment.Payment;
 import com.zuqi.domain.payment.PaymentMethod;
 import com.zuqi.domain.payment.PaymentStatus;
 import com.zuqi.domain.product.Product;
-import com.zuqi.repository.MerchantRepository;
+import com.zuqi.repository.CustomerRepository;
 import com.zuqi.repository.OrderRepository;
 import com.zuqi.repository.PaymentRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,7 +36,7 @@ class PaymentFeatureServiceTest {
     private PaymentRepository paymentRepository;
 
     @Mock
-    private MerchantRepository merchantRepository;
+    private CustomerRepository merchantRepository;
 
     @Mock
     private OrderRepository orderRepository;
@@ -47,7 +47,7 @@ class PaymentFeatureServiceTest {
     private UUID paymentId;
     private UUID merchantId;
     private Payment payment;
-    private Merchant merchant;
+    private Customer merchant;
     private LocalDateTime asOfDate;
 
     @BeforeEach
@@ -56,12 +56,12 @@ class PaymentFeatureServiceTest {
         merchantId = UUID.randomUUID();
         asOfDate = LocalDateTime.now();
 
-        MerchantCategory category = MerchantCategory.builder()
+        CustomerCategory category = CustomerCategory.builder()
                 .id(1L)
                 .name("Retail")
                 .build();
 
-        merchant = Merchant.builder()
+        merchant = Customer.builder()
                 .id(merchantId)
                 .businessName("Test Merchant")
                 .city("Nairobi")
