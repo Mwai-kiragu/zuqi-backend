@@ -1,24 +1,30 @@
 package com.zuqi.service.impl;
 
 import com.zuqi.api.dto.kcb.*;
+import com.zuqi.api.dto.payment.PaymentRequest;
 import com.zuqi.domain.kcb.*;
 import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.order.Order;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
-import com.zuqi.repository.KcbConfigRepository;
-import com.zuqi.repository.KcbStkRequestRepository;
-import com.zuqi.repository.MerchantRepository;
+import com.zuqi.repository.*;
+import com.zuqi.service.InvoiceService;
 import com.zuqi.service.KcbService;
+import com.zuqi.service.PaymentService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -31,19 +37,26 @@ public class KcbServiceImpl implements KcbService {
     private final KcbConfigRepository kcbConfigRepository;
     private final KcbStkRequestRepository kcbStkRequestRepository;
     private final MerchantRepository merchantRepository;
+    private final PaymentMethodRepository paymentMethodRepository;
+    private final OrderRepository orderRepository;
     private final SecurityUtils securityUtils;
     private final RestTemplate restTemplate;
 
-    /** swerri.io endpoint that registers a KCB collection account (same service as M-Pesa) */
+    @Autowired @Lazy private InvoiceService invoiceService;
+    @Autowired @Lazy private PaymentService paymentService;
+
     @Value("${kcb.add-config-url:https://stk.swerri.io/api/v1/add_business_configs}")
     private String kcbAddConfigUrl;
 
-    /** swerri.io endpoint for KCB KCBACCOUNT STK push — takes businessId directly, no JWT needed */
-    @Value("${kcb.stk-push-url:https://stk.swerri.io/api/v1/kcb_acc_stkpush}")
+//    @Value("${kcb.stk-push-url:https://stk.swerri.io/api/v1/kcb_acc_stkpush}")
+    @Value("${kcb.stk-push-url:https://stk.swerri.io/api/v1/kcbStkPush}")
     private String kcbStkPushUrl;
 
     @Value("${kcb.callback-base-url:https://zuqi.pestoe.com/api/v1/kcb/callback}")
     private String callbackBaseUrl;
+
+    @Value("${daraja.business-config-url:https://stk.swerri.io/api/v1/business_config/all}")
+    private String darajaBusinessConfigUrl;
 
     @Override
     @Transactional
@@ -56,7 +69,6 @@ public class KcbServiceImpl implements KcbService {
                 ? (currentUser.getFirstName() + " " + currentUser.getLastName()).trim()
                 : "System";
 
-        // Upsert: update existing ACTIVE config if present, otherwise create new
         List<KcbConfig> existing = kcbConfigRepository.findByMerchantIdAndStatus(merchantId, KcbConfigStatus.ACTIVE);
 
         KcbConfig config;
@@ -87,42 +99,47 @@ public class KcbServiceImpl implements KcbService {
         config.setConfiguredBy(currentUser);
         config.setConfiguredByName(configuredByName);
 
-        // Register with swerri.io (same service that handles M-Pesa configs)
-        // No JWT needed — just account details. Returns a kcbDarajaId (_id) we use for STK push.
-        try {
-            Map<String, Object> body = new HashMap<>();
-            body.put("businessName", request.businessName());
-            body.put("accountReference", request.accountNumber());
-            body.put("businessShortCode", request.accountNumber());
-            body.put("consumerKey", "");
-            body.put("consumerSecret", "");
-            body.put("passKey", "");
-            body.put("thirdPartyCallback", callbackBaseUrl);
+        // Try to find an existing properly-credentialed KCB config from swerri.io (mirrors M-Pesa lookupZedBusinessId)
+        String existingId = lookupSwerriKcbId(request.accountNumber(), request.businessNo());
+        if (existingId != null) {
+            config.setExternalId(existingId);
+            log.info("Using existing KCB config from swerri.io for merchant {} kcbDarajaId={}", merchantId, existingId);
+        } else {
+            // Fall back: register a new config with swerri.io
+            try {
+                Map<String, Object> body = new HashMap<>();
+                body.put("businessName", request.businessName());
+                body.put("accountReference", request.accountNumber());
+                body.put("businessShortCode", request.accountNumber());
+                body.put("consumerKey", "");
+                body.put("consumerSecret", "");
+                body.put("passKey", "");
+                body.put("thirdPartyCallback", callbackBaseUrl);
 
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
 
-            log.info("Registering KCB config with swerri.io for merchant {} accountNumber={}",
-                    merchantId, request.accountNumber());
+                log.info("Registering KCB config with swerri.io for merchant {} accountNumber={}",
+                        merchantId, request.accountNumber());
 
-            ResponseEntity<Map> response = restTemplate.exchange(
-                    kcbAddConfigUrl, HttpMethod.POST, new HttpEntity<>(body, headers), Map.class);
+                ResponseEntity<Map> response = restTemplate.exchange(
+                        kcbAddConfigUrl, HttpMethod.POST, new HttpEntity<>(body, headers), Map.class);
 
-            Map<?, ?> resBody = response.getBody();
-            if (resBody != null) {
-                Object newConfigs = resBody.get("newBusinessConfigs");
-                if (newConfigs instanceof Map<?, ?> nc) {
-                    String id = getString(nc, "_id");
-                    if (id != null) {
-                        config.setExternalId(id);
-                        log.info("KCB config registered with swerri.io for merchant {} kcbDarajaId={}",
-                                merchantId, id);
+                Map<?, ?> resBody = response.getBody();
+                if (resBody != null) {
+                    Object newConfigs = resBody.get("newBusinessConfigs");
+                    if (newConfigs instanceof Map<?, ?> nc) {
+                        String id = getString(nc, "_id");
+                        if (id != null) {
+                            config.setExternalId(id);
+                            log.info("KCB config registered with swerri.io for merchant {} kcbDarajaId={}",
+                                    merchantId, id);
+                        }
                     }
                 }
+            } catch (Exception e) {
+                log.warn("swerri.io KCB config registration failed for merchant {}: {}", merchantId, e.getMessage());
             }
-        } catch (Exception e) {
-            log.warn("swerri.io KCB config registration failed for merchant {}: {}", merchantId, e.getMessage());
-            // Store config locally anyway — externalId can be set manually or retried
         }
 
         KcbConfig saved = kcbConfigRepository.save(config);
@@ -188,8 +205,6 @@ public class KcbServiceImpl implements KcbService {
         stkRequest = kcbStkRequestRepository.save(stkRequest);
 
         try {
-            // Call swerri.io KCB STK push directly using the stored kcbDarajaId (externalId)
-            // Same pattern as M-Pesa: no business number or JWT needed
             Map<String, Object> body = new HashMap<>();
             body.put("amount", request.amount().intValue());
             body.put("phone", phone);
@@ -207,7 +222,6 @@ public class KcbServiceImpl implements KcbService {
 
             Map<?, ?> resBody = response.getBody();
             if (resBody != null) {
-                // swerri.io wraps KCB response: {response: {ResponseCode, MerchantRequestID}, header: {statusCode}}
                 Object headerObj = resBody.get("header");
                 if (headerObj instanceof Map<?, ?> header) {
                     String statusCode = getString(header, "statusCode");
@@ -261,40 +275,94 @@ public class KcbServiceImpl implements KcbService {
     public void handleCallback(Map<String, Object> payload) {
         log.info("KCB STK callback received: {}", payload);
 
-        String zedStkId = payload.containsKey("id") ? String.valueOf(payload.get("id")) : null;
-        String referenceId = payload.containsKey("orderId") ? String.valueOf(payload.get("orderId")) : null;
-        String statusStr = payload.containsKey("status") ? String.valueOf(payload.get("status")) : null;
-        String resultDesc = payload.containsKey("message") ? String.valueOf(payload.get("message")) : null;
+        // Callback fields: merchantRequestId, checkoutRequestId, orderId, resultCode, resultDesc, transactionReference
+        String merchantRequestId = getString(payload, "merchantRequestId");
+        String checkoutRequestId = getString(payload, "checkoutRequestId");
+        String orderId           = getString(payload, "orderId");
+        String resultDesc        = getString(payload, "resultDesc");
+        String receipt           = getString(payload, "transactionReference");
 
-        Optional<KcbStkRequest> optReq = zedStkId != null
-                ? kcbStkRequestRepository.findByZedStkId(zedStkId)
+        // resultCode: 0 = success, anything else = failure
+        Object resultCodeObj = payload.get("resultCode");
+        boolean success = resultCodeObj != null &&
+                (Integer.valueOf(0).equals(resultCodeObj) || "0".equals(String.valueOf(resultCodeObj)));
+
+        // Match by merchantRequestId (stored as zedStkId) first, then checkoutRequestId, then orderId
+        Optional<KcbStkRequest> optReq = merchantRequestId != null
+                ? kcbStkRequestRepository.findByZedStkId(merchantRequestId)
                 : Optional.empty();
 
-        if (optReq.isEmpty() && referenceId != null) {
-            optReq = kcbStkRequestRepository.findTopByReferenceIdOrderByCreatedAtDesc(referenceId);
+        if (optReq.isEmpty() && checkoutRequestId != null) {
+            optReq = kcbStkRequestRepository.findTopByReferenceIdOrderByCreatedAtDesc(checkoutRequestId);
+        }
+
+        if (optReq.isEmpty() && orderId != null) {
+            optReq = kcbStkRequestRepository.findTopByReferenceIdOrderByCreatedAtDesc(orderId);
         }
 
         if (optReq.isEmpty()) {
-            log.warn("KCB callback: no matching STK request found for zedStkId={} refId={}", zedStkId, referenceId);
+            log.warn("KCB callback: no matching STK request found for merchantRequestId={} orderId={}", merchantRequestId, orderId);
             return;
         }
 
         KcbStkRequest req = optReq.get();
         req.setCallbackReceivedAt(LocalDateTime.now());
         req.setResultDesc(resultDesc);
-
-        boolean success = "SUCCESS".equalsIgnoreCase(statusStr) || "200".equals(statusStr)
-                || (payload.containsKey("status") && Integer.valueOf(200).equals(payload.get("status")));
+        if (receipt != null) req.setZedStkId(receipt); // store KCB receipt as zedStkId for reconciliation
 
         if (success) {
             req.setStatus(KcbStkStatus.SUCCESS);
-            log.info("KCB payment SUCCESS for referenceId={}", req.getReferenceId());
+            log.info("KCB payment SUCCESS for referenceId={} receipt={}", req.getReferenceId(), receipt);
         } else {
             req.setStatus(KcbStkStatus.FAILED);
-            log.info("KCB payment FAILED for referenceId={} desc={}", req.getReferenceId(), resultDesc);
+            log.info("KCB payment FAILED for referenceId={} resultCode={} desc={}", req.getReferenceId(), resultCodeObj, resultDesc);
         }
 
         kcbStkRequestRepository.save(req);
+
+        if (success) {
+            reconcilePayment(req);
+        }
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void reconcilePayment(KcbStkRequest stkRequest) {
+        try {
+            Long kcbMethodId = paymentMethodRepository.findByCode("KCB")
+                    .map(m -> m.getId())
+                    .orElse(null);
+
+            String referenceId   = stkRequest.getReferenceId();
+            String referenceType = stkRequest.getReferenceType();
+            BigDecimal amount    = stkRequest.getAmount();
+            String receipt       = stkRequest.getZedStkId();
+
+            if ("INVOICE".equalsIgnoreCase(referenceType)) {
+                invoiceService.recordPayment(UUID.fromString(referenceId), amount, kcbMethodId, receipt);
+                log.info("Auto-reconciled invoice {} via KCB receipt {}", referenceId, receipt);
+
+            } else if ("ORDER".equalsIgnoreCase(referenceType)) {
+                Order order = orderRepository.findById(UUID.fromString(referenceId)).orElse(null);
+                if (order != null) {
+                    PaymentRequest pr = PaymentRequest.builder()
+                            .orderId(order.getId())
+                            .merchantId(order.getMerchant().getId())
+                            .distributorId(order.getDistributor().getId())
+                            .paymentMethodId(kcbMethodId)
+                            .amount(amount)
+                            .currency("KES")
+                            .externalReference(receipt)
+                            .build();
+                    paymentService.createPayment(pr);
+                    log.info("Auto-reconciled order {} via KCB receipt {}", referenceId, receipt);
+                }
+            } else {
+                log.info("No auto-reconciliation for referenceType={} referenceId={}", referenceType, referenceId);
+            }
+        } catch (Exception e) {
+            log.error("Failed to auto-reconcile KCB payment for ref={} type={}: {}",
+                    stkRequest.getReferenceId(), stkRequest.getReferenceType(), e.getMessage());
+        }
     }
 
     private KcbStkPushResponse toResponse(KcbStkRequest req, String message) {
@@ -308,6 +376,48 @@ public class KcbServiceImpl implements KcbService {
                 req.getStatus().name(),
                 message
         );
+    }
+
+    /**
+     * Looks up an existing KCB config in swerri.io by accountNumber or businessNo,
+     * mirroring M-Pesa's lookupZedBusinessId approach.
+     */
+    @SuppressWarnings("unchecked")
+    private String lookupSwerriKcbId(String accountNumber, String businessNo) {
+        try {
+            ResponseEntity<Map> response = restTemplate.getForEntity(darajaBusinessConfigUrl, Map.class);
+            log.info("swerri.io business_config/all status={} (KCB lookup)", response.getStatusCode());
+            if (response.getBody() == null) return null;
+
+            Object rawData = response.getBody().get("data");
+            List<?> items = rawData instanceof List ? (List<?>) rawData : null;
+            if (items == null) return null;
+
+            for (Object item : items) {
+                if (item instanceof Map<?, ?> m) {
+                    // swerri.io stores the short code in businessShortCode or businessNumber
+                    Object scObj = m.get("businessShortCode");
+                    if (scObj == null) scObj = m.get("businessNumber");
+                    if (scObj == null) scObj = m.get("accountNumber");
+                    String sc = scObj != null ? String.valueOf(scObj) : "";
+
+                    boolean matchAccount = accountNumber != null && accountNumber.equals(sc);
+                    boolean matchBizNo   = businessNo   != null && businessNo.equals(sc);
+
+                    if (matchAccount || matchBizNo) {
+                        Object id = m.get("_id");
+                        if (id != null) {
+                            log.info("Found existing KCB config in swerri.io: id={} sc={}", id, sc);
+                            return String.valueOf(id);
+                        }
+                    }
+                }
+            }
+            log.info("No existing KCB config in swerri.io matched accountNumber={} businessNo={}", accountNumber, businessNo);
+        } catch (Exception e) {
+            log.warn("Could not look up KCB config from swerri.io: {}", e.getMessage());
+        }
+        return null;
     }
 
     private String normalizePhone(String phone) {

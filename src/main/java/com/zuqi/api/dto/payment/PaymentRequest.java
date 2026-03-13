@@ -17,6 +17,7 @@ import java.util.UUID;
 public class PaymentRequest {
 
     private UUID orderId;
+    private UUID invoiceId;
 
     @NotNull(message = "Merchant ID is required")
     private UUID merchantId;

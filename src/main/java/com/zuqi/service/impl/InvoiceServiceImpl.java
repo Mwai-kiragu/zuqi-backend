@@ -360,6 +360,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         // Create a completed Payment record so transactions appear on the payments list
         if (invoice.getDistributor() != null && invoice.getMerchant() != null) {
             PaymentRequest paymentRequest = PaymentRequest.builder()
+                    .invoiceId(invoice.getId())
                     .orderId(invoice.getOrder() != null ? invoice.getOrder().getId() : null)
                     .merchantId(invoice.getMerchant().getId())
                     .distributorId(invoice.getDistributor().getId())

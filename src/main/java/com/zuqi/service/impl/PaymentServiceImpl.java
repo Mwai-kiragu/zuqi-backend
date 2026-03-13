@@ -3,6 +3,7 @@ package com.zuqi.service.impl;
 import com.zuqi.api.dto.payment.*;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.customer.Customer;
+import com.zuqi.domain.invoice.Invoice;
 import com.zuqi.domain.order.Order;
 import com.zuqi.domain.payment.Payment;
 import com.zuqi.domain.payment.PaymentMethod;
@@ -43,6 +44,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final PaymentRepository paymentRepository;
     private final PaymentMethodRepository paymentMethodRepository;
     private final OrderRepository orderRepository;
+    private final InvoiceRepository invoiceRepository;
     private final CustomerRepository customerRepository;
     private final DistributorRepository distributorRepository;
     private final MerchantRepository merchantRepository;
@@ -165,6 +167,11 @@ public class PaymentServiceImpl implements PaymentService {
                     .orElseThrow(() -> new ResourceNotFoundException("Order", "id", request.getOrderId()));
         }
 
+        Invoice invoice = null;
+        if (request.getInvoiceId() != null) {
+            invoice = invoiceRepository.findById(request.getInvoiceId()).orElse(null);
+        }
+
         PaymentMethod paymentMethod = null;
         if (request.getPaymentMethodId() != null) {
             paymentMethod = paymentMethodRepository.findById(request.getPaymentMethodId())
@@ -179,6 +186,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .paymentNumber(paymentNumber)
                 .sourceType(order != null ? "ORDER" : "MANUAL")
                 .order(order)
+                .invoice(invoice)
                 .merchant(merchant)
                 .distributor(distributor)
                 .paymentMethod(paymentMethod)

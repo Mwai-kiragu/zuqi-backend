@@ -1,5 +1,6 @@
 package com.zuqi.api.dto.payment;
 
+import com.zuqi.domain.invoice.Invoice;
 import com.zuqi.domain.payment.Payment;
 import com.zuqi.domain.payment.PaymentStatus;
 import com.zuqi.domain.pos.PosSale;
@@ -21,6 +22,8 @@ public class PaymentResponse {
     private UUID id;
     private String paymentNumber;
     private String sourceType;
+    private UUID invoiceId;
+    private String invoiceNumber;
     private UUID orderId;
     private String orderNumber;
     private UUID posSaleId;
@@ -47,10 +50,13 @@ public class PaymentResponse {
 
     public static PaymentResponse fromEntity(Payment payment) {
         PosSale posSale = payment.getPosSale();
+        Invoice invoice = payment.getInvoice();
         return PaymentResponse.builder()
                 .id(payment.getId())
                 .paymentNumber(payment.getPaymentNumber())
                 .sourceType(payment.getSourceType())
+                .invoiceId(invoice != null ? invoice.getId() : null)
+                .invoiceNumber(invoice != null ? invoice.getInvoiceNumber() : null)
                 .orderId(payment.getOrder() != null ? payment.getOrder().getId() : null)
                 .orderNumber(payment.getOrder() != null ? payment.getOrder().getOrderNumber() : null)
                 .posSaleId(posSale != null ? posSale.getId() : null)
