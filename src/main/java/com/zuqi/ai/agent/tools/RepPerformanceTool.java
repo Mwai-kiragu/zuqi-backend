@@ -3,6 +3,7 @@ package com.zuqi.ai.agent.tools;
 import com.zuqi.domain.user.User;
 import com.zuqi.repository.OrderRepository;
 import com.zuqi.repository.UserRepository;
+import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +29,7 @@ public class RepPerformanceTool {
           "top 3 and bottom 3 performers by order volume. " +
           "Parameter: distributorId (UUID string).")
     @Transactional(readOnly = true)
-    public String getRepPerformance(String distributorId) {
+    public String getRepPerformance(@P("The distributor UUID") String distributorId) {
         try {
             UUID distId = UUID.fromString(distributorId.trim());
 

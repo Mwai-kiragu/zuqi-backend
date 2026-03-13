@@ -1,6 +1,7 @@
 package com.zuqi.ai.agent.tools;
 
 import com.zuqi.repository.StockRepository;
+import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +24,7 @@ public class InventoryHealthTool {
           "and outOfStock (SKUs with zero or negative quantity). " +
           "Parameter: distributorId (UUID string).")
     @Transactional(readOnly = true)
-    public String getInventoryHealth(String distributorId) {
+    public String getInventoryHealth(@P("The distributor UUID") String distributorId) {
         try {
             UUID distId = UUID.fromString(distributorId.trim());
 

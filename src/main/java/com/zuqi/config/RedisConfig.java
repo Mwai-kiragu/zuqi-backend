@@ -98,6 +98,11 @@ public class RedisConfig {
         // Evicted on every new message save to stay fresh.
         cacheConfigurations.put("chat-history", defaultConfig.entryTtl(Duration.ofMinutes(30)));
 
+        // Assistant business context - 5 min TTL per distributorId
+        // Pre-fetched DB snapshot (9 data points) injected into chat prompts.
+        // Short TTL so data stays reasonably fresh without hitting DB every message.
+        cacheConfigurations.put("assistant-context", defaultConfig.entryTtl(Duration.ofMinutes(5)));
+
         RedisCacheManager redisCacheManager = RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(defaultConfig)
                 .withInitialCacheConfigurations(cacheConfigurations)

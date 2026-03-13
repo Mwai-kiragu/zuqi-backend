@@ -68,6 +68,7 @@ public class LangChain4jConfig {
                 .modelName(chatModelName)
                 .temperature(temperature)
                 .timeout(chatTimeout)
+                .maxRetries(1)
                 .build();
     }
 
@@ -75,8 +76,7 @@ public class LangChain4jConfig {
      * Long-timeout chat model for report generation.
      *
      * Report generation assembles large data blocks and asks the LLM to produce
-     * a full markdown report — qwen2.5-coder:32b can take 2-5 min for this.
-     * 300s (5 min) prevents premature timeouts.
+     * a full markdown report — 300s (5 min) prevents premature timeouts.
      */
     @Bean
     @Qualifier("reportChatLanguageModel")

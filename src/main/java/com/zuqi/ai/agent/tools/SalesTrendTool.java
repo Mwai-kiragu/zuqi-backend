@@ -3,6 +3,7 @@ package com.zuqi.ai.agent.tools;
 import com.zuqi.domain.order.Order;
 import com.zuqi.domain.order.OrderStatus;
 import com.zuqi.repository.OrderRepository;
+import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,7 +26,9 @@ public class SalesTrendTool {
           "total revenue, and the period analysed. " +
           "Parameters: distributorId (UUID string), periodDays (number of days to look back, default 30).")
     @Transactional(readOnly = true)
-    public String getSalesTrend(String distributorId, String periodDays) {
+    public String getSalesTrend(
+            @P("The distributor UUID (e.g. a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11)") String distributorId,
+            @P("Number of days to look back (e.g. 7, 30, 90). Default is 30.") String periodDays) {
         try {
             UUID distId = UUID.fromString(distributorId.trim());
 

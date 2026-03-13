@@ -2,6 +2,8 @@ package com.zuqi.repository;
 
 import com.zuqi.domain.ai.DeliveryRoute;
 import com.zuqi.domain.ai.RouteStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -27,4 +29,8 @@ public interface DeliveryRouteRepository extends JpaRepository<DeliveryRoute, UU
             @Param("routeDate") LocalDate routeDate);
 
     boolean existsByDistributorIdAndRouteDate(UUID distributorId, LocalDate routeDate);
+
+    Page<DeliveryRoute> findByDistributorId(UUID distributorId, Pageable pageable);
+
+    Page<DeliveryRoute> findByDistributorIdAndRouteDate(UUID distributorId, LocalDate routeDate, Pageable pageable);
 }

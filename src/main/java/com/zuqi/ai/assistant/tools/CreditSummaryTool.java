@@ -3,6 +3,7 @@ package com.zuqi.ai.assistant.tools;
 import com.zuqi.domain.credit.CreditLimitStatus;
 import com.zuqi.repository.CreditLimitRepository;
 import com.zuqi.repository.CreditScoreRepository;
+import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +32,7 @@ public class CreditSummaryTool {
           "suspendedLimits (count of SUSPENDED limits). " +
           "Parameter: distributorId (UUID string).")
     @Transactional(readOnly = true)
-    public String getCreditSummary(String distributorId) {
+    public String getCreditSummary(@P("The distributor UUID") String distributorId) {
         try {
             UUID distId = UUID.fromString(distributorId.trim());
 

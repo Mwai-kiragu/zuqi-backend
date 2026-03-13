@@ -4,6 +4,7 @@ import com.zuqi.domain.payment.Payment;
 import com.zuqi.domain.payment.PaymentStatus;
 import com.zuqi.repository.OrderRepository;
 import com.zuqi.repository.PaymentRepository;
+import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +32,7 @@ public class PaymentPerformanceTool {
           "and are not fully paid), and totalOutstandingAmount (sum of unpaid balances). " +
           "Parameter: distributorId (UUID string).")
     @Transactional(readOnly = true)
-    public String getPaymentPerformance(String distributorId) {
+    public String getPaymentPerformance(@P("The distributor UUID") String distributorId) {
         try {
             UUID distId = UUID.fromString(distributorId.trim());
 

@@ -83,15 +83,16 @@ casbin:
 # LangChain4j Ollama Configuration
 langchain4j:
   ollama:
-    base-url: http://192.168.2.17:11434
+    base-url: http://100.109.211.20:11434  # Tailscale
+#    base-url: http://192.168.2.17:11434   # LAN
     chat-model:
-      model-name: qwen2.5-coder:32b
+      model-name: gpt-oss:latest
       temperature: 0.1  # Low for consistency in credit scoring
-      timeout: 30s
+      timeout: 180s
     report-model:
-      model-name: qwen2.5-coder:32b
+      model-name: gpt-oss:latest
       temperature: 0.2  # Slightly higher for narrative report prose
-      timeout: 300s     # 5-min timeout — report generation with 32B model needs time
+      timeout: 300s     # 5-min timeout — report generation
     embedding-model:
       model-name: nomic-embed-text
       timeout: 30s

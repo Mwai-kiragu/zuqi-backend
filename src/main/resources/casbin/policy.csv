@@ -218,10 +218,28 @@ p, DISTRIBUTOR_ADMIN, /v1/ai/reports/compliance/templates, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/reports/compliance/:id, GET
 
 # AI Assistant - Chat, report generation, and structured report data
+p, SUPER_ADMIN, /v1/ai/assistant/chat, POST
+p, DISTRIBUTOR_ADMIN, /v1/ai/assistant/chat, POST
+p, SALES_REP, /v1/ai/assistant/chat, POST
+p, FINANCE, /v1/ai/assistant/chat, POST
+
+p, SUPER_ADMIN, /v1/ai/assistant/report, POST
+p, DISTRIBUTOR_ADMIN, /v1/ai/assistant/report, POST
+p, FINANCE, /v1/ai/assistant/report, POST
+
 p, SUPER_ADMIN, /v1/ai/assistant/report-data, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/assistant/report-data, GET
 p, MERCHANT_ADMIN, /v1/ai/assistant/report-data, GET
 p, FINANCE, /v1/ai/assistant/report-data, GET
+
+p, SUPER_ADMIN, /v1/ai/assistant/history/:id, GET|DELETE
+p, DISTRIBUTOR_ADMIN, /v1/ai/assistant/history/:id, GET|DELETE
+p, SALES_REP, /v1/ai/assistant/history/:id, GET|DELETE
+p, FINANCE, /v1/ai/assistant/history/:id, GET|DELETE
+
+p, SUPER_ADMIN, /v1/ai/assistant/conversations/:id, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/assistant/conversations/:id, GET
+p, FINANCE, /v1/ai/assistant/conversations/:id, GET
 
 # DRIVER - Delivery operations
 p, DRIVER, /v1/roles/name/:name, GET

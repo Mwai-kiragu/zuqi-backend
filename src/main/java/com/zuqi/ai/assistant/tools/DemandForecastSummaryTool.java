@@ -1,6 +1,7 @@
 package com.zuqi.ai.assistant.tools;
 
 import com.zuqi.repository.DemandForecastRepository;
+import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +27,7 @@ public class DemandForecastSummaryTool {
           "Use this tool to answer questions about demand predictions and order suggestions. " +
           "Parameter: distributorId (UUID string).")
     @Transactional(readOnly = true)
-    public String getDemandForecastSummary(String distributorId) {
+    public String getDemandForecastSummary(@P("The distributor UUID") String distributorId) {
         try {
             UUID distId = UUID.fromString(distributorId.trim());
 

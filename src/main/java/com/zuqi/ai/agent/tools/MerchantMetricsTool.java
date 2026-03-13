@@ -4,6 +4,7 @@ import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.order.Order;
 import com.zuqi.repository.CustomerRepository;
 import com.zuqi.repository.OrderRepository;
+import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,7 +31,7 @@ public class MerchantMetricsTool {
           "who placed at least one order recently). " +
           "Parameter: distributorId (UUID string).")
     @Transactional(readOnly = true)
-    public String getMerchantMetrics(String distributorId) {
+    public String getMerchantMetrics(@P("The distributor UUID") String distributorId) {
         try {
             UUID distId = UUID.fromString(distributorId.trim());
 

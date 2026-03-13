@@ -10,6 +10,7 @@ import com.zuqi.api.dto.assistant.ReportRequest;
 import com.zuqi.domain.ai.ChatMessage;
 import com.zuqi.domain.ai.ReportType;
 import com.zuqi.repository.ChatMessageRepository;
+import com.zuqi.repository.DistributorRepository;
 import com.zuqi.util.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -51,6 +52,7 @@ public class AiAssistantController {
     private final AssistantService       assistantService;
     private final ReportDataService      reportDataService;
     private final ChatMessageRepository  chatMessageRepository;
+    private final DistributorRepository  distributorRepository;
     private final SecurityUtils          securityUtils;
 
     // ── POST /chat ────────────────────────────────────────────────────────
@@ -66,11 +68,17 @@ public class AiAssistantController {
 
         UUID userId = securityUtils.getCurrentUserId();
 
-        // SUPER_ADMIN may omit distributorId — fall back to their own distributor if set,
-        // or reject if still null (no context available)
+        // SUPER_ADMIN may omit distributorId — fall back to their own distributor,
+        // then to the first active distributor in the system (for admin testing)
         UUID distributorId = request.getDistributorId() != null
                 ? request.getDistributorId()
                 : securityUtils.getCurrentUserDistributorId();
+        if (distributorId == null && securityUtils.isSuperAdmin()) {
+            distributorId = distributorRepository.findByActiveTrue()
+                    .stream().findFirst()
+                    .map(d -> d.getId())
+                    .orElse(null);
+        }
         if (distributorId == null) {
             return ResponseEntity.badRequest()
                     .body(ApiResponse.error("distributorId is required"));
