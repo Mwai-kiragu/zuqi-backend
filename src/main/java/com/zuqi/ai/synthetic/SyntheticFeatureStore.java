@@ -1,5 +1,7 @@
 package com.zuqi.ai.synthetic;
 
+import com.zuqi.ai.synthetic.dto.*;
+
 import com.zuqi.ai.anomaly.AnomalyFeatureBuilder;
 import com.zuqi.ai.credit.CreditMlFeatureBuilder;
 import com.zuqi.ai.feature.DemandFeatures;

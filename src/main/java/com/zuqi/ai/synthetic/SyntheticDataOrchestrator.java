@@ -1,5 +1,7 @@
 package com.zuqi.ai.synthetic;
 
+import com.zuqi.ai.synthetic.dto.*;
+
 import com.zuqi.ai.synthetic.generators.*;
 import com.zuqi.ai.synthetic.generators.OrderHistoryGenerator.OrderHistoryResult;
 import com.zuqi.domain.ai.AISyntheticRun;

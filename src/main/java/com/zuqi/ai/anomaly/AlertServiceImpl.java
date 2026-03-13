@@ -5,8 +5,11 @@ import com.zuqi.domain.ai.AlertStatus;
 import com.zuqi.domain.ai.AlertType;
 import com.zuqi.domain.ai.AnomalyAlert;
 import com.zuqi.domain.distributor.Distributor;
+import com.zuqi.domain.user.User;
 import com.zuqi.repository.AnomalyAlertRepository;
 import com.zuqi.repository.DistributorRepository;
+import com.zuqi.repository.UserRepository;
+import com.zuqi.service.EmailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -15,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,6 +32,8 @@ public class AlertServiceImpl implements AlertService {
 
     private final AnomalyAlertRepository alertRepository;
     private final DistributorRepository distributorRepository;
+    private final UserRepository userRepository;
+    private final EmailService emailService;
 
     @Override
     @Transactional
@@ -76,6 +82,11 @@ public class AlertServiceImpl implements AlertService {
         AnomalyAlert saved = alertRepository.save(alert);
         log.info("Created {} alert id={} severity={} entity={}:{} score={}",
                 alertType, saved.getId(), severity, entityType, entityId, anomalyScore);
+
+        if (severity == AlertSeverity.CRITICAL || severity == AlertSeverity.HIGH) {
+            notifyDistributorUsers(distributor, alertType, severity, entityType, description, anomalyScore);
+        }
+
         return saved;
     }
 
@@ -163,6 +174,30 @@ public class AlertServiceImpl implements AlertService {
     private AnomalyAlert getAlertOrThrow(UUID alertId) {
         return alertRepository.findById(alertId)
                 .orElseThrow(() -> new IllegalArgumentException("Alert not found: " + alertId));
+    }
+
+    private void notifyDistributorUsers(Distributor distributor, AlertType alertType,
+                                          AlertSeverity severity, String entityType,
+                                          String description, Double anomalyScore) {
+        try {
+            List<User> activeUsers = userRepository.findByDistributorIdAndActiveTrue(distributor.getId());
+            for (User user : activeUsers) {
+                if (user.getEmail() != null && !user.getEmail().isBlank()) {
+                    emailService.sendAnomalyAlertEmail(
+                            user.getEmail(),
+                            alertType.name(),
+                            severity.name(),
+                            entityType,
+                            description,
+                            anomalyScore
+                    );
+                }
+            }
+            log.info("Queued {} alert notifications for distributor {}", activeUsers.size(), distributor.getId());
+        } catch (Exception e) {
+            log.warn("Failed to send alert notifications for distributor {}: {}",
+                    distributor.getId(), e.getMessage());
+        }
     }
 
     private void validateTransition(AlertStatus current, AlertStatus target) {

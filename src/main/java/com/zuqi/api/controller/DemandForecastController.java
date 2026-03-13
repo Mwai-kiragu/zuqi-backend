@@ -4,11 +4,15 @@ import com.zuqi.ai.demand.DemandForecaster;
 import com.zuqi.ai.demand.DemandModelTrainingPipeline;
 import com.zuqi.ai.demand.OrderSuggestionService;
 import com.zuqi.api.dto.ApiResponse;
+import com.zuqi.domain.ai.DemandForecast;
+import com.zuqi.repository.DemandForecastRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
@@ -37,6 +41,34 @@ public class DemandForecastController {
     private final DemandForecaster demandForecaster;
     private final OrderSuggestionService orderSuggestionService;
     private final DemandModelTrainingPipeline trainingPipeline;
+    private final DemandForecastRepository demandForecastRepository;
+
+    /**
+     * List all stored demand forecasts for a distributor (paginated).
+     */
+    @GetMapping("/forecasts")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SALES_REP', 'DISTRIBUTOR_ADMIN')")
+    @Operation(
+            summary = "List demand forecasts",
+            description = "Paginated list of stored demand forecasts for the distributor"
+    )
+    public ResponseEntity<ApiResponse<Page<DemandForecast>>> listForecasts(
+            @Parameter(required = true) @RequestParam UUID distributorId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        log.info("GET /v1/ai/demand/forecasts distributor={} page={} size={}", distributorId, page, size);
+
+        try {
+            PageRequest pageable = PageRequest.of(page, size);
+            Page<DemandForecast> forecasts = demandForecastRepository.findByDistributorId(distributorId, pageable);
+            return ResponseEntity.ok(ApiResponse.success(forecasts));
+        } catch (Exception e) {
+            log.error("Failed to list forecasts: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("Failed to list forecasts: " + e.getMessage()));
+        }
+    }
 
     /**
      * Get demand forecast for a specific merchant-product combination.

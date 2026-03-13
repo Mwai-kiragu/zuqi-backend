@@ -1,0 +1,327 @@
+{
+  "title": "Zuqi AI — LLM Metrics",
+  "uid": "zuqi-llm-metrics",
+  "description": "LLM call volume, latency, and error rates for the Zuqi AI layer (credit scoring, recommendations, compliance reporting).",
+  "tags": ["zuqi", "ai", "llm"],
+  "timezone": "browser",
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "version": 1,
+  "time": { "from": "now-3h", "to": "now" },
+  "timepicker": {},
+  "panels": [
+
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "LLM Requests / sec",
+      "description": "Rate of successful LLM calls, broken down by module.",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "sum(rate(zuqi_ai_llm_requests_total[5m])) by (module)",
+          "legendFormat": "{{module}}",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "LLM Errors / sec",
+      "description": "Rate of LLM errors, broken down by error type.",
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red",   "value": 0.01 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "sum(rate(zuqi_ai_llm_errors_total[5m])) by (error_type)",
+          "legendFormat": "{{error_type}}",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "LLM Latency (avg)",
+      "description": "Average LLM call duration in seconds, broken down by module.",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "multi" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "rate(zuqi_ai_llm_latency_seconds_sum[5m]) / rate(zuqi_ai_llm_latency_seconds_count[5m])",
+          "legendFormat": "avg latency",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "zuqi_ai_llm_latency_seconds_max",
+          "legendFormat": "max latency",
+          "refId": "B"
+        }
+      ]
+    },
+
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Error Rate %",
+      "description": "LLM errors as a percentage of total requests.",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "palette-classic" },
+          "custom": { "lineWidth": 2, "fillOpacity": 10 },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 5 },
+              { "color": "red",    "value": 20 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "tooltip": { "mode": "single" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "100 * sum(rate(zuqi_ai_llm_errors_total[5m])) / (sum(rate(zuqi_ai_llm_requests_total[5m])) + sum(rate(zuqi_ai_llm_errors_total[5m])))",
+          "legendFormat": "error %",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Total LLM Requests (last 1h)",
+      "gridPos": { "x": 0, "y": 16, "w": 6, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "blue", "value": null }]
+          }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "sum(increase(zuqi_ai_llm_requests_total[1h]))",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Total LLM Errors (last 1h)",
+      "gridPos": { "x": 6, "y": 16, "w": 6, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "red",    "value": 10 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "sum(increase(zuqi_ai_llm_errors_total[1h]))",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Avg Latency (last 5m)",
+      "gridPos": { "x": 12, "y": 16, "w": 6, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "red",    "value": 25 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "rate(zuqi_ai_llm_latency_seconds_sum[5m]) / rate(zuqi_ai_llm_latency_seconds_count[5m])",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "Max Latency (last 5m)",
+      "gridPos": { "x": 18, "y": 16, "w": 6, "h": 4 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 20 },
+              { "color": "red",    "value": 30 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "zuqi_ai_llm_latency_seconds_max",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 9,
+      "type": "bargauge",
+      "title": "Requests by Module",
+      "description": "Cumulative LLM requests per AI module.",
+      "gridPos": { "x": 0, "y": 20, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "valueMode": "color"
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "sum(zuqi_ai_llm_requests_total) by (module)",
+          "legendFormat": "{{module}}",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 10,
+      "type": "piechart",
+      "title": "Errors by Type",
+      "description": "Breakdown of LLM error types.",
+      "gridPos": { "x": 12, "y": 20, "w": 12, "h": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "pieType": "donut",
+        "legend": { "displayMode": "list", "placement": "right" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus" },
+          "expr": "sum(zuqi_ai_llm_errors_total) by (error_type)",
+          "legendFormat": "{{error_type}}",
+          "refId": "A"
+        }
+      ]
+    }
+
+  ]
+}

@@ -112,6 +112,8 @@ zuqi:
     demand-forecasting:
       enabled: true
       forecast-horizon-days: 7  # Predict 1 week ahead
+      xgboost:
+        num-rounds: 150  # Boosting rounds (higher = more capacity, slower training)
       min-confidence-threshold: 0.5  # Filter suggestions with confidence < 0.5
       max-suggestions-per-merchant: 20  # Limit order suggestions
       llm-enrichment-enabled: false  # Phase 5+ feature (sales tips from LLM)

@@ -1,5 +1,7 @@
 package com.zuqi.ai.synthetic;
 
+import com.zuqi.ai.synthetic.dto.*;
+
 import com.zuqi.ai.feature.DemandFeatures;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

@@ -167,10 +167,12 @@ class DemandForecastingIntegrationTest {
             log.info("✅ Validation correctly rejected small dataset");
         }
 
-        // Test null features validation
-        List<DemandModelTrainer.DemandTrainingExample> nullData = List.of(
-                new DemandModelTrainer.DemandTrainingExample(null, BigDecimal.valueOf(50))
-        );
+        // Test null features validation — dataset must be >= 1000 to bypass size check
+        List<DemandModelTrainer.DemandTrainingExample> nullData =
+                java.util.stream.IntStream.range(0, 1000)
+                        .mapToObj(i -> new DemandModelTrainer.DemandTrainingExample(
+                                null, BigDecimal.valueOf(50)))
+                        .toList();
 
         try {
             modelTrainer.validateDataset(nullData);

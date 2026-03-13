@@ -1,6 +1,7 @@
 package com.zuqi.ai.demand;
 
 import com.zuqi.ai.feature.DemandFeatures;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.tribuo.Example;
@@ -30,8 +31,11 @@ import java.util.List;
  * Blueprint: plan.md Section 6.2 - Demand Forecasting Module
  */
 @Service
+@RequiredArgsConstructor
 @Slf4j
 public class DemandFeatureBuilder {
+
+    private final TribuoFeatureConverter converter;
 
     // All possible merchant categories
     private static final List<String> ALL_MERCHANT_CATEGORIES = List.of(
@@ -84,15 +88,15 @@ public class DemandFeatureBuilder {
         List<Feature> featureList = new ArrayList<>();
 
         // ========== Lag Features (7) ==========
-        featureList.add(new Feature("qty_1w_ago", safeDouble(features.qty1wAgo())));
-        featureList.add(new Feature("qty_2w_ago", safeDouble(features.qty2wAgo())));
-        featureList.add(new Feature("qty_3w_ago", safeDouble(features.qty3wAgo())));
-        featureList.add(new Feature("qty_4w_ago", safeDouble(features.qty4wAgo())));
-        featureList.add(new Feature("rolling_avg_4w", safeDouble(features.rollingAvg4w())));
-        featureList.add(new Feature("rolling_avg_12w", safeDouble(features.rollingAvg12w())));
+        featureList.add(new Feature("qty_1w_ago", converter.safeDouble(features.qty1wAgo())));
+        featureList.add(new Feature("qty_2w_ago", converter.safeDouble(features.qty2wAgo())));
+        featureList.add(new Feature("qty_3w_ago", converter.safeDouble(features.qty3wAgo())));
+        featureList.add(new Feature("qty_4w_ago", converter.safeDouble(features.qty4wAgo())));
+        featureList.add(new Feature("rolling_avg_4w", converter.safeDouble(features.rollingAvg4w())));
+        featureList.add(new Feature("rolling_avg_12w", converter.safeDouble(features.rollingAvg12w())));
 
         // Trend direction (encoded as numeric: INCREASING=1, STABLE=0, DECREASING=-1)
-        double trendValue = encodeTrend(features.trendDirection());
+        double trendValue = converter.encodeTrend(features.trendDirection());
         featureList.add(new Feature("trend_direction_numeric", trendValue));
 
         // ========== Temporal Features (7 numeric + boolean flags) ==========
@@ -110,7 +114,7 @@ public class DemandFeatureBuilder {
         // Merchant category (one-hot encoded)
         String merchantCategory = features.merchantCategory();
         for (String category : ALL_MERCHANT_CATEGORIES) {
-            String featureName = "merchant_category_" + sanitizeFeatureName(category);
+            String featureName = "merchant_category_" + converter.sanitizeFeatureName(category);
             double value = (merchantCategory != null && merchantCategory.equals(category)) ? 1.0 : 0.0;
             featureList.add(new Feature(featureName, value));
         }
@@ -118,7 +122,7 @@ public class DemandFeatureBuilder {
         // Merchant size tier (one-hot encoded)
         String sizeTier = features.merchantSizeTier();
         for (String tier : SIZE_TIERS) {
-            String featureName = "size_tier_" + sanitizeFeatureName(tier);
+            String featureName = "size_tier_" + converter.sanitizeFeatureName(tier);
             double value = (sizeTier != null && sizeTier.equals(tier)) ? 1.0 : 0.0;
             featureList.add(new Feature(featureName, value));
         }
@@ -126,19 +130,20 @@ public class DemandFeatureBuilder {
         // Merchant credit status (one-hot encoded)
         String creditStatus = features.merchantCreditStatus();
         for (String status : CREDIT_STATUSES) {
-            String featureName = "credit_status_" + sanitizeFeatureName(status);
+            String featureName = "credit_status_" + converter.sanitizeFeatureName(status);
             double value = (creditStatus != null && creditStatus.equals(status)) ? 1.0 : 0.0;
             featureList.add(new Feature(featureName, value));
         }
 
         // ========== SKU Context Features (1 numeric + categorical) ==========
+        Integer shelfLife = features.typicalShelfLifeDays();
         featureList.add(new Feature("typical_shelf_life_days",
-                features.typicalShelfLifeDays() != null ? features.typicalShelfLifeDays().doubleValue() : 0.0));
+                shelfLife != null ? shelfLife.doubleValue() : 0.0));
 
         // Product category (one-hot encoded)
         String productCategory = features.productCategory();
         for (String category : ALL_PRODUCT_CATEGORIES) {
-            String featureName = "product_category_" + sanitizeFeatureName(category);
+            String featureName = "product_category_" + converter.sanitizeFeatureName(category);
             double value = (productCategory != null && productCategory.equals(category)) ? 1.0 : 0.0;
             featureList.add(new Feature(featureName, value));
         }
@@ -146,7 +151,7 @@ public class DemandFeatureBuilder {
         // Price tier (one-hot encoded)
         String priceTier = features.priceTier();
         for (String tier : PRICE_TIERS) {
-            String featureName = "price_tier_" + sanitizeFeatureName(tier);
+            String featureName = "price_tier_" + converter.sanitizeFeatureName(tier);
             double value = (priceTier != null && priceTier.equals(tier)) ? 1.0 : 0.0;
             featureList.add(new Feature(featureName, value));
         }
@@ -211,22 +216,22 @@ public class DemandFeatureBuilder {
         // Merchant context
         names.add("merchant_tenure_days");
         for (String category : ALL_MERCHANT_CATEGORIES) {
-            names.add("merchant_category_" + sanitizeFeatureName(category));
+            names.add("merchant_category_" + converter.sanitizeFeatureName(category));
         }
         for (String tier : SIZE_TIERS) {
-            names.add("size_tier_" + sanitizeFeatureName(tier));
+            names.add("size_tier_" + converter.sanitizeFeatureName(tier));
         }
         for (String status : CREDIT_STATUSES) {
-            names.add("credit_status_" + sanitizeFeatureName(status));
+            names.add("credit_status_" + converter.sanitizeFeatureName(status));
         }
 
         // SKU context
         names.add("typical_shelf_life_days");
         for (String category : ALL_PRODUCT_CATEGORIES) {
-            names.add("product_category_" + sanitizeFeatureName(category));
+            names.add("product_category_" + converter.sanitizeFeatureName(category));
         }
         for (String tier : PRICE_TIERS) {
-            names.add("price_tier_" + sanitizeFeatureName(tier));
+            names.add("price_tier_" + converter.sanitizeFeatureName(tier));
         }
         names.add("is_promotional");
 
@@ -244,33 +249,4 @@ public class DemandFeatureBuilder {
                 1 + ALL_PRODUCT_CATEGORIES.size() + PRICE_TIERS.size() + 1; // SKU features
     }
 
-    /**
-     * Safely convert BigDecimal to double, handling nulls.
-     */
-    private double safeDouble(BigDecimal value) {
-        return value != null ? value.doubleValue() : 0.0;
-    }
-
-    /**
-     * Encode trend direction to numeric value.
-     */
-    private double encodeTrend(String trendDirection) {
-        if (trendDirection == null) return 0.0;
-        return switch (trendDirection) {
-            case "INCREASING" -> 1.0;
-            case "STABLE" -> 0.0;
-            case "DECREASING" -> -1.0;
-            default -> 0.0;
-        };
-    }
-
-    /**
-     * Sanitize feature name for Tribuo compatibility.
-     */
-    private String sanitizeFeatureName(String name) {
-        return name.toLowerCase()
-                .replace(" ", "_")
-                .replace("-", "_")
-                .replaceAll("[^a-z0-9_]", "");
-    }
 }

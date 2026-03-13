@@ -1,7 +1,10 @@
 package com.zuqi.ai.demand;
 
+import com.zuqi.domain.credit.CreditLimit;
+import com.zuqi.domain.credit.CreditLimitStatus;
 import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.product.Product;
+import com.zuqi.repository.CreditLimitRepository;
 import com.zuqi.repository.CustomerRepository;
 import com.zuqi.repository.ProductRepository;
 import lombok.Builder;
@@ -37,6 +40,7 @@ public class OrderSuggestionService {
     private final DemandForecaster demandForecaster;
     private final CustomerRepository customerRepository;
     private final ProductRepository productRepository;
+    private final CreditLimitRepository creditLimitRepository;
 
     /**
      * Generate order suggestions for a merchant.
@@ -137,9 +141,15 @@ public class OrderSuggestionService {
      * Check if suggestion is within merchant's available credit limit.
      */
     private boolean isWithinCreditLimit(Customer merchant, OrderSuggestion suggestion) {
-        // TODO: Implement actual credit limit check
-        // For now, accept all suggestions
-        return true;
+        if (merchant.getDistributor() == null) {
+            return true;
+        }
+        return creditLimitRepository.findByMerchantIdAndDistributorIdAndStatus(
+                merchant.getId(), merchant.getDistributor().getId(), CreditLimitStatus.ACTIVE
+        ).map(creditLimit -> {
+            BigDecimal available = creditLimit.getAvailableLimit();
+            return available == null || suggestion.estimatedValue().compareTo(available) <= 0;
+        }).orElse(true); // No credit limit set up — allow suggestions
     }
 
     /**

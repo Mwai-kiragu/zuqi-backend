@@ -1,0 +1,21 @@
+global:
+  scrape_interval:     15s   # scrape every 15 seconds
+  evaluation_interval: 15s
+
+scrape_configs:
+
+  # ── Zuqi Backend ────────────────────────────────────────────
+  # Spring Boot app running on the host machine.
+  # Context path is /api, so the actuator endpoint is /api/actuator/prometheus.
+  - job_name: "zuqi-backend"
+    metrics_path: "/api/actuator/prometheus"
+    static_configs:
+      - targets: ["host.docker.internal:8080"]
+        labels:
+          app: "zuqi-backend"
+          env: "dev"
+
+  # ── Prometheus self-monitoring ───────────────────────────────
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]

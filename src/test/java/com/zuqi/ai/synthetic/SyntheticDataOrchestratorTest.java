@@ -1,5 +1,7 @@
 package com.zuqi.ai.synthetic;
 
+import com.zuqi.ai.synthetic.dto.*;
+
 import com.zuqi.ai.synthetic.generators.BusinessNameGenerator;
 import com.zuqi.ai.synthetic.generators.CreditHistoryGenerator;
 import com.zuqi.ai.synthetic.generators.InventoryMovementGenerator;

@@ -1,5 +1,7 @@
 package com.zuqi.ai.synthetic;
 
+import com.zuqi.ai.synthetic.dto.*;
+
 import com.zuqi.domain.ai.DataPhase;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

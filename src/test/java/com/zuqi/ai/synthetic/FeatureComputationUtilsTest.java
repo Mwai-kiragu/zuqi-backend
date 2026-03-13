@@ -1,5 +1,9 @@
 package com.zuqi.ai.synthetic;
 
+import com.zuqi.ai.feature.FeatureComputationUtils;
+
+import com.zuqi.ai.synthetic.dto.*;
+
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;

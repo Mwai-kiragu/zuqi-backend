@@ -2,7 +2,7 @@ package com.zuqi.ai.prediction;
 
 import com.zuqi.ai.feature.InventoryFeatures;
 import com.zuqi.ai.model.ModelRegistry;
-import com.zuqi.ai.training.ModelEvaluator;
+import com.zuqi.ai.pipeline.ModelEvaluator;
 import com.zuqi.domain.ai.AIModelRegistry;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;

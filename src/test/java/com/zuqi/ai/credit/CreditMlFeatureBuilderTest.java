@@ -1,8 +1,6 @@
 package com.zuqi.ai.credit;
 
 import com.zuqi.ai.feature.MerchantFeatures;
-import com.zuqi.ai.training.SyntheticMerchant;
-import com.zuqi.ai.training.SyntheticMerchantDataGenerator;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -14,8 +12,11 @@ import org.tribuo.classification.Label;
 import org.tribuo.regression.Regressor;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.Map;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -31,27 +32,56 @@ class CreditMlFeatureBuilderTest {
     @Autowired
     private CreditMlFeatureBuilder featureBuilder;
 
-    @Autowired
-    private SyntheticMerchantDataGenerator syntheticDataGenerator;
+    // ── Test helpers ───────────────────────────────────────────────────────
+
+    private MerchantFeatures buildTestFeatures() {
+        return MerchantFeatures.builder()
+                .merchantId(UUID.randomUUID())
+                .computedAt(LocalDateTime.now())
+                .totalOrders(150)
+                .orderFrequencyPerWeek(2.5)
+                .avgOrderValue(BigDecimal.valueOf(25_000))
+                .orderValueTrendSlope12w(0.05)
+                .orderConsistencyStddev(5_000.0)
+                .cancellationRate(0.03)
+                .returnRate(0.02)
+                .daysSinceLastOrder(5)
+                .uniqueSkusOrdered(12)
+                .topSkuConcentration(0.35)
+                .totalPayments(140)
+                .onTimePaymentPct(0.88)
+                .avgDaysToPay(12.0)
+                .worstDaysToPay(30)
+                .partialPaymentFrequency(0.05)
+                .paymentMethodDistribution(Map.of("MPESA", 60, "CASH", 30, "BANK_TRANSFER", 10))
+                .consecutiveOnTimeStreak(8)
+                .totalOverdueAmount(BigDecimal.ZERO)
+                .currentCreditLimit(BigDecimal.valueOf(200_000))
+                .currentUtilizationRatio(0.45)
+                .peakUtilizationRatio(0.70)
+                .utilizationTrendSlope(-0.02)
+                .limitIncreaseCount(1)
+                .daysSinceLastLimitChange(90)
+                .businessCategoryEncoded("General Store")
+                .relationshipTenureDays(450)
+                .verificationStatus("VERIFIED")
+                .geographicCluster("Nairobi")
+                .build();
+    }
+
+    // ── Tests ──────────────────────────────────────────────────────────────
 
     @Test
     void testBuildClassificationExample() {
-        // Generate a synthetic merchant
-        List<SyntheticMerchant> merchants = syntheticDataGenerator.generateDataset(1);
-        SyntheticMerchant merchant = merchants.get(0);
+        MerchantFeatures features = buildTestFeatures();
+        boolean didDefault = false;
 
-        // Build Tribuo example
-        Example<Label> example = featureBuilder.buildClassificationExample(
-                merchant.features(),
-                merchant.didDefault()
-        );
+        Example<Label> example = featureBuilder.buildClassificationExample(features, didDefault);
 
-        // Verify
         assertThat(example).isNotNull();
         assertThat(example.getOutput().getLabel()).isIn("DEFAULT", "NO_DEFAULT");
         assertThat(example.size()).isGreaterThan(40); // ~47 features expected
 
-        // Print for debugging
         System.out.println("Classification example created:");
         System.out.println("  Label: " + example.getOutput().getLabel());
         System.out.println("  Feature count: " + example.size());
@@ -59,19 +89,11 @@ class CreditMlFeatureBuilderTest {
 
     @Test
     void testBuildRegressionExample() {
-        // Generate a synthetic merchant
-        List<SyntheticMerchant> merchants = syntheticDataGenerator.generateDataset(1);
-        SyntheticMerchant merchant = merchants.get(0);
-
+        MerchantFeatures features = buildTestFeatures();
         BigDecimal targetLimit = BigDecimal.valueOf(250_000);
 
-        // Build Tribuo regression example
-        Example<Regressor> example = featureBuilder.buildRegressionExample(
-                merchant.features(),
-                targetLimit
-        );
+        Example<Regressor> example = featureBuilder.buildRegressionExample(features, targetLimit);
 
-        // Verify
         assertThat(example).isNotNull();
         assertThat(example.getOutput().getNames()).contains("credit_limit");
         assertThat(example.getOutput().getValues()[0]).isEqualTo(250_000.0);
@@ -84,25 +106,18 @@ class CreditMlFeatureBuilderTest {
 
     @Test
     void testBuildClassificationDataset() {
-        // Generate 100 synthetic merchants
-        List<SyntheticMerchant> merchants = syntheticDataGenerator.generateDataset(100);
+        List<MerchantFeatures> features = new ArrayList<>();
+        List<Boolean> labels = new ArrayList<>();
+        for (int i = 0; i < 100; i++) {
+            features.add(buildTestFeatures());
+            labels.add(i % 6 == 0); // ~17% default rate
+        }
 
-        List<MerchantFeatures> features = merchants.stream()
-                .map(SyntheticMerchant::features)
-                .collect(Collectors.toList());
-
-        List<Boolean> labels = merchants.stream()
-                .map(SyntheticMerchant::didDefault)
-                .collect(Collectors.toList());
-
-        // Build dataset
         MutableDataset<Label> dataset = featureBuilder.buildClassificationDataset(features, labels);
 
-        // Verify
         assertThat(dataset.size()).isEqualTo(100);
         assertThat(dataset.getOutputs()).hasSizeGreaterThan(0);
 
-        // Check label distribution
         long defaultCount = dataset.getData().stream()
                 .filter(ex -> ex.getOutput().getLabel().equals("DEFAULT"))
                 .count();
@@ -114,30 +129,23 @@ class CreditMlFeatureBuilderTest {
         System.out.println("  Total examples: " + dataset.size());
         System.out.println("  DEFAULT: " + defaultCount);
         System.out.println("  NO_DEFAULT: " + noDefaultCount);
-        System.out.println("  Default rate: " + String.format("%.1f%%", (defaultCount * 100.0 / dataset.size())));
 
         assertThat(defaultCount + noDefaultCount).isEqualTo(100);
     }
 
     @Test
     void testBuildRegressionDataset() {
-        // Generate 50 synthetic merchants
-        List<SyntheticMerchant> merchants = syntheticDataGenerator.generateDataset(50);
+        List<MerchantFeatures> features = new ArrayList<>();
+        List<BigDecimal> targetLimits = new ArrayList<>();
+        for (int i = 0; i < 50; i++) {
+            MerchantFeatures f = buildTestFeatures();
+            features.add(f);
+            targetLimits.add(f.avgOrderValue().multiply(BigDecimal.valueOf(8)));
+        }
 
-        List<MerchantFeatures> features = merchants.stream()
-                .map(SyntheticMerchant::features)
-                .collect(Collectors.toList());
-
-        List<BigDecimal> targetLimits = features.stream()
-                .map(f -> f.avgOrderValue().multiply(BigDecimal.valueOf(8)))  // 8x monthly order value
-                .collect(Collectors.toList());
-
-        // Build dataset
         MutableDataset<Regressor> dataset = featureBuilder.buildRegressionDataset(features, targetLimits);
 
-        // Verify
         assertThat(dataset.size()).isEqualTo(50);
-
         System.out.println("Regression dataset built:");
         System.out.println("  Total examples: " + dataset.size());
     }
@@ -152,7 +160,6 @@ class CreditMlFeatureBuilderTest {
         assertThat(featureNames).contains("current_credit_limit");
         assertThat(featureNames).contains("relationship_tenure_days");
 
-        // Check categorical features
         assertThat(featureNames.stream()
                 .anyMatch(name -> name.startsWith("category_"))).isTrue();
         assertThat(featureNames.stream()
@@ -175,16 +182,10 @@ class CreditMlFeatureBuilderTest {
 
     @Test
     void testNoNullFeatures() {
-        // Generate a synthetic merchant
-        List<SyntheticMerchant> merchants = syntheticDataGenerator.generateDataset(10);
+        for (int i = 0; i < 10; i++) {
+            MerchantFeatures features = buildTestFeatures();
+            Example<Label> example = featureBuilder.buildClassificationExample(features, i % 5 == 0);
 
-        for (SyntheticMerchant merchant : merchants) {
-            Example<Label> example = featureBuilder.buildClassificationExample(
-                    merchant.features(),
-                    merchant.didDefault()
-            );
-
-            // Check no null or NaN values
             for (Feature feature : example) {
                 assertThat(feature.getValue()).isNotNull();
                 assertThat(Double.isNaN(feature.getValue())).isFalse();
@@ -197,16 +198,10 @@ class CreditMlFeatureBuilderTest {
 
     @Test
     void testOneHotEncoding() {
-        // Generate a synthetic merchant
-        List<SyntheticMerchant> merchants = syntheticDataGenerator.generateDataset(1);
-        SyntheticMerchant merchant = merchants.get(0);
+        MerchantFeatures features = buildTestFeatures();
 
-        Example<Label> example = featureBuilder.buildClassificationExample(
-                merchant.features(),
-                merchant.didDefault()
-        );
+        Example<Label> example = featureBuilder.buildClassificationExample(features, false);
 
-        // Count one-hot encoded features (should be exactly 1.0 for category, city, verification)
         long categoryOnes = 0;
         long cityOnes = 0;
         long verificationOnes = 0;
@@ -228,8 +223,8 @@ class CreditMlFeatureBuilderTest {
         System.out.println("  City features with value 1.0: " + cityOnes);
         System.out.println("  Verification features with value 1.0: " + verificationOnes);
 
-        assertThat(categoryOnes).isEqualTo(1); // Exactly one category active
-        assertThat(cityOnes).isEqualTo(1);     // Exactly one city active
-        assertThat(verificationOnes).isEqualTo(1); // Exactly one status active
+        assertThat(categoryOnes).isEqualTo(1);
+        assertThat(cityOnes).isEqualTo(1);
+        assertThat(verificationOnes).isEqualTo(1);
     }
 }

@@ -3,8 +3,6 @@ package com.zuqi.ai.credit;
 import com.zuqi.ai.feature.MerchantFeatureService;
 import com.zuqi.ai.feature.MerchantFeatures;
 import com.zuqi.ai.model.ModelLoaderService;
-import com.zuqi.ai.training.SyntheticMerchant;
-import com.zuqi.ai.training.SyntheticMerchantDataGenerator;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -12,7 +10,8 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
-import java.util.List;
+import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,9 +29,6 @@ class CreditLimitRegressorTest {
     @Autowired
     private CreditLimitRegressor creditLimitRegressor;
 
-    @Autowired
-    private SyntheticMerchantDataGenerator syntheticDataGenerator;
-
     @MockBean
     private ModelLoaderService modelLoader;
 
@@ -42,39 +38,170 @@ class CreditLimitRegressorTest {
     private static final BigDecimal MIN_LIMIT = BigDecimal.valueOf(50_000);
     private static final BigDecimal MAX_LIMIT = BigDecimal.valueOf(10_000_000);
 
+    // ── Test helpers ───────────────────────────────────────────────────────
+
+    private MerchantFeatures buildTestFeatures() {
+        return MerchantFeatures.builder()
+                .merchantId(UUID.randomUUID())
+                .computedAt(LocalDateTime.now())
+                .totalOrders(150)
+                .orderFrequencyPerWeek(2.5)
+                .avgOrderValue(BigDecimal.valueOf(25_000))
+                .orderValueTrendSlope12w(0.05)
+                .orderConsistencyStddev(5_000.0)
+                .cancellationRate(0.03)
+                .returnRate(0.02)
+                .daysSinceLastOrder(5)
+                .uniqueSkusOrdered(12)
+                .topSkuConcentration(0.35)
+                .totalPayments(140)
+                .onTimePaymentPct(0.88)
+                .avgDaysToPay(12.0)
+                .worstDaysToPay(30)
+                .partialPaymentFrequency(0.05)
+                .paymentMethodDistribution(Map.of("MPESA", 60, "CASH", 30, "BANK_TRANSFER", 10))
+                .consecutiveOnTimeStreak(8)
+                .totalOverdueAmount(BigDecimal.ZERO)
+                .currentCreditLimit(BigDecimal.valueOf(200_000))
+                .currentUtilizationRatio(0.45)
+                .peakUtilizationRatio(0.70)
+                .utilizationTrendSlope(-0.02)
+                .limitIncreaseCount(1)
+                .daysSinceLastLimitChange(90)
+                .businessCategoryEncoded("retail")
+                .relationshipTenureDays(450)
+                .verificationStatus("VERIFIED")
+                .geographicCluster("Nairobi")
+                .build();
+    }
+
+    private MerchantFeatures buildFeaturesWithOnTimePayment(double onTimePaymentPct) {
+        return MerchantFeatures.builder()
+                .merchantId(UUID.randomUUID())
+                .computedAt(LocalDateTime.now())
+                .totalOrders(200)
+                .orderFrequencyPerWeek(3.0)
+                .avgOrderValue(BigDecimal.valueOf(30_000))
+                .orderValueTrendSlope12w(0.03)
+                .orderConsistencyStddev(4_000.0)
+                .cancellationRate(0.02)
+                .returnRate(0.01)
+                .daysSinceLastOrder(3)
+                .uniqueSkusOrdered(15)
+                .topSkuConcentration(0.30)
+                .totalPayments(195)
+                .onTimePaymentPct(onTimePaymentPct)
+                .avgDaysToPay(8.0)
+                .worstDaysToPay(20)
+                .partialPaymentFrequency(0.02)
+                .paymentMethodDistribution(Map.of("MPESA", 70, "CASH", 20, "BANK_TRANSFER", 10))
+                .consecutiveOnTimeStreak(12)
+                .totalOverdueAmount(BigDecimal.ZERO)
+                .currentCreditLimit(BigDecimal.valueOf(300_000))
+                .currentUtilizationRatio(0.40)
+                .peakUtilizationRatio(0.65)
+                .utilizationTrendSlope(-0.01)
+                .limitIncreaseCount(2)
+                .daysSinceLastLimitChange(60)
+                .businessCategoryEncoded("retail")
+                .relationshipTenureDays(600)
+                .verificationStatus("VERIFIED")
+                .geographicCluster("Nairobi")
+                .build();
+    }
+
+    private MerchantFeatures buildFeaturesWithTenure(int tenureDays) {
+        return MerchantFeatures.builder()
+                .merchantId(UUID.randomUUID())
+                .computedAt(LocalDateTime.now())
+                .totalOrders(180)
+                .orderFrequencyPerWeek(2.8)
+                .avgOrderValue(BigDecimal.valueOf(28_000))
+                .orderValueTrendSlope12w(0.04)
+                .orderConsistencyStddev(4_500.0)
+                .cancellationRate(0.03)
+                .returnRate(0.02)
+                .daysSinceLastOrder(4)
+                .uniqueSkusOrdered(14)
+                .topSkuConcentration(0.32)
+                .totalPayments(170)
+                .onTimePaymentPct(0.85)
+                .avgDaysToPay(10.0)
+                .worstDaysToPay(25)
+                .partialPaymentFrequency(0.04)
+                .paymentMethodDistribution(Map.of("MPESA", 65, "CASH", 25, "BANK_TRANSFER", 10))
+                .consecutiveOnTimeStreak(10)
+                .totalOverdueAmount(BigDecimal.ZERO)
+                .currentCreditLimit(BigDecimal.valueOf(250_000))
+                .currentUtilizationRatio(0.42)
+                .peakUtilizationRatio(0.68)
+                .utilizationTrendSlope(-0.01)
+                .limitIncreaseCount(1)
+                .daysSinceLastLimitChange(120)
+                .businessCategoryEncoded("retail")
+                .relationshipTenureDays(tenureDays)
+                .verificationStatus("VERIFIED")
+                .geographicCluster("Mombasa")
+                .build();
+    }
+
+    private MerchantFeatures buildFeaturesWithUtilization(double utilization) {
+        return MerchantFeatures.builder()
+                .merchantId(UUID.randomUUID())
+                .computedAt(LocalDateTime.now())
+                .totalOrders(120)
+                .orderFrequencyPerWeek(2.0)
+                .avgOrderValue(BigDecimal.valueOf(20_000))
+                .orderValueTrendSlope12w(0.01)
+                .orderConsistencyStddev(6_000.0)
+                .cancellationRate(0.05)
+                .returnRate(0.03)
+                .daysSinceLastOrder(8)
+                .uniqueSkusOrdered(10)
+                .topSkuConcentration(0.40)
+                .totalPayments(110)
+                .onTimePaymentPct(0.75)
+                .avgDaysToPay(18.0)
+                .worstDaysToPay(45)
+                .partialPaymentFrequency(0.10)
+                .paymentMethodDistribution(Map.of("MPESA", 55, "CASH", 35, "BANK_TRANSFER", 10))
+                .consecutiveOnTimeStreak(4)
+                .totalOverdueAmount(BigDecimal.valueOf(5_000))
+                .currentCreditLimit(BigDecimal.valueOf(150_000))
+                .currentUtilizationRatio(utilization)
+                .peakUtilizationRatio(utilization + 0.05)
+                .utilizationTrendSlope(0.02)
+                .limitIncreaseCount(0)
+                .daysSinceLastLimitChange(200)
+                .businessCategoryEncoded("retail")
+                .relationshipTenureDays(200)
+                .verificationStatus("PENDING")
+                .geographicCluster("Kisumu")
+                .build();
+    }
+
+    // ── Tests ──────────────────────────────────────────────────────────────
+
     @Test
     void testPredictWithNoModel() {
-        // Given: No model is available
         UUID merchantId = UUID.randomUUID();
         when(modelLoader.loadModel("credit_limit_regressor")).thenReturn(null);
+        when(merchantFeatureService.computeFeatures(merchantId)).thenReturn(buildTestFeatures());
 
-        // Generate synthetic merchant features
-        List<SyntheticMerchant> merchants = syntheticDataGenerator.generateDataset(1);
-        when(merchantFeatureService.computeFeatures(merchantId))
-                .thenReturn(merchants.get(0).features());
-
-        // When: Predict
         BigDecimal creditLimit = creditLimitRegressor.predictCreditLimit(merchantId);
 
-        // Then: Should return default limit (100k)
         assertThat(creditLimit).isNotNull();
         assertThat(creditLimit).isEqualTo(BigDecimal.valueOf(100_000));
     }
 
     @Test
     void testCreditLimitConstraints() {
-        // Verify that predictions are constrained between min and max
         UUID merchantId = UUID.randomUUID();
         when(modelLoader.loadModel("credit_limit_regressor")).thenReturn(null);
 
-        List<SyntheticMerchant> merchants = syntheticDataGenerator.generateDataset(10);
-
-        for (SyntheticMerchant merchant : merchants) {
-            when(merchantFeatureService.computeFeatures(merchantId))
-                    .thenReturn(merchant.features());
-
+        for (int i = 0; i < 10; i++) {
+            when(merchantFeatureService.computeFeatures(merchantId)).thenReturn(buildTestFeatures());
             BigDecimal creditLimit = creditLimitRegressor.predictCreditLimit(merchantId);
-
             assertThat(creditLimit).isGreaterThanOrEqualTo(MIN_LIMIT);
             assertThat(creditLimit).isLessThanOrEqualTo(MAX_LIMIT);
         }
@@ -82,19 +209,12 @@ class CreditLimitRegressorTest {
 
     @Test
     void testCreditLimitRounding() {
-        // Credit limits should be rounded to nearest 10k
         UUID merchantId = UUID.randomUUID();
         when(modelLoader.loadModel("credit_limit_regressor")).thenReturn(null);
 
-        List<SyntheticMerchant> merchants = syntheticDataGenerator.generateDataset(10);
-
-        for (SyntheticMerchant merchant : merchants) {
-            when(merchantFeatureService.computeFeatures(merchantId))
-                    .thenReturn(merchant.features());
-
+        for (int i = 0; i < 10; i++) {
+            when(merchantFeatureService.computeFeatures(merchantId)).thenReturn(buildTestFeatures());
             BigDecimal creditLimit = creditLimitRegressor.predictCreditLimit(merchantId);
-
-            // Should be multiple of 10,000
             long limitValue = creditLimit.longValue();
             assertThat(limitValue % 10_000).isEqualTo(0);
         }
@@ -102,191 +222,109 @@ class CreditLimitRegressorTest {
 
     @Test
     void testCalculateIdealLimit() {
-        // Generate merchants with different risk profiles
-        List<SyntheticMerchant> merchants = syntheticDataGenerator.generateDataset(10);
+        MerchantFeatures features = buildTestFeatures();
+        double defaultProb = 0.15;
 
-        for (SyntheticMerchant merchant : merchants) {
-            MerchantFeatures features = merchant.features();
-            double defaultProb = merchant.defaultProbability();
+        BigDecimal idealLimit = creditLimitRegressor.calculateIdealLimit(features, defaultProb);
 
-            BigDecimal idealLimit = creditLimitRegressor.calculateIdealLimit(features, defaultProb);
+        assertThat(idealLimit).isGreaterThanOrEqualTo(MIN_LIMIT);
+        assertThat(idealLimit).isLessThanOrEqualTo(MAX_LIMIT);
+        assertThat(idealLimit.longValue() % 10_000).isEqualTo(0);
 
-            // Verify constraints
-            assertThat(idealLimit).isGreaterThanOrEqualTo(MIN_LIMIT);
-            assertThat(idealLimit).isLessThanOrEqualTo(MAX_LIMIT);
-
-            // Should be rounded to 10k
-            assertThat(idealLimit.longValue() % 10_000).isEqualTo(0);
-
-            System.out.println("Merchant: " + merchant.archetypeName() +
-                    " | Default Prob: " + String.format("%.2f", defaultProb) +
-                    " | Ideal Limit: " + idealLimit);
-        }
+        System.out.println("Default prob: " + defaultProb + " | Ideal limit: " + idealLimit);
     }
 
     @Test
     void testIdealLimitRiskAdjustment() {
-        // Higher default probability should result in lower credit limit
-        List<SyntheticMerchant> merchants = syntheticDataGenerator.generateDataset(100);
+        // Low-risk merchant (5% default probability)
+        MerchantFeatures lowRiskFeatures = buildTestFeatures();
+        double lowRiskProb = 0.05;
 
-        // Find low-risk and high-risk merchants
-        SyntheticMerchant lowRisk = merchants.stream()
-                .filter(m -> m.defaultProbability() < 0.10)
-                .findFirst()
-                .orElseThrow();
+        // High-risk merchant (45% default probability) — worse payment behaviour
+        MerchantFeatures highRiskFeatures = buildFeaturesWithUtilization(0.90);
+        double highRiskProb = 0.45;
 
-        SyntheticMerchant highRisk = merchants.stream()
-                .filter(m -> m.defaultProbability() > 0.40)
-                .findFirst()
-                .orElseThrow();
+        BigDecimal lowRiskLimit = creditLimitRegressor.calculateIdealLimit(lowRiskFeatures, lowRiskProb);
+        BigDecimal highRiskLimit = creditLimitRegressor.calculateIdealLimit(highRiskFeatures, highRiskProb);
 
-        BigDecimal lowRiskLimit = creditLimitRegressor.calculateIdealLimit(
-                lowRisk.features(), lowRisk.defaultProbability());
+        System.out.println("Low-risk  (prob=" + lowRiskProb  + "): " + lowRiskLimit);
+        System.out.println("High-risk (prob=" + highRiskProb + "): " + highRiskLimit);
 
-        BigDecimal highRiskLimit = creditLimitRegressor.calculateIdealLimit(
-                highRisk.features(), highRisk.defaultProbability());
-
-        System.out.println("Low-risk merchant (" + lowRisk.archetypeName() + "):");
-        System.out.println("  Default prob: " + String.format("%.2f", lowRisk.defaultProbability()));
-        System.out.println("  Ideal limit: " + lowRiskLimit);
-
-        System.out.println("High-risk merchant (" + highRisk.archetypeName() + "):");
-        System.out.println("  Default prob: " + String.format("%.2f", highRisk.defaultProbability()));
-        System.out.println("  Ideal limit: " + highRiskLimit);
-
-        // Low-risk should have higher limit than high-risk (generally)
-        // Note: This may not always be true due to other factors, so we just verify the logic runs
         assertThat(lowRiskLimit).isGreaterThan(BigDecimal.ZERO);
         assertThat(highRiskLimit).isGreaterThan(BigDecimal.ZERO);
     }
 
     @Test
     void testIdealLimitPaymentHistoryBonus() {
-        // Merchants with high on-time payment should get limit boost
-        List<SyntheticMerchant> merchants = syntheticDataGenerator.generateDataset(100);
+        MerchantFeatures excellentPayer = buildFeaturesWithOnTimePayment(0.95);
+        double defaultProb = 0.10;
 
-        SyntheticMerchant excellentPayer = merchants.stream()
-                .filter(m -> m.features().onTimePaymentPct() > 0.90)
-                .findFirst()
-                .orElseThrow();
+        BigDecimal limit = creditLimitRegressor.calculateIdealLimit(excellentPayer, defaultProb);
 
-        BigDecimal limit = creditLimitRegressor.calculateIdealLimit(
-                excellentPayer.features(),
-                excellentPayer.defaultProbability()
-        );
-
-        // Should get 10% boost for on-time payment > 90%
         assertThat(limit).isGreaterThan(BigDecimal.ZERO);
-
-        System.out.println("Excellent payer:");
-        System.out.println("  On-time payment: " + String.format("%.1f%%", excellentPayer.features().onTimePaymentPct() * 100));
-        System.out.println("  Credit limit: " + limit);
+        System.out.println("Excellent payer (onTime=95%): " + limit);
     }
 
     @Test
     void testIdealLimitTenureBonus() {
-        // Merchants with long tenure should get limit boost
-        List<SyntheticMerchant> merchants = syntheticDataGenerator.generateDataset(100);
+        MerchantFeatures longTenure = buildFeaturesWithTenure(400);
+        double defaultProb = 0.12;
 
-        SyntheticMerchant longTenure = merchants.stream()
-                .filter(m -> m.features().relationshipTenureDays() > 365)
-                .findFirst()
-                .orElseThrow();
+        BigDecimal limit = creditLimitRegressor.calculateIdealLimit(longTenure, defaultProb);
 
-        BigDecimal limit = creditLimitRegressor.calculateIdealLimit(
-                longTenure.features(),
-                longTenure.defaultProbability()
-        );
-
-        // Should get 15% boost for tenure > 1 year
         assertThat(limit).isGreaterThan(BigDecimal.ZERO);
-
-        System.out.println("Long tenure merchant:");
-        System.out.println("  Tenure days: " + longTenure.features().relationshipTenureDays());
-        System.out.println("  Credit limit: " + limit);
+        System.out.println("Long tenure (400 days): " + limit);
     }
 
     @Test
     void testIdealLimitUtilizationPenalty() {
-        // Merchants with high utilization should get limit reduction
-        List<SyntheticMerchant> merchants = syntheticDataGenerator.generateDataset(100);
+        MerchantFeatures highUtilization = buildFeaturesWithUtilization(0.85);
+        double defaultProb = 0.20;
 
-        SyntheticMerchant highUtilization = merchants.stream()
-                .filter(m -> m.features().currentUtilizationRatio() > 0.80)
-                .findFirst()
-                .orElseThrow();
+        BigDecimal limit = creditLimitRegressor.calculateIdealLimit(highUtilization, defaultProb);
 
-        BigDecimal limit = creditLimitRegressor.calculateIdealLimit(
-                highUtilization.features(),
-                highUtilization.defaultProbability()
-        );
-
-        // Should get 10% penalty for utilization > 80%
         assertThat(limit).isGreaterThan(BigDecimal.ZERO);
-
-        System.out.println("High utilization merchant:");
-        System.out.println("  Utilization: " + String.format("%.1f%%", highUtilization.features().currentUtilizationRatio() * 100));
-        System.out.println("  Credit limit: " + limit);
+        System.out.println("High utilization (85%): " + limit);
     }
 
     @Test
     void testExceptionHandling() {
-        // Given: merchantFeatureService throws exception
         UUID merchantId = UUID.randomUUID();
         when(modelLoader.loadModel("credit_limit_regressor")).thenReturn(null);
         when(merchantFeatureService.computeFeatures(merchantId))
                 .thenThrow(new RuntimeException("Database error"));
 
-        // When: Predict
         BigDecimal creditLimit = creditLimitRegressor.predictCreditLimit(merchantId);
 
-        // Then: Should return default limit (not throw exception)
         assertThat(creditLimit).isNotNull();
         assertThat(creditLimit).isEqualTo(BigDecimal.valueOf(100_000));
     }
 
     @Test
     void testPredictWithMultipleMerchants() {
-        // Generate 10 synthetic merchants
-        List<SyntheticMerchant> merchants = syntheticDataGenerator.generateDataset(10);
-
+        UUID merchantId = UUID.randomUUID();
         when(modelLoader.loadModel("credit_limit_regressor")).thenReturn(null);
 
-        for (SyntheticMerchant merchant : merchants) {
-            UUID merchantId = UUID.randomUUID();
-            when(merchantFeatureService.computeFeatures(merchantId))
-                    .thenReturn(merchant.features());
-
+        for (int i = 0; i < 10; i++) {
+            when(merchantFeatureService.computeFeatures(merchantId)).thenReturn(buildTestFeatures());
             BigDecimal creditLimit = creditLimitRegressor.predictCreditLimit(merchantId);
-
             assertThat(creditLimit).isNotNull();
             assertThat(creditLimit).isGreaterThanOrEqualTo(MIN_LIMIT);
             assertThat(creditLimit).isLessThanOrEqualTo(MAX_LIMIT);
-
-            System.out.println("Merchant: " + merchant.archetypeName() +
-                    " | Predicted Limit: " + creditLimit);
         }
     }
 
     @Test
     void testFeatureIntegration() {
-        // Validate that features are correctly passed to regressor
-        List<SyntheticMerchant> merchants = syntheticDataGenerator.generateDataset(5);
-
+        UUID merchantId = UUID.randomUUID();
         when(modelLoader.loadModel("credit_limit_regressor")).thenReturn(null);
 
-        for (SyntheticMerchant merchant : merchants) {
-            UUID merchantId = UUID.randomUUID();
-            when(merchantFeatureService.computeFeatures(merchantId))
-                    .thenReturn(merchant.features());
-
+        for (int i = 0; i < 5; i++) {
+            MerchantFeatures features = buildTestFeatures();
+            when(merchantFeatureService.computeFeatures(merchantId)).thenReturn(features);
             BigDecimal creditLimit = creditLimitRegressor.predictCreditLimit(merchantId);
 
-            // For default result, should always return 100k
             assertThat(creditLimit).isEqualTo(BigDecimal.valueOf(100_000));
-
-            // Features should have realistic values
-            MerchantFeatures features = merchant.features();
             assertThat(features.totalOrders()).isGreaterThan(0);
             assertThat(features.avgOrderValue()).isGreaterThan(BigDecimal.ZERO);
             assertThat(features.orderFrequencyPerWeek()).isGreaterThan(0.0);
@@ -295,31 +333,20 @@ class CreditLimitRegressorTest {
 
     @Test
     void testIdealLimitBasedOnMonthlyVolume() {
-        // Ideal limit should be roughly 2x monthly order volume (before adjustments)
-        List<SyntheticMerchant> merchants = syntheticDataGenerator.generateDataset(10);
+        MerchantFeatures features = buildTestFeatures();
+        double defaultProb = 0.15;
 
-        for (SyntheticMerchant merchant : merchants) {
-            MerchantFeatures features = merchant.features();
+        BigDecimal monthlyOrderValue = features.avgOrderValue()
+                .multiply(BigDecimal.valueOf(features.orderFrequencyPerWeek() * 4.33));
 
-            // Calculate expected monthly volume
-            BigDecimal monthlyOrderValue = features.avgOrderValue()
-                    .multiply(BigDecimal.valueOf(features.orderFrequencyPerWeek() * 4.33));
+        BigDecimal idealLimit = creditLimitRegressor.calculateIdealLimit(features, defaultProb);
 
-            // Base limit should be ~2x monthly volume (before adjustments)
-            BigDecimal idealLimit = creditLimitRegressor.calculateIdealLimit(
-                    features,
-                    merchant.defaultProbability()
-            );
+        System.out.println("Monthly volume: " + monthlyOrderValue);
+        System.out.println("Ideal limit: " + idealLimit);
+        System.out.println("Ratio: " + idealLimit.divide(monthlyOrderValue, 2, java.math.RoundingMode.HALF_UP));
 
-            System.out.println("Monthly volume: " + monthlyOrderValue);
-            System.out.println("Ideal limit: " + idealLimit);
-            System.out.println("Ratio: " + idealLimit.divide(monthlyOrderValue, 2, java.math.RoundingMode.HALF_UP));
-            System.out.println("---");
-
-            // Ideal limit should be positive and within constraints
-            assertThat(idealLimit).isGreaterThan(BigDecimal.ZERO);
-            assertThat(idealLimit).isGreaterThanOrEqualTo(MIN_LIMIT);
-            assertThat(idealLimit).isLessThanOrEqualTo(MAX_LIMIT);
-        }
+        assertThat(idealLimit).isGreaterThan(BigDecimal.ZERO);
+        assertThat(idealLimit).isGreaterThanOrEqualTo(MIN_LIMIT);
+        assertThat(idealLimit).isLessThanOrEqualTo(MAX_LIMIT);
     }
 }
