@@ -4,6 +4,11 @@ import com.zuqi.api.dto.pos.*;
 import com.zuqi.domain.branch.DistributorBranch;
 import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.inventory.*;
+import com.zuqi.domain.order.Order;
+import com.zuqi.domain.order.OrderItem;
+import com.zuqi.domain.order.OrderStatus;
+import com.zuqi.domain.order.OrderType;
+import com.zuqi.domain.order.PaymentStatus;
 import com.zuqi.domain.pos.*;
 import com.zuqi.domain.product.Product;
 import com.zuqi.domain.user.User;
@@ -51,6 +56,7 @@ public class PosServiceImpl implements PosService {
     private final WarehouseRepository warehouseRepository;
     private final UserRepository userRepository;
     private final CustomerRepository customerRepository;
+    private final OrderRepository orderRepository;
     private final SecurityUtils securityUtils;
     private final InvoiceService invoiceService;
     private final PaymentService paymentService;
@@ -163,6 +169,60 @@ public class PosServiceImpl implements PosService {
     }
 
     @Override
+    public ShiftReconciliationResponse getShiftReconciliation(UUID shiftId) {
+        PosShift shift = shiftRepository.findById(shiftId)
+                .orElseThrow(() -> new ResourceNotFoundException("Shift", "id", shiftId));
+
+        LocalDateTime from = shift.getOpenedAt();
+        LocalDateTime to = LocalDateTime.now();
+        UUID branchId = shift.getBranch().getId();
+
+        long totalTransactions = saleRepository.countByBranchAndStatusAndDateRange(
+                branchId, PosSaleStatus.COMPLETED, from, to);
+
+        BigDecimal totalSales = saleRepository.sumTotalByBranchAndStatusAndDateRange(
+                branchId, PosSaleStatus.COMPLETED, from, to);
+        totalSales = totalSales != null ? totalSales : BigDecimal.ZERO;
+
+        List<Object[]> breakdown = paymentRepository
+                .sumByPaymentMethodForBranchStatusAndDateRange(branchId, PosSaleStatus.COMPLETED, from, to);
+
+        BigDecimal cashCollected = BigDecimal.ZERO;
+        BigDecimal cardCollected = BigDecimal.ZERO;
+        BigDecimal mpesaCollected = BigDecimal.ZERO;
+        BigDecimal otherCollected = BigDecimal.ZERO;
+
+        for (Object[] row : breakdown) {
+            PosPaymentMethod method = (PosPaymentMethod) row[0];
+            BigDecimal amount = (BigDecimal) row[1];
+            if (amount == null) continue;
+            switch (method) {
+                case CASH -> cashCollected = cashCollected.add(amount);
+                case CARD -> cardCollected = cardCollected.add(amount);
+                case MPESA -> mpesaCollected = mpesaCollected.add(amount);
+                default -> otherCollected = otherCollected.add(amount);
+            }
+        }
+
+        BigDecimal expectedCash = shift.getOpeningFloat().add(cashCollected);
+
+        return ShiftReconciliationResponse.builder()
+                .shiftId(shift.getId())
+                .cashierName(shift.getCashier().getFirstName() + " " + shift.getCashier().getLastName())
+                .branchName(shift.getBranch().getName())
+                .openedAt(shift.getOpenedAt())
+                .openingFloat(shift.getOpeningFloat())
+                .totalTransactions(totalTransactions)
+                .totalSales(totalSales)
+                .cashCollected(cashCollected)
+                .cardCollected(cardCollected)
+                .mpesaCollected(mpesaCollected)
+                .otherCollected(otherCollected)
+                .expectedCash(expectedCash)
+                .build();
+    }
+
+    @Override
     public PosShiftResponse getCurrentShift(UUID branchId, UUID cashierId) {
         PosShift shift = shiftRepository.findByBranchIdAndCashierIdAndStatus(branchId, cashierId, PosShiftStatus.OPEN)
                 .orElseThrow(() -> new ResourceNotFoundException("Open Shift", "branchId/cashierId", branchId + "/" + cashierId));
@@ -194,7 +254,7 @@ public class PosServiceImpl implements PosService {
                 .branch(branch)
                 .shift(shift)
                 .cashier(cashier)
-                .status(PosSaleStatus.DRAFT)
+                .status(PosSaleStatus.UNPAID)
                 .customer(customer)
                 .customerName(customer != null ? customer.getBusinessName() : request.getCustomerName())
                 .customerPhone(customer != null ? customer.getPhone() : request.getCustomerPhone())
@@ -209,7 +269,7 @@ public class PosServiceImpl implements PosService {
     @Transactional
     public PosSaleResponse updateSaleItems(UUID saleId, UpdateSaleItemsRequest request) {
         PosSale sale = getSaleEntity(saleId);
-        validateSaleDraft(sale);
+        validateSaleUnpaid(sale);
 
         Warehouse warehouse = resolveWarehouse(sale.getBranch().getId(), sale.getBranch().getDistributor().getId());
 
@@ -259,6 +319,13 @@ public class PosServiceImpl implements PosService {
             log.error("Failed to generate invoice for sale {}: {}", saleId, e.getMessage());
         }
 
+        // Create or update the Order record immediately so it appears as UNPAID in the orders list
+        try {
+            upsertOrderFromPosSale(savedSale);
+        } catch (Exception e) {
+            log.error("Order upsert failed for POS sale {}: {}", saleId, e.getMessage(), e);
+        }
+
         return mapToSaleResponse(savedSale);
     }
 
@@ -266,7 +333,7 @@ public class PosServiceImpl implements PosService {
     @Transactional
     public PosSaleResponse addPayment(UUID saleId, ProcessPaymentRequest request) {
         PosSale sale = getSaleEntity(saleId);
-        validateSaleDraft(sale);
+        validateSaleUnpaid(sale);
 
         PosSalePayment payment = PosSalePayment.builder()
                 .sale(sale)
@@ -286,14 +353,34 @@ public class PosServiceImpl implements PosService {
         BigDecimal change = totalPaid.subtract(sale.getTotalAmount());
         sale.setChangeGiven(change.compareTo(BigDecimal.ZERO) > 0 ? change : BigDecimal.ZERO);
 
-        return mapToSaleResponse(saleRepository.save(sale));
+        PosSale savedSale = saleRepository.save(sale);
+
+        // GL: DR Cash / CR AR for this payment
+        try {
+            glAutoPostingService.postPosSalePayment(savedSale, payment.getAmount());
+        } catch (Exception e) {
+            log.warn("GL auto-post skipped (POS payment) for sale {}: {}", saleId, e.getMessage());
+        }
+
+        // Update the linked Order's paid amount and payment status
+        try {
+            orderRepository.findByPosSaleId(savedSale.getId()).ifPresent(order -> {
+                order.setPaidAmount(totalPaid);
+                order.setPaymentStatus(resolvePaymentStatus(totalPaid, savedSale.getTotalAmount()));
+                orderRepository.save(order);
+            });
+        } catch (Exception e) {
+            log.warn("Order payment status update failed for sale {}: {}", saleId, e.getMessage());
+        }
+
+        return mapToSaleResponse(savedSale);
     }
 
     @Override
     @Transactional
     public PosSaleResponse completeSale(UUID saleId, UUID warehouseId) {
         PosSale sale = getSaleEntity(saleId);
-        validateSaleDraft(sale);
+        validateSaleUnpaid(sale);
 
         if (sale.getItems().isEmpty()) {
             throw new ValidationException("Cannot complete a sale with no items");
@@ -310,11 +397,14 @@ public class PosServiceImpl implements PosService {
         // Record payment transactions (one Payment record per tender type)
         paymentService.createPaymentsForPosSale(savedSale);
 
-        // Auto-post to GL: DR Cash+AR / CR Revenue, and DR COGS / CR Inventory
+        // GL revenue + COGS were already posted when items were first set (accrual basis).
+        // No new revenue entry here — completeSale only finalizes the order status.
+
+        // Finalize the Order record (set status=DELIVERED, assign receipt number as order number)
         try {
-            glAutoPostingService.postPosSaleCompleted(savedSale);
+            finalizeOrderFromPosSale(savedSale);
         } catch (Exception e) {
-            log.warn("GL auto-post skipped (POS sale completed) for {}: {}", savedSale.getReceiptNumber(), e.getMessage());
+            log.error("Order finalization failed for POS sale {}: {}", savedSale.getReceiptNumber(), e.getMessage(), e);
         }
 
         // Publish event — invoice is created AFTER this transaction commits
@@ -450,6 +540,138 @@ public class PosServiceImpl implements PosService {
 
     // ---- Helpers ----
 
+    /**
+     * Creates or updates the Order linked to a POS sale with PENDING status and PENDING
+     * payment status. Called from {@link #updateSaleItems} so the order appears in the
+     * orders list immediately — before payment is recorded.
+     */
+    private void upsertOrderFromPosSale(PosSale sale) {
+        BigDecimal totalPaid = sale.getAmountPaid() != null ? sale.getAmountPaid() : BigDecimal.ZERO;
+        PaymentStatus paymentStatus = resolvePaymentStatus(totalPaid, sale.getTotalAmount());
+
+        Order order = orderRepository.findByPosSaleId(sale.getId()).orElse(null);
+
+        if (order == null) {
+            // Temporary order number using sale ID; replaced by receipt number on completeSale
+            String tempOrderNum = "POS-" + sale.getId().toString();
+            order = Order.builder()
+                    .orderNumber(tempOrderNum)
+                    .distributor(sale.getBranch().getDistributor())
+                    .merchant(sale.getCustomer())
+                    .salesRep(sale.getCashier())
+                    .orderType(OrderType.POS)
+                    .status(OrderStatus.PENDING)
+                    .paymentStatus(paymentStatus)
+                    .subtotal(sale.getSubtotal())
+                    .discountAmount(sale.getDiscountAmount())
+                    .totalAmount(sale.getTotalAmount())
+                    .paidAmount(totalPaid)
+                    .notes(sale.getNotes())
+                    .posSaleId(sale.getId())
+                    .build();
+
+            for (PosSaleItem saleItem : sale.getItems()) {
+                OrderItem orderItem = OrderItem.builder()
+                        .order(order).product(saleItem.getProduct())
+                        .quantity(saleItem.getQuantity()).unitPrice(saleItem.getUnitPrice())
+                        .totalAmount(saleItem.getLineTotal()).build();
+                order.getItems().add(orderItem);
+            }
+
+            orderRepository.save(order);
+            log.info("Created PENDING Order {} from POS sale {}", order.getOrderNumber(), sale.getId());
+
+            // GL: DR AR / CR Revenue (accrual — revenue recognized when sale is created)
+            try {
+                glAutoPostingService.postPosSaleCompleted(sale);
+            } catch (Exception e) {
+                log.warn("GL auto-post skipped (POS revenue) for sale {}: {}", sale.getId(), e.getMessage());
+            }
+
+            // GL: DR COGS / CR Inventory — separate REQUIRES_NEW transaction to avoid
+            // duplicate entry-number collision with the revenue entry above
+            try {
+                glAutoPostingService.postPosCogs(sale);
+            } catch (Exception e) {
+                log.warn("GL auto-post skipped (POS COGS) for sale {}: {}", sale.getId(), e.getMessage());
+            }
+        } else {
+            // Update items and totals in case items were changed
+            order.getItems().clear();
+            for (PosSaleItem saleItem : sale.getItems()) {
+                OrderItem orderItem = OrderItem.builder()
+                        .order(order).product(saleItem.getProduct())
+                        .quantity(saleItem.getQuantity()).unitPrice(saleItem.getUnitPrice())
+                        .totalAmount(saleItem.getLineTotal()).build();
+                order.getItems().add(orderItem);
+            }
+            order.setSubtotal(sale.getSubtotal());
+            order.setDiscountAmount(sale.getDiscountAmount());
+            order.setTotalAmount(sale.getTotalAmount());
+            order.setPaidAmount(totalPaid);
+            order.setPaymentStatus(paymentStatus);
+            order.setMerchant(sale.getCustomer());
+
+            orderRepository.save(order);
+            log.info("Updated Order {} from POS sale {}", order.getOrderNumber(), sale.getId());
+        }
+    }
+
+    /**
+     * Marks the linked Order as DELIVERED (sale complete) and assigns the receipt number.
+     * Falls back to creating a new Order if one doesn't exist yet.
+     */
+    private void finalizeOrderFromPosSale(PosSale sale) {
+        BigDecimal totalPaid = sale.getAmountPaid() != null ? sale.getAmountPaid() : BigDecimal.ZERO;
+        PaymentStatus paymentStatus = resolvePaymentStatus(totalPaid, sale.getTotalAmount());
+
+        Order order = orderRepository.findByPosSaleId(sale.getId()).orElse(null);
+
+        if (order == null) {
+            // Fallback: create if upsertOrderFromPosSale was somehow not called
+            order = Order.builder()
+                    .orderNumber(sale.getReceiptNumber())
+                    .distributor(sale.getBranch().getDistributor())
+                    .merchant(sale.getCustomer())
+                    .salesRep(sale.getCashier())
+                    .orderType(OrderType.POS)
+                    .status(OrderStatus.DELIVERED)
+                    .paymentStatus(paymentStatus)
+                    .subtotal(sale.getSubtotal())
+                    .discountAmount(sale.getDiscountAmount())
+                    .totalAmount(sale.getTotalAmount())
+                    .paidAmount(totalPaid)
+                    .notes(sale.getNotes())
+                    .posSaleId(sale.getId())
+                    .build();
+
+            for (PosSaleItem saleItem : sale.getItems()) {
+                OrderItem orderItem = OrderItem.builder()
+                        .order(order).product(saleItem.getProduct())
+                        .quantity(saleItem.getQuantity()).unitPrice(saleItem.getUnitPrice())
+                        .totalAmount(saleItem.getLineTotal()).build();
+                order.getItems().add(orderItem);
+            }
+        } else {
+            // Update existing order to DELIVERED with final receipt number
+            order.setOrderNumber(sale.getReceiptNumber());
+            order.setStatus(OrderStatus.DELIVERED);
+            order.setPaidAmount(totalPaid);
+            order.setPaymentStatus(paymentStatus);
+            order.setMerchant(sale.getCustomer());
+        }
+
+        orderRepository.save(order);
+        log.info("Finalized Order {} from POS sale {}", order.getOrderNumber(), sale.getId());
+    }
+
+    private PaymentStatus resolvePaymentStatus(BigDecimal paid, BigDecimal total) {
+        if (total == null || total.compareTo(BigDecimal.ZERO) == 0) return PaymentStatus.PENDING;
+        if (paid.compareTo(total) >= 0) return PaymentStatus.PAID;
+        if (paid.compareTo(BigDecimal.ZERO) > 0) return PaymentStatus.PARTIAL;
+        return PaymentStatus.PENDING;
+    }
+
     /** Returns the first active warehouse for the branch, falling back to distributor warehouse. */
     private Warehouse resolveWarehouse(UUID branchId, UUID distributorId) {
         List<Warehouse> branchWarehouses = warehouseRepository.findByBranchIdAndActiveTrue(branchId);
@@ -495,9 +717,9 @@ public class PosServiceImpl implements PosService {
                 .orElseThrow(() -> new ResourceNotFoundException("Sale", "id", saleId));
     }
 
-    private void validateSaleDraft(PosSale sale) {
-        if (sale.getStatus() != PosSaleStatus.DRAFT) {
-            throw new ValidationException("Operation only allowed on DRAFT sales. Current status: " + sale.getStatus());
+    private void validateSaleUnpaid(PosSale sale) {
+        if (sale.getStatus() != PosSaleStatus.UNPAID) {
+            throw new ValidationException("Operation only allowed on UNPAID sales. Current status: " + sale.getStatus());
         }
     }
 

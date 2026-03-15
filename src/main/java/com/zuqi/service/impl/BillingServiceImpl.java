@@ -238,7 +238,7 @@ public class BillingServiceImpl implements BillingService {
         sub.setNotes(req.getNotes());
         sub.setUpdatedBy(actor);
 
-        if (req.getPackageType() == BillingPackageType.CUSTOM && req.getCustomModules() != null) {
+        if (req.getCustomModules() != null && !req.getCustomModules().isEmpty()) {
             sub.setCustomModules(toJson(req.getCustomModules()));
         } else {
             sub.setCustomModules(null);

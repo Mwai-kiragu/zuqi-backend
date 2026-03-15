@@ -1,10 +1,13 @@
 package com.zuqi.service;
 
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.user.User;
 
 public interface EmailService {
 
     void sendWelcomeEmail(User user, String temporaryPassword);
+
+    void sendCustomerOnboardingEmail(Customer customer);
 
     void sendPasswordResetEmail(User user, String resetToken);
 

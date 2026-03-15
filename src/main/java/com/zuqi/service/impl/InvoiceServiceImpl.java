@@ -59,13 +59,18 @@ public class InvoiceServiceImpl implements InvoiceService {
     public InvoiceResponse createInvoiceFromOrder(Order order) {
         log.info("Creating invoice for order: {}", order.getOrderNumber());
 
+        // Every invoice must be tied to a customer record
+        if (order.getMerchant() == null) {
+            throw new ValidationException("Invoice cannot be created: order " + order.getOrderNumber() + " has no customer assigned.");
+        }
+
         // Check if invoice already exists for this order
         if (invoiceRepository.findByOrderId(order.getId()).isPresent()) {
             throw new ValidationException("Invoice already exists for order: " + order.getOrderNumber());
         }
 
         // Generate invoice number
-        String invoiceNumber = generateInvoiceNumber();
+        String invoiceNumber = generateInvoiceNumber(order.getDistributor().getName());
 
         // Calculate due date based on payment terms
         LocalDate dueDate = LocalDate.now();
@@ -121,6 +126,12 @@ public class InvoiceServiceImpl implements InvoiceService {
         PosSale sale = posSaleRepository.findById(saleId)
                 .orElseThrow(() -> new ResourceNotFoundException("PosSale", "id", saleId));
 
+        // Invoice requires a customer — skip creation for walk-in (no-account) sales
+        if (sale.getCustomer() == null) {
+            log.info("Skipping invoice creation for POS sale {} — no customer account linked", saleId);
+            return null;
+        }
+
         boolean isCompleted = sale.getStatus() == PosSaleStatus.COMPLETED;
         BigDecimal paidAmount = isCompleted ? (sale.getAmountPaid() != null ? sale.getAmountPaid() : BigDecimal.ZERO) : BigDecimal.ZERO;
         BigDecimal total = sale.getTotalAmount() != null ? sale.getTotalAmount() : BigDecimal.ZERO;
@@ -162,7 +173,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         }
 
         // Create new invoice
-        String invoiceNumber = generateInvoiceNumber();
+        String invoiceNumber = generateInvoiceNumber(sale.getBranch().getDistributor().getName());
         Invoice invoice = Invoice.builder()
                 .invoiceNumber(invoiceNumber)
                 .sourceType("POS_SALE")
@@ -380,7 +391,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                 && invoice.getStatus() == InvoiceStatus.PAID
                 && invoice.getPosOrder() != null) {
             PosSale sale = posSaleRepository.findById(invoice.getPosOrder().getId()).orElse(null);
-            if (sale != null && sale.getStatus() == PosSaleStatus.DRAFT) {
+            if (sale != null && sale.getStatus() == PosSaleStatus.UNPAID) {
                 sale.setStatus(PosSaleStatus.COMPLETED);
                 sale.setAmountPaid(invoice.getPaidAmount());
                 sale.setCompletedAt(LocalDateTime.now());
@@ -528,11 +539,26 @@ public class InvoiceServiceImpl implements InvoiceService {
         }
     }
 
-    private String generateInvoiceNumber() {
-        String prefix = "INV-" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + "-";
+    private String generateInvoiceNumber(String distributorName) {
+        String prefix = initials(distributorName) + "-";
         Integer maxNum = invoiceRepository.findMaxInvoiceNumberByPrefix(prefix);
         int nextNum = (maxNum != null ? maxNum : 0) + 1;
-        return prefix + String.format("%04d", nextNum);
+        return prefix + String.format("%03d", nextNum);
+    }
+
+    /** Extracts uppercase initials — e.g. "Menace Distributor" → "MD". */
+    static String initials(String name) {
+        if (name == null || name.isBlank()) return "ORG";
+        String[] words = name.trim().split("\\s+");
+        StringBuilder sb = new StringBuilder();
+        for (String w : words) {
+            if (!w.isBlank()) sb.append(Character.toUpperCase(w.charAt(0)));
+        }
+        String result = sb.toString();
+        if (result.length() == 1 && words[0].length() >= 2) {
+            result = words[0].substring(0, 2).toUpperCase();
+        }
+        return result.isEmpty() ? "ORG" : result;
     }
 
     private void sendPosReceiptEmail(Invoice invoice, PosSale sale, boolean isPaid) {

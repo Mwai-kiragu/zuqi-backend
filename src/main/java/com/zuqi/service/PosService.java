@@ -20,6 +20,8 @@ public interface PosService {
 
     PosShiftResponse getCurrentShift(UUID branchId, UUID cashierId);
 
+    ShiftReconciliationResponse getShiftReconciliation(UUID shiftId);
+
     PosSaleResponse createSale(CreateSaleRequest request, UUID cashierId);
 
     PosSaleResponse updateSaleItems(UUID saleId, UpdateSaleItemsRequest request);

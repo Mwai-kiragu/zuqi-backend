@@ -20,6 +20,8 @@ public interface GlAccountRepository extends JpaRepository<GlAccount, UUID> {
 
     boolean existsByDistributorIdAndAccountCode(UUID distributorId, String accountCode);
 
+    boolean existsByDistributorId(UUID distributorId);
+
     Optional<GlAccount> findByDistributorIdAndAccountCode(UUID distributorId, String accountCode);
 
     List<GlAccount> findByDistributorIdAndActiveOrderByAccountCodeAsc(UUID distributorId, boolean active);

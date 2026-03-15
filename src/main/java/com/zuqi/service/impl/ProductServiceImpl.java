@@ -8,6 +8,7 @@ import com.zuqi.api.dto.product.ProductRequest;
 import com.zuqi.api.dto.product.ProductResponse;
 import com.zuqi.domain.branch.DistributorBranch;
 import com.zuqi.domain.distributor.Distributor;
+import com.zuqi.domain.gl.GlAccount;
 import com.zuqi.domain.product.Product;
 import com.zuqi.domain.product.ProductBranchPrice;
 import com.zuqi.domain.product.ProductCategory;
@@ -16,6 +17,7 @@ import com.zuqi.exception.DuplicateResourceException;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.repository.DistributorBranchRepository;
 import com.zuqi.repository.DistributorRepository;
+import com.zuqi.repository.GlAccountRepository;
 import com.zuqi.repository.ProductBranchPriceRepository;
 import com.zuqi.repository.ProductCategoryRepository;
 import com.zuqi.repository.ProductRepository;
@@ -34,6 +36,7 @@ import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -48,6 +51,7 @@ public class ProductServiceImpl implements ProductService {
     private final DistributorBranchRepository branchRepository;
     private final ProductBranchPriceRepository branchPriceRepository;
     private final StockRepository stockRepository;
+    private final GlAccountRepository glAccountRepository;
     private final SecurityUtils securityUtils;
 
     @Override
@@ -150,6 +154,7 @@ public class ProductServiceImpl implements ProductService {
                     .map(ProductBranchPriceResponse::fromEntity)
                     .collect(Collectors.toList()));
         }
+        enrichGlAccountNames(List.of(response));
         return response;
     }
 
@@ -185,6 +190,8 @@ public class ProductServiceImpl implements ProductService {
                 .imageUrl(request.getImageUrl())
                 .barcode(request.getBarcode())
                 .allBranches(request.isAllBranches())
+                .revenueAccountId(request.getRevenueAccountId())
+                .cogsAccountId(request.getCogsAccountId())
                 .build();
 
         if (request.getCategoryId() != null) {
@@ -247,6 +254,10 @@ public class ProductServiceImpl implements ProductService {
                     .orElseThrow(() -> new ResourceNotFoundException("ProductCategory", "id", request.getCategoryId().toString()));
             product.setCategory(category);
         }
+
+        // GL account overrides (null clears the override)
+        product.setRevenueAccountId(request.getRevenueAccountId());
+        product.setCogsAccountId(request.getCogsAccountId());
 
         Product updatedProduct = productRepository.save(product);
         log.info("Product updated successfully: {}", id);
@@ -522,11 +533,32 @@ public class ProductServiceImpl implements ProductService {
                         Collectors.mapping(ProductBranchPriceResponse::fromEntity, Collectors.toList())
                 ));
 
-        return page.map(p -> {
+        // Build response map keyed by product ID so we can enrich GL names before returning
+        Map<UUID, ProductResponse> responseMap = new java.util.LinkedHashMap<>();
+        for (Product p : page) {
             ProductResponse r = ProductResponse.fromEntity(p);
             r.setTotalStock(stockMap.getOrDefault(p.getId(), BigDecimal.ZERO));
             r.setBranchPrices(branchPricesMap.getOrDefault(p.getId(), Collections.emptyList()));
-            return r;
-        });
+            responseMap.put(p.getId(), r);
+        }
+
+        enrichGlAccountNames(new java.util.ArrayList<>(responseMap.values()));
+        return page.map(p -> responseMap.get(p.getId()));
+    }
+
+    /** Batch-load GL account names for a list of product responses. */
+    private void enrichGlAccountNames(List<ProductResponse> responses) {
+        Set<UUID> accountIds = new java.util.HashSet<>();
+        for (ProductResponse r : responses) {
+            if (r.getRevenueAccountId() != null) accountIds.add(r.getRevenueAccountId());
+            if (r.getCogsAccountId() != null) accountIds.add(r.getCogsAccountId());
+        }
+        if (accountIds.isEmpty()) return;
+
+        Map<UUID, GlAccount> accountMap = glAccountRepository.findAllById(accountIds).stream()
+                .collect(Collectors.toMap(GlAccount::getId, a -> a));
+        for (ProductResponse r : responses) {
+            r.enrichGlAccountNames(accountMap);
+        }
     }
 }

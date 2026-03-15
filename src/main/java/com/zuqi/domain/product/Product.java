@@ -68,6 +68,12 @@ public class Product {
 
     private String barcode;
 
+    @Column(name = "revenue_account_id")
+    private UUID revenueAccountId;
+
+    @Column(name = "cogs_account_id")
+    private UUID cogsAccountId;
+
     @Column(name = "all_branches", nullable = false)
     @Builder.Default
     private boolean allBranches = true;

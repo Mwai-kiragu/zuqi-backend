@@ -52,7 +52,7 @@ public class PosSale {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     @Builder.Default
-    private PosSaleStatus status = PosSaleStatus.DRAFT;
+    private PosSaleStatus status = PosSaleStatus.UNPAID;
 
     @Column(name = "subtotal", precision = 15, scale = 2)
     @Builder.Default

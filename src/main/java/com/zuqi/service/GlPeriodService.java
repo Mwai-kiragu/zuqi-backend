@@ -18,4 +18,10 @@ public interface GlPeriodService {
     GlPeriodResponse lock(UUID id, User currentUser);
     GlPeriodResponse reopen(UUID id, User currentUser);
     GlPeriod getOpenPeriodForDate(UUID distributorId, LocalDate date);
+
+    /**
+     * Returns the accounting period for the given date, creating it (as OPEN) if it doesn't
+     * exist yet. Intended for auto-posting only — never throws for a missing period.
+     */
+    GlPeriod getOrCreatePeriodForAutoPosting(UUID distributorId, LocalDate date);
 }

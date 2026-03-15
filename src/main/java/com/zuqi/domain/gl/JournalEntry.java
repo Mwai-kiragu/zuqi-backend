@@ -14,14 +14,19 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "journal_entries", indexes = {
-        @Index(name = "idx_journal_entries_distributor",   columnList = "distributor_id"),
-        @Index(name = "idx_journal_entries_period",        columnList = "period_id"),
-        @Index(name = "idx_journal_entries_status",        columnList = "status"),
-        @Index(name = "idx_journal_entries_entry_date",    columnList = "entry_date"),
-        @Index(name = "idx_journal_entries_source_module", columnList = "source_module"),
-        @Index(name = "idx_journal_entries_source_doc",    columnList = "source_document_id")
-})
+@Table(name = "journal_entries",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uq_journal_entry_number_per_distributor",
+                        columnNames = {"distributor_id", "entry_number"})
+        },
+        indexes = {
+                @Index(name = "idx_journal_entries_distributor",   columnList = "distributor_id"),
+                @Index(name = "idx_journal_entries_period",        columnList = "period_id"),
+                @Index(name = "idx_journal_entries_status",        columnList = "status"),
+                @Index(name = "idx_journal_entries_entry_date",    columnList = "entry_date"),
+                @Index(name = "idx_journal_entries_source_module", columnList = "source_module"),
+                @Index(name = "idx_journal_entries_source_doc",    columnList = "source_document_id")
+        })
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @Setter
@@ -37,7 +42,7 @@ public class JournalEntry {
     @Column(name = "distributor_id", nullable = false)
     private UUID distributorId;
 
-    @Column(name = "entry_number", length = 30, nullable = false, unique = true)
+    @Column(name = "entry_number", length = 30, nullable = false)
     private String entryNumber;
 
     @Column(name = "period_id", nullable = false)

@@ -38,8 +38,9 @@ public class SubscriptionResponse {
 
     public static SubscriptionResponse fromEntity(DistributorSubscription sub) {
         List<String> modules;
-        if (sub.getPackageType() == BillingPackageType.CUSTOM) {
-            modules = parseCustomModules(sub.getCustomModules());
+        String storedModules = sub.getCustomModules();
+        if (storedModules != null && !storedModules.isBlank()) {
+            modules = parseCustomModules(storedModules);
         } else {
             modules = sub.getPackageType().getIncludedModules();
         }

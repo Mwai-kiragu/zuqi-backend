@@ -9,7 +9,7 @@ public enum BillingPackageType {
     FREE_TRIAL {
         @Override
         public List<String> getIncludedModules() {
-            return Arrays.asList("dashboard", "orders", "merchants", "customers", "products", "inventory");
+            return Arrays.asList("dashboard", "orders", "customers", "products", "inventory");
         }
     },
 

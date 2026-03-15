@@ -23,9 +23,22 @@ public interface GlAutoPostingService {
     void postPaymentReceived(Invoice invoice, BigDecimal amount);
 
     /**
-     * DR Cash & Bank (paid amount) + DR AR (unpaid balance) / CR Sales Revenue
-     * when a POS sale is completed.  If COGS + Inventory accounts are configured,
-     * also posts DR COGS / CR Inventory for the sold items' cost.
+     * DR Accounts Receivable (full total) / CR Sales Revenue when a POS sale is completed.
+     * Runs in its own REQUIRES_NEW transaction — isolated from COGS posting.
      */
     void postPosSaleCompleted(PosSale sale);
+
+    /**
+     * DR Cost of Goods Sold / CR Inventory for a POS sale.
+     * Runs in a separate REQUIRES_NEW transaction so a missing COGS account never
+     * rolls back the revenue entry posted by {@link #postPosSaleCompleted}.
+     */
+    void postPosCogs(PosSale sale);
+
+    /**
+     * DR Cash & Bank / CR Accounts Receivable when a payment is recorded against a POS sale.
+     * @param sale          the POS sale being paid
+     * @param paymentAmount the amount received in this single payment
+     */
+    void postPosSalePayment(PosSale sale, BigDecimal paymentAmount);
 }

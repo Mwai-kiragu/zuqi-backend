@@ -27,6 +27,7 @@ import com.zuqi.exception.AuthenticationException;
 import com.zuqi.exception.DuplicateResourceException;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
+import com.zuqi.domain.inventory.Warehouse;
 import com.zuqi.repository.BranchUserRepository;
 import com.zuqi.repository.DistributorBranchRepository;
 import com.zuqi.repository.DistributorRepository;
@@ -35,6 +36,7 @@ import com.zuqi.repository.PasswordResetTokenRepository;
 import com.zuqi.repository.RefreshTokenRepository;
 import com.zuqi.repository.RoleRepository;
 import com.zuqi.repository.UserRepository;
+import com.zuqi.repository.WarehouseRepository;
 import com.zuqi.domain.audit.ActivityAction;
 import com.zuqi.security.JwtService;
 import com.zuqi.service.ActivityLogService;
@@ -77,6 +79,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private final ActivityLogService activityLogService;
     private final DistributorBranchRepository distributorBranchRepository;
     private final BranchUserRepository branchUserRepository;
+    private final WarehouseRepository warehouseRepository;
     private final GlAccountService glAccountService;
     private final GlPeriodService glPeriodService;
 
@@ -244,6 +247,17 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         branchUserRepository.save(adminBranchUser);
         log.info("Created default HQ branch {} for distributor {}", savedHqBranch.getId(), savedDistributor.getId());
 
+        // 3d. Auto-create a default Main Warehouse linked to the HQ branch
+        Warehouse defaultWarehouse = Warehouse.builder()
+                .distributor(savedDistributor)
+                .branch(savedHqBranch)
+                .name("Main Warehouse")
+                .code("MAIN")
+                .active(true)
+                .build();
+        warehouseRepository.save(defaultWarehouse);
+        log.info("Created default warehouse for distributor {}", savedDistributor.getId());
+
         // Auto-seed GL accounts + create all 12 periods for the current year
         autoSetupGl(savedDistributor, savedUser);
 
@@ -369,6 +383,17 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .build();
         branchUserRepository.save(adminBranchUser);
 
+        // 6b. Auto-create a default Main Warehouse linked to the HQ branch
+        Warehouse defaultWarehouse = Warehouse.builder()
+                .distributor(savedDistributor)
+                .branch(savedHqBranch)
+                .name("Main Warehouse")
+                .code("MAIN")
+                .active(true)
+                .build();
+        warehouseRepository.save(defaultWarehouse);
+        log.info("Created default warehouse for merchant distributor {}", savedDistributor.getId());
+
         // Auto-seed GL accounts + create all 12 periods for the current year
         autoSetupGl(savedDistributor, savedUser);
 
@@ -442,6 +467,12 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         // Update last login
         user.setLastLoginAt(LocalDateTime.now());
         userRepository.save(user);
+
+        // Ensure GL accounts and periods are provisioned (self-healing for new distributors)
+        if (user.getDistributorId() != null && !glAccountService.hasAccountsSetUp(user.getDistributorId())) {
+            distributorRepository.findById(user.getDistributorId())
+                    .ifPresent(dist -> autoSetupGl(dist, user));
+        }
 
         // Generate tokens
         String accessToken = jwtService.generateAccessToken(user);
@@ -675,6 +706,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .phoneNumber(user.getPhoneNumber())
                 .emailVerified(true)
                 .kycStatus(resolveKycStatus(user))
+                .mustChangePassword(user.isMustChangePassword())
                 .build();
     }
 

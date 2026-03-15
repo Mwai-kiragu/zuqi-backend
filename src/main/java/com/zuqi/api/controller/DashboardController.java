@@ -27,9 +27,11 @@ public class DashboardController {
     @Operation(summary = "Get dashboard stats", description = "Retrieves role-specific dashboard statistics. If distributorId is null, returns aggregated data (admin only)")
     public ResponseEntity<ApiResponse<DashboardStatsResponse>> getStats(
             @Parameter(description = "Distributor ID (optional for admins)") @RequestParam(required = false) UUID distributorId,
-            @Parameter(description = "Branch ID filter (optional)") @RequestParam(required = false) UUID branchId) {
+            @Parameter(description = "Branch ID filter (optional)") @RequestParam(required = false) UUID branchId,
+            @Parameter(description = "Period start date (optional, defaults to today)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @Parameter(description = "Period end date (optional, defaults to today)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
 
-        DashboardStatsResponse stats = dashboardService.getStats(distributorId, null, branchId);
+        DashboardStatsResponse stats = dashboardService.getStats(distributorId, null, branchId, startDate, endDate);
         return ResponseEntity.ok(ApiResponse.success(stats));
     }
 

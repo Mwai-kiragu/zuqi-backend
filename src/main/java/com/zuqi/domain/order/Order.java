@@ -50,8 +50,12 @@ public class Order {
     private Distributor distributor;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "merchant_id", nullable = false)
+    @JoinColumn(name = "merchant_id")
     private Customer merchant;
+
+    /** Set when this order was created from a POS sale. */
+    @Column(name = "pos_sale_id")
+    private UUID posSaleId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "sales_rep_id")

@@ -49,6 +49,12 @@ public class ProductRequest {
     @Size(max = 100, message = "Barcode must not exceed 100 characters")
     private String barcode;
 
+    /** Optional GL revenue account override for this product */
+    private UUID revenueAccountId;
+
+    /** Optional GL COGS account override for this product */
+    private UUID cogsAccountId;
+
     @Builder.Default
     private boolean allBranches = true;
 

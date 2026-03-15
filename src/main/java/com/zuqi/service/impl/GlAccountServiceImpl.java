@@ -121,6 +121,11 @@ public class GlAccountServiceImpl implements GlAccountService {
     }
 
     @Override
+    public boolean hasAccountsSetUp(UUID distributorId) {
+        return distributorId != null && glAccountRepository.existsByDistributorId(distributorId);
+    }
+
+    @Override
     @Transactional
     public List<GlAccountResponse> seedDefaultAccounts(UUID distributorId, User currentUser) {
         record Seed(String code, String name, AccountType type, AccountSubType subType, SystemAccountType sysType) {}
@@ -156,7 +161,21 @@ public class GlAccountServiceImpl implements GlAccountService {
 
         List<GlAccountResponse> created = new ArrayList<>();
         for (Seed s : seeds) {
-            if (glAccountRepository.existsByDistributorIdAndAccountCode(distributorId, s.code())) continue;
+            GlAccount existing = glAccountRepository
+                    .findByDistributorIdAndAccountCode(distributorId, s.code())
+                    .orElse(null);
+
+            if (existing != null) {
+                // Patch: if system type is missing, fill it in so auto-posting can find it
+                if (existing.getSystemAccountType() == null && s.sysType() != null) {
+                    existing.setSystemAccountType(s.sysType());
+                    existing.setSystemAccount(true);
+                    glAccountRepository.save(existing);
+                    log.info("Patched systemAccountType={} on GL account {} for distributor {}", s.sysType(), s.code(), distributorId);
+                }
+                continue;
+            }
+
             GlAccount account = GlAccount.builder()
                     .distributorId(distributorId)
                     .accountCode(s.code())

@@ -73,6 +73,10 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
             "FROM payments WHERE payment_number LIKE :prefix%", nativeQuery = true)
     Integer findMaxPaymentNumberByPrefix(@Param("prefix") String prefix);
 
+    @Query(value = "SELECT COALESCE(MAX(CAST(SUBSTRING(external_reference, LENGTH(:prefix) + 1) AS INTEGER)), 0) " +
+            "FROM payments WHERE external_reference LIKE :prefix%", nativeQuery = true)
+    Integer findMaxCashReferenceByPrefix(@Param("prefix") String prefix);
+
     /** Scope to a merchant brand (MERCHANT_ADMIN). */
     Page<Payment> findByDistributorMerchantId(UUID merchantId, Pageable pageable);
 

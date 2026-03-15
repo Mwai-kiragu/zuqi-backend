@@ -198,7 +198,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
     @Override
     @Transactional
     public JournalEntryResponse postDirect(UUID distributorId, JournalEntryRequest request, User currentUser) {
-        GlPeriod period = glPeriodService.getOpenPeriodForDate(distributorId, request.getEntryDate());
+        GlPeriod period = glPeriodService.getOrCreatePeriodForAutoPosting(distributorId, request.getEntryDate());
         validateLines(request.getLines());
 
         JournalEntry entry = buildEntry(distributorId, request, period, currentUser, JournalEntryStatus.POSTED);

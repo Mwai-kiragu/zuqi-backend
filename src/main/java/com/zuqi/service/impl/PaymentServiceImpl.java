@@ -181,6 +181,13 @@ public class PaymentServiceImpl implements PaymentService {
         // Generate payment number
         String paymentNumber = generatePaymentNumber();
 
+        // Auto-generate a cash reference for cash payments that have no external reference
+        String externalReference = request.getExternalReference();
+        if (externalReference == null && paymentMethod != null
+                && "CASH".equalsIgnoreCase(paymentMethod.getCode())) {
+            externalReference = generateCashReference(distributor.getName());
+        }
+
         // Create payment
         Payment payment = Payment.builder()
                 .paymentNumber(paymentNumber)
@@ -193,7 +200,7 @@ public class PaymentServiceImpl implements PaymentService {
                 .amount(request.getAmount())
                 .currency(request.getCurrency() != null ? request.getCurrency() : "KES")
                 .status(PaymentStatus.PENDING)
-                .externalReference(request.getExternalReference())
+                .externalReference(externalReference)
                 .notes(request.getNotes())
                 .build();
 
@@ -335,6 +342,13 @@ public class PaymentServiceImpl implements PaymentService {
                     .findByCode(posPayment.getPaymentMethod().name())
                     .orElse(null);
 
+            // Auto-generate a cash reference if none was provided
+            String ref = posPayment.getReferenceNumber();
+            if (ref == null && posPayment.getPaymentMethod() == com.zuqi.domain.pos.PosPaymentMethod.CASH) {
+                ref = generateCashReference(sale.getBranch().getDistributor().getName());
+                posPayment.setReferenceNumber(ref);
+            }
+
             Payment payment = Payment.builder()
                     .paymentNumber(generatePaymentNumber())
                     .sourceType("POS_SALE")
@@ -345,7 +359,7 @@ public class PaymentServiceImpl implements PaymentService {
                     .currency("KES")
                     .status(PaymentStatus.COMPLETED)
                     .paymentDate(sale.getCompletedAt())
-                    .externalReference(posPayment.getReferenceNumber())
+                    .externalReference(ref)
                     .notes(posPayment.getNotes())
                     .build();
 
@@ -361,6 +375,29 @@ public class PaymentServiceImpl implements PaymentService {
         Integer maxNum = paymentRepository.findMaxPaymentNumberByPrefix(prefix);
         int nextNum = (maxNum != null ? maxNum : 0) + 1;
         return prefix + String.format("%04d", nextNum);
+    }
+
+    private String generateCashReference(String distributorName) {
+        String prefix = initials(distributorName) + "-";
+        Integer maxNum = paymentRepository.findMaxCashReferenceByPrefix(prefix);
+        int nextNum = (maxNum != null ? maxNum : 0) + 1;
+        return prefix + String.format("%03d", nextNum);
+    }
+
+    /** Extracts uppercase initials from a name — e.g. "Menace Distributor" → "MD". */
+    static String initials(String name) {
+        if (name == null || name.isBlank()) return "ORG";
+        String[] words = name.trim().split("\\s+");
+        StringBuilder sb = new StringBuilder();
+        for (String w : words) {
+            if (!w.isBlank()) sb.append(Character.toUpperCase(w.charAt(0)));
+        }
+        String result = sb.toString();
+        // Single-word name: take first 2 characters instead of just 1
+        if (result.length() == 1 && words[0].length() >= 2) {
+            result = words[0].substring(0, 2).toUpperCase();
+        }
+        return result.isEmpty() ? "ORG" : result;
     }
 
     private void updateOrderPaidAmount(Order order) {

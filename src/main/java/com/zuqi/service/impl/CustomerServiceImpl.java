@@ -19,6 +19,7 @@ import com.zuqi.ai.feature.FeatureStore;
 import com.zuqi.domain.audit.ActivityAction;
 import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.CustomerService;
+import com.zuqi.service.EmailService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +46,7 @@ public class CustomerServiceImpl implements CustomerService {
     private final ActivityLogService activityLogService;
     private final ApplicationEventPublisher eventPublisher;
     private final FeatureStore featureStore;
+    private final EmailService emailService;
 
     @Override
     @Transactional(readOnly = true)
@@ -178,6 +180,9 @@ public class CustomerServiceImpl implements CustomerService {
         }
 
         publishCustomerCreatedEvent(saved);
+
+        // Send onboarding notification email (skipped silently if no email address)
+        emailService.sendCustomerOnboardingEmail(saved);
 
         return CustomerResponse.fromEntity(saved);
     }

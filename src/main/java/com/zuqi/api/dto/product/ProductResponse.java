@@ -1,5 +1,6 @@
 package com.zuqi.api.dto.product;
 
+import com.zuqi.domain.gl.GlAccount;
 import com.zuqi.domain.product.Product;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -9,6 +10,7 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Data
@@ -38,6 +40,12 @@ public class ProductResponse {
     private LocalDateTime deactivatedAt;
     private String deactivatedByName;
 
+    // GL account overrides
+    private UUID revenueAccountId;
+    private String revenueAccountName;
+    private UUID cogsAccountId;
+    private String cogsAccountName;
+
     // Aggregated stock across all warehouses (null = not requested)
     private BigDecimal totalStock;
 
@@ -66,6 +74,20 @@ public class ProductResponse {
                 .deactivationReason(product.getDeactivationReason())
                 .deactivatedAt(product.getDeactivatedAt())
                 .deactivatedByName(product.getDeactivatedBy() != null ? product.getDeactivatedBy().getFullName() : null)
+                .revenueAccountId(product.getRevenueAccountId())
+                .cogsAccountId(product.getCogsAccountId())
                 .build();
+    }
+
+    /** Enrich with GL account names from a pre-fetched map keyed by account ID. */
+    public void enrichGlAccountNames(Map<UUID, GlAccount> accountMap) {
+        if (revenueAccountId != null) {
+            GlAccount a = accountMap.get(revenueAccountId);
+            if (a != null) revenueAccountName = a.getAccountCode() + " — " + a.getAccountName();
+        }
+        if (cogsAccountId != null) {
+            GlAccount a = accountMap.get(cogsAccountId);
+            if (a != null) cogsAccountName = a.getAccountCode() + " — " + a.getAccountName();
+        }
     }
 }

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>You've been added as a customer</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f4f4f4;">
+        <tr>
+            <td style="padding: 40px 0;">
+                <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background: linear-gradient(135deg, #1976d2 0%, #1565c0 100%); padding: 30px 40px; border-radius: 8px 8px 0 0;">
+                            <h1 style="margin: 0; color: #ffffff; font-size: 28px; font-weight: 600;" th:text="${companyName}">Zuqi</h1>
+                        </td>
+                    </tr>
+
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 40px;">
+                            <h2 style="margin: 0 0 20px 0; color: #333333; font-size: 24px; font-weight: 600;">
+                                Welcome, <span th:text="${businessName}">Business</span>!
+                            </h2>
+
+                            <p style="margin: 0 0 20px 0; color: #666666; font-size: 16px; line-height: 1.6;">
+                                You have been added as a customer of <strong th:text="${distributorName}">the business</strong>.
+                                Your account is now active and ready to use.
+                            </p>
+
+                            <!-- Account Details Box -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f8f9fa; border-radius: 8px; margin: 25px 0;">
+                                <tr>
+                                    <td style="padding: 25px;">
+                                        <p style="margin: 0 0 16px 0; color: #333333; font-size: 15px; font-weight: 600;">Your Account Details</p>
+                                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                            <tr>
+                                                <td style="padding: 8px 0;">
+                                                    <span style="color: #666666; font-size: 14px;">Customer Code:</span>
+                                                    <br>
+                                                    <strong style="color: #1976d2; font-size: 18px; font-family: monospace; letter-spacing: 1px;" th:text="${customerCode}">CUST-00001</strong>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 8px 0; border-top: 1px solid #e0e0e0;">
+                                                    <span style="color: #666666; font-size: 14px;">Business Name:</span>
+                                                    <br>
+                                                    <strong style="color: #333333; font-size: 16px;" th:text="${businessName}">Business Name</strong>
+                                                </td>
+                                            </tr>
+                                            <tr th:if="${ownerName != null}">
+                                                <td style="padding: 8px 0; border-top: 1px solid #e0e0e0;">
+                                                    <span style="color: #666666; font-size: 14px;">Contact Person:</span>
+                                                    <br>
+                                                    <strong style="color: #333333; font-size: 16px;" th:text="${ownerName}">Owner</strong>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td style="padding: 8px 0; border-top: 1px solid #e0e0e0;">
+                                                    <span style="color: #666666; font-size: 14px;">Phone:</span>
+                                                    <br>
+                                                    <strong style="color: #333333; font-size: 16px;" th:text="${phone}">+254700000000</strong>
+                                                </td>
+                                            </tr>
+                                            <tr th:if="${paymentTermsDays != null and paymentTermsDays > 0}">
+                                                <td style="padding: 8px 0; border-top: 1px solid #e0e0e0;">
+                                                    <span style="color: #666666; font-size: 14px;">Payment Terms:</span>
+                                                    <br>
+                                                    <strong style="color: #333333; font-size: 16px;"><span th:text="${paymentTermsDays}">30</span> days</strong>
+                                                </td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p style="margin: 0 0 20px 0; color: #666666; font-size: 16px; line-height: 1.6;">
+                                If you have any questions or concerns about your account, please contact
+                                <strong th:text="${distributorName}">the business</strong> directly.
+                            </p>
+
+                            <p style="margin: 0; color: #999999; font-size: 14px; line-height: 1.6;">
+                                If you believe this account was created in error, please contact us immediately.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f8f9fa; padding: 25px 40px; border-radius: 0 0 8px 8px; border-top: 1px solid #e0e0e0;">
+                            <p style="margin: 0; color: #999999; font-size: 13px; text-align: center;">
+                                &copy; 2024 <span th:text="${companyName}">Zuqi</span>. All rights reserved.
+                                <br>
+                                This is an automated message, please do not reply.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

@@ -8,7 +8,7 @@ import java.util.UUID;
 
 public interface DashboardService {
 
-    DashboardStatsResponse getStats(UUID distributorId, UUID userId, UUID branchId);
+    DashboardStatsResponse getStats(UUID distributorId, UUID userId, UUID branchId, LocalDate startDate, LocalDate endDate);
 
     List<RecentOrderResponse> getRecentOrders(UUID distributorId, UUID userId, int limit, UUID branchId);
 

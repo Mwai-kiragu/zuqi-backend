@@ -134,6 +134,36 @@ public class GlPeriodServiceImpl implements GlPeriodService {
         return period;
     }
 
+    @Override
+    @Transactional
+    public GlPeriod getOrCreatePeriodForAutoPosting(UUID distributorId, LocalDate date) {
+        int year = date.getYear();
+        int month = date.getMonthValue();
+        GlPeriod period = glPeriodRepository
+                .findByDistributorIdAndPeriodYearAndPeriodMonth(distributorId, year, month)
+                .orElseGet(() -> {
+                    LocalDate startDate = LocalDate.of(year, month, 1);
+                    LocalDate endDate = startDate.withDayOfMonth(startDate.lengthOfMonth());
+                    String name = Month.of(month).getDisplayName(TextStyle.SHORT, Locale.ENGLISH) + "-" + year;
+                    return glPeriodRepository.save(GlPeriod.builder()
+                            .distributorId(distributorId)
+                            .periodName(name)
+                            .periodYear(year)
+                            .periodMonth(month)
+                            .startDate(startDate)
+                            .endDate(endDate)
+                            .status(GlPeriodStatus.OPEN)
+                            .build());
+                });
+        if (period.getStatus() == GlPeriodStatus.LOCKED) {
+            throw new ValidationException("Period " + period.getPeriodName() + " is LOCKED. Auto-posting is not allowed.");
+        }
+        if (period.getStatus() == GlPeriodStatus.CLOSED) {
+            throw new ValidationException("Period " + period.getPeriodName() + " is CLOSED. Reopen it before auto-posting.");
+        }
+        return period;
+    }
+
     private GlPeriod findById(UUID id) {
         return glPeriodRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("GlPeriod", "id", id));

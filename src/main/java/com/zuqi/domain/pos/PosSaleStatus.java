@@ -1,7 +1,7 @@
 package com.zuqi.domain.pos;
 
 public enum PosSaleStatus {
-    DRAFT,
+    UNPAID,
     COMPLETED,
     CANCELLED,
     REFUNDED

@@ -2,6 +2,7 @@ package com.zuqi.service.impl;
 
 import com.zuqi.config.AppConfig;
 import com.zuqi.config.EmailConfig;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.user.User;
 import com.zuqi.service.EmailService;
 import jakarta.mail.MessagingException;
@@ -137,6 +138,37 @@ public class EmailServiceImpl implements EmailService {
                 user.getEmail(),
                 "Your Password Has Been Changed - " + emailConfig.getFromName(),
                 "password-changed",
+                variables
+        );
+    }
+
+    @Override
+    @Async
+    public void sendCustomerOnboardingEmail(Customer customer) {
+        if (customer.getEmail() == null || customer.getEmail().isBlank()) {
+            log.debug("Customer onboarding email skipped — no email address for customer {}", customer.getId());
+            return;
+        }
+        if (!emailConfig.isEnabled()) {
+            log.info("Email disabled. Would send onboarding email to customer: {}", customer.getEmail());
+            return;
+        }
+
+        String distributorName = customer.getDistributor() != null ? customer.getDistributor().getName() : emailConfig.getFromName();
+
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("businessName", customer.getBusinessName());
+        variables.put("ownerName", customer.getOwnerName());
+        variables.put("customerCode", customer.getCustomerCode());
+        variables.put("phone", customer.getPhone());
+        variables.put("paymentTermsDays", customer.getPaymentTermsDays());
+        variables.put("distributorName", distributorName);
+        variables.put("companyName", emailConfig.getFromName());
+
+        sendTemplatedEmail(
+                customer.getEmail(),
+                "You've been added as a customer of " + distributorName,
+                "customer-onboarding",
                 variables
         );
     }

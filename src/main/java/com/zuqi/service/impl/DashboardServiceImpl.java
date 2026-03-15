@@ -37,51 +37,121 @@ public class DashboardServiceImpl implements DashboardService {
     private final SecurityUtils securityUtils;
 
     @Override
-    public DashboardStatsResponse getStats(UUID distributorId, UUID userId, UUID branchId) {
+    public DashboardStatsResponse getStats(UUID distributorId, UUID userId, UUID branchId, LocalDate startDate, LocalDate endDate) {
         // Determine effective distributor ID for filtering
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
 
-        log.debug("Getting dashboard stats for distributor: {}", effectiveDistributorId);
+        log.debug("Getting dashboard stats for distributor: {}, branch: {}, period: {} - {}",
+                effectiveDistributorId, branchId, startDate, endDate);
 
-        LocalDateTime startOfToday = LocalDate.now().atStartOfDay();
+        // Use provided date range for pulse metrics; default to today when not supplied
+        LocalDate effectiveStart = startDate != null ? startDate : LocalDate.now();
+        LocalDate effectiveEnd   = endDate   != null ? endDate   : LocalDate.now();
+        LocalDateTime periodStart = effectiveStart.atStartOfDay();
+        LocalDateTime periodEnd   = effectiveEnd.atTime(23, 59, 59);
+
         LocalDateTime startOfMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay();
 
         // SUPER_ADMIN/ADMIN get system-wide stats when distributorId is null
         boolean isGlobalView = effectiveDistributorId == null;
+        boolean hasBranch    = branchId != null && !isGlobalView;
+        // When dates are supplied this is a "pulse" call — scope status counts to the period
+        boolean hasPeriod    = startDate != null;
 
-        // Order statistics
-        long totalOrders = isGlobalView ? orderRepository.count() : orderRepository.countByDistributorId(effectiveDistributorId);
-        long ordersToday = isGlobalView ? orderRepository.countOrdersTodayAll(startOfToday) : orderRepository.countOrdersToday(effectiveDistributorId, startOfToday);
-        long pendingOrders = isGlobalView ? orderRepository.countByStatus(OrderStatus.PENDING) : orderRepository.countByDistributorIdAndStatus(effectiveDistributorId, OrderStatus.PENDING);
-        long processingOrders = isGlobalView ? orderRepository.countByStatus(OrderStatus.PROCESSING) : orderRepository.countByDistributorIdAndStatus(effectiveDistributorId, OrderStatus.PROCESSING);
-        long deliveredOrders = isGlobalView ? orderRepository.countByStatus(OrderStatus.DELIVERED) : orderRepository.countByDistributorIdAndStatus(effectiveDistributorId, OrderStatus.DELIVERED);
+        // Order statistics — branch-filtered when branchId is provided
+        long totalOrders;
+        long ordersToday;
+        long pendingOrders;
+        long processingOrders;
+        long deliveredOrders;
+        long readyForDelivery;
+        long outForDelivery;
+        BigDecimal totalRevenue;
+        BigDecimal revenueToday;
+        BigDecimal totalOutstanding;
 
-        // Revenue statistics
-        BigDecimal totalRevenue = isGlobalView ? orderRepository.sumTotalRevenueAll() : orderRepository.sumTotalRevenue(effectiveDistributorId);
-        BigDecimal revenueToday = isGlobalView ? orderRepository.sumRevenueFromDateAll(startOfToday) : orderRepository.sumRevenueFromDate(effectiveDistributorId, startOfToday);
-        BigDecimal revenueThisMonth = isGlobalView ? orderRepository.sumRevenueFromDateAll(startOfMonth) : orderRepository.sumRevenueFromDate(effectiveDistributorId, startOfMonth);
-        BigDecimal totalOutstanding = isGlobalView ? orderRepository.sumOutstandingAmountAll() : orderRepository.sumOutstandingAmount(effectiveDistributorId);
+        if (isGlobalView) {
+            totalOrders      = orderRepository.count();
+            ordersToday      = orderRepository.countOrdersTodayAll(periodStart);
+            pendingOrders    = orderRepository.countByStatus(OrderStatus.PENDING);
+            processingOrders = orderRepository.countByStatus(OrderStatus.PROCESSING);
+            deliveredOrders  = orderRepository.countByStatus(OrderStatus.DELIVERED);
+            readyForDelivery = orderRepository.countByStatus(OrderStatus.READY_FOR_DELIVERY);
+            outForDelivery   = orderRepository.countByStatus(OrderStatus.OUT_FOR_DELIVERY);
+            totalRevenue     = orderRepository.sumTotalRevenueAll();
+            revenueToday     = orderRepository.sumRevenueFromDateAll(periodStart);
+            totalOutstanding = orderRepository.sumOutstandingAmountAll();
+        } else if (hasBranch) {
+            totalOrders      = orderRepository.countByDistributorIdAndBranch(effectiveDistributorId, branchId);
+            ordersToday      = orderRepository.countOrdersInPeriodByBranch(effectiveDistributorId, periodStart, periodEnd, branchId);
+            pendingOrders    = hasPeriod
+                    ? orderRepository.countOrdersInPeriodWithStatusByBranch(effectiveDistributorId, OrderStatus.PENDING, periodStart, periodEnd, branchId)
+                    : orderRepository.countByDistributorIdAndStatusAndBranch(effectiveDistributorId, OrderStatus.PENDING, branchId);
+            processingOrders = hasPeriod
+                    ? orderRepository.countOrdersInPeriodWithStatusByBranch(effectiveDistributorId, OrderStatus.PROCESSING, periodStart, periodEnd, branchId)
+                    : orderRepository.countByDistributorIdAndStatusAndBranch(effectiveDistributorId, OrderStatus.PROCESSING, branchId);
+            deliveredOrders  = hasPeriod
+                    ? orderRepository.countOrdersInPeriodWithStatusByBranch(effectiveDistributorId, OrderStatus.DELIVERED, periodStart, periodEnd, branchId)
+                    : orderRepository.countByDistributorIdAndStatusAndBranch(effectiveDistributorId, OrderStatus.DELIVERED, branchId);
+            readyForDelivery = hasPeriod
+                    ? orderRepository.countOrdersInPeriodWithStatusByBranch(effectiveDistributorId, OrderStatus.READY_FOR_DELIVERY, periodStart, periodEnd, branchId)
+                    : orderRepository.countByDistributorIdAndStatusAndBranch(effectiveDistributorId, OrderStatus.READY_FOR_DELIVERY, branchId);
+            outForDelivery   = hasPeriod
+                    ? orderRepository.countOrdersInPeriodWithStatusByBranch(effectiveDistributorId, OrderStatus.OUT_FOR_DELIVERY, periodStart, periodEnd, branchId)
+                    : orderRepository.countByDistributorIdAndStatusAndBranch(effectiveDistributorId, OrderStatus.OUT_FOR_DELIVERY, branchId);
+            totalRevenue     = orderRepository.sumTotalRevenueByBranch(effectiveDistributorId, branchId);
+            revenueToday     = orderRepository.sumRevenueInPeriodByBranch(effectiveDistributorId, periodStart, periodEnd, branchId);
+            totalOutstanding = orderRepository.sumOutstandingAmountByBranch(effectiveDistributorId, branchId);
+        } else {
+            totalOrders      = orderRepository.countByDistributorId(effectiveDistributorId);
+            ordersToday      = orderRepository.countOrdersInPeriod(effectiveDistributorId, periodStart, periodEnd);
+            pendingOrders    = hasPeriod
+                    ? orderRepository.countOrdersInPeriodWithStatus(effectiveDistributorId, OrderStatus.PENDING, periodStart, periodEnd)
+                    : orderRepository.countByDistributorIdAndStatus(effectiveDistributorId, OrderStatus.PENDING);
+            processingOrders = hasPeriod
+                    ? orderRepository.countOrdersInPeriodWithStatus(effectiveDistributorId, OrderStatus.PROCESSING, periodStart, periodEnd)
+                    : orderRepository.countByDistributorIdAndStatus(effectiveDistributorId, OrderStatus.PROCESSING);
+            deliveredOrders  = hasPeriod
+                    ? orderRepository.countOrdersInPeriodWithStatus(effectiveDistributorId, OrderStatus.DELIVERED, periodStart, periodEnd)
+                    : orderRepository.countByDistributorIdAndStatus(effectiveDistributorId, OrderStatus.DELIVERED);
+            readyForDelivery = hasPeriod
+                    ? orderRepository.countOrdersInPeriodWithStatus(effectiveDistributorId, OrderStatus.READY_FOR_DELIVERY, periodStart, periodEnd)
+                    : orderRepository.countByDistributorIdAndStatus(effectiveDistributorId, OrderStatus.READY_FOR_DELIVERY);
+            outForDelivery   = hasPeriod
+                    ? orderRepository.countOrdersInPeriodWithStatus(effectiveDistributorId, OrderStatus.OUT_FOR_DELIVERY, periodStart, periodEnd)
+                    : orderRepository.countByDistributorIdAndStatus(effectiveDistributorId, OrderStatus.OUT_FOR_DELIVERY);
+            totalRevenue     = orderRepository.sumTotalRevenue(effectiveDistributorId);
+            revenueToday     = orderRepository.sumRevenueInPeriod(effectiveDistributorId, periodStart, periodEnd);
+            totalOutstanding = orderRepository.sumOutstandingAmount(effectiveDistributorId);
+        }
 
-        // Merchant statistics
-        long totalMerchants = isGlobalView ? customerRepository.countByActiveTrue() : customerRepository.countByDistributorIdAndActiveTrue(effectiveDistributorId);
-        long newMerchantsThisMonth = isGlobalView ? customerRepository.countNewCustomersFromDateAll(startOfMonth) : customerRepository.countNewCustomersFromDate(effectiveDistributorId, startOfMonth);
+        // Revenue this month (not period-filtered — it's always the calendar month)
+        BigDecimal revenueThisMonth = isGlobalView
+                ? orderRepository.sumRevenueFromDateAll(startOfMonth)
+                : orderRepository.sumRevenueFromDate(effectiveDistributorId, startOfMonth);
 
-        // Payment statistics
-        long unreconciledPayments = isGlobalView ? paymentRepository.countAllUnreconciledPayments() : paymentRepository.countUnreconciledPayments(effectiveDistributorId);
-
-        // Inventory statistics
-        long lowStockProducts = isGlobalView ? stockRepository.countAllLowStock() : stockRepository.countLowStockByDistributorId(effectiveDistributorId);
-        long outOfStockProducts = isGlobalView ? stockRepository.countAllOutOfStock() : stockRepository.countOutOfStockByDistributorId(effectiveDistributorId);
-
-        // Sales team statistics
-        long salesReps = isGlobalView ? userRepository.countByRole("SALES_REP") : userRepository.countByRoleAndDistributor("SALES_REP", effectiveDistributorId);
-
-        // Pending deliveries (orders that are out for delivery or ready for delivery)
-        long readyForDelivery = isGlobalView ? orderRepository.countByStatus(OrderStatus.READY_FOR_DELIVERY) : orderRepository.countByDistributorIdAndStatus(effectiveDistributorId, OrderStatus.READY_FOR_DELIVERY);
-        long outForDelivery = isGlobalView ? orderRepository.countByStatus(OrderStatus.OUT_FOR_DELIVERY) : orderRepository.countByDistributorIdAndStatus(effectiveDistributorId, OrderStatus.OUT_FOR_DELIVERY);
+        // Merchant / payment / inventory / team stats are not branch-scoped
+        long totalMerchants = isGlobalView
+                ? customerRepository.countByActiveTrue()
+                : customerRepository.countByDistributorIdAndActiveTrue(effectiveDistributorId);
+        long newMerchantsThisMonth = isGlobalView
+                ? customerRepository.countNewCustomersFromDateAll(startOfMonth)
+                : customerRepository.countNewCustomersFromDate(effectiveDistributorId, startOfMonth);
+        long unreconciledPayments = isGlobalView
+                ? paymentRepository.countAllUnreconciledPayments()
+                : paymentRepository.countUnreconciledPayments(effectiveDistributorId);
+        long lowStockProducts = isGlobalView
+                ? stockRepository.countAllLowStock()
+                : stockRepository.countLowStockByDistributorId(effectiveDistributorId);
+        long outOfStockProducts = isGlobalView
+                ? stockRepository.countAllOutOfStock()
+                : stockRepository.countOutOfStockByDistributorId(effectiveDistributorId);
+        long salesReps = isGlobalView
+                ? userRepository.countByRole("SALES_REP")
+                : userRepository.countByRoleAndDistributor("SALES_REP", effectiveDistributorId);
 
         return DashboardStatsResponse.builder()
                 .totalOrders(totalOrders)
@@ -121,6 +191,8 @@ public class DashboardServiceImpl implements DashboardService {
         Page<Order> orders;
         if (effectiveDistributorId == null) {
             orders = orderRepository.findRecentOrdersAll(PageRequest.of(0, limit));
+        } else if (branchId != null) {
+            orders = orderRepository.findRecentOrdersByBranch(effectiveDistributorId, branchId, PageRequest.of(0, limit));
         } else {
             orders = orderRepository.findRecentOrders(effectiveDistributorId, PageRequest.of(0, limit));
         }

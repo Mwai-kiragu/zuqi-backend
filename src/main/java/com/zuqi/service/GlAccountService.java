@@ -21,4 +21,7 @@ public interface GlAccountService {
      * Skips accounts whose code already exists.
      */
     List<GlAccountResponse> seedDefaultAccounts(UUID distributorId, User currentUser);
+
+    /** Returns true if the distributor already has GL accounts seeded. */
+    boolean hasAccountsSetUp(UUID distributorId);
 }

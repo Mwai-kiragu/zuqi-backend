@@ -131,6 +131,81 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     List<Object[]> findDailyRevenueData(@Param("distributorId") UUID distributorId,
             @Param("startDate") LocalDateTime startDate, @Param("endDate") LocalDateTime endDate);
 
+    // Branch-filtered dashboard queries
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.distributor.id = :distributorId " +
+            "AND o.warehouse.branch.id = :branchId")
+    long countByDistributorIdAndBranch(@Param("distributorId") UUID distributorId,
+                                        @Param("branchId") UUID branchId);
+
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.distributor.id = :distributorId " +
+            "AND o.status = :status AND o.warehouse.branch.id = :branchId")
+    long countByDistributorIdAndStatusAndBranch(@Param("distributorId") UUID distributorId,
+                                                 @Param("status") OrderStatus status,
+                                                 @Param("branchId") UUID branchId);
+
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.distributor.id = :distributorId " +
+            "AND o.createdAt >= :startDate AND o.createdAt <= :endDate " +
+            "AND o.warehouse.branch.id = :branchId")
+    long countOrdersInPeriodByBranch(@Param("distributorId") UUID distributorId,
+                                      @Param("startDate") LocalDateTime startDate,
+                                      @Param("endDate") LocalDateTime endDate,
+                                      @Param("branchId") UUID branchId);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.distributor.id = :distributorId " +
+            "AND o.warehouse.branch.id = :branchId")
+    java.math.BigDecimal sumTotalRevenueByBranch(@Param("distributorId") UUID distributorId,
+                                                  @Param("branchId") UUID branchId);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.distributor.id = :distributorId " +
+            "AND o.createdAt >= :startDate AND o.createdAt <= :endDate " +
+            "AND o.warehouse.branch.id = :branchId")
+    java.math.BigDecimal sumRevenueInPeriodByBranch(@Param("distributorId") UUID distributorId,
+                                                     @Param("startDate") LocalDateTime startDate,
+                                                     @Param("endDate") LocalDateTime endDate,
+                                                     @Param("branchId") UUID branchId);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount - o.paidAmount), 0) FROM Order o " +
+            "WHERE o.distributor.id = :distributorId AND o.paymentStatus != 'PAID' " +
+            "AND o.warehouse.branch.id = :branchId")
+    java.math.BigDecimal sumOutstandingAmountByBranch(@Param("distributorId") UUID distributorId,
+                                                       @Param("branchId") UUID branchId);
+
+    @Query("SELECT o FROM Order o WHERE o.distributor.id = :distributorId " +
+            "AND o.warehouse.branch.id = :branchId ORDER BY o.createdAt DESC")
+    Page<Order> findRecentOrdersByBranch(@Param("distributorId") UUID distributorId,
+                                          @Param("branchId") UUID branchId,
+                                          Pageable pageable);
+
+    // Period-scoped status count (for pulse: delivered/pending in period)
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.distributor.id = :distributorId " +
+            "AND o.status = :status AND o.createdAt >= :startDate AND o.createdAt <= :endDate")
+    long countOrdersInPeriodWithStatus(@Param("distributorId") UUID distributorId,
+                                        @Param("status") OrderStatus status,
+                                        @Param("startDate") LocalDateTime startDate,
+                                        @Param("endDate") LocalDateTime endDate);
+
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.distributor.id = :distributorId " +
+            "AND o.status = :status AND o.createdAt >= :startDate AND o.createdAt <= :endDate " +
+            "AND o.warehouse.branch.id = :branchId")
+    long countOrdersInPeriodWithStatusByBranch(@Param("distributorId") UUID distributorId,
+                                                @Param("status") OrderStatus status,
+                                                @Param("startDate") LocalDateTime startDate,
+                                                @Param("endDate") LocalDateTime endDate,
+                                                @Param("branchId") UUID branchId);
+
+    // Date-range variants (no branch filter) for pulse period tabs
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.distributor.id = :distributorId " +
+            "AND o.createdAt >= :startDate AND o.createdAt <= :endDate")
+    long countOrdersInPeriod(@Param("distributorId") UUID distributorId,
+                              @Param("startDate") LocalDateTime startDate,
+                              @Param("endDate") LocalDateTime endDate);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.distributor.id = :distributorId " +
+            "AND o.createdAt >= :startDate AND o.createdAt <= :endDate")
+    java.math.BigDecimal sumRevenueInPeriod(@Param("distributorId") UUID distributorId,
+                                             @Param("startDate") LocalDateTime startDate,
+                                             @Param("endDate") LocalDateTime endDate);
+
     // Global queries for SUPER_ADMIN/ADMIN (no distributor filter)
     @Query("SELECT COUNT(o) FROM Order o WHERE o.status = :status")
     long countByStatus(@Param("status") OrderStatus status);
@@ -152,6 +227,9 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
 
     /** Scope to all orders for a merchant brand (MERCHANT_ADMIN). */
     Page<Order> findByDistributorMerchantId(UUID merchantId, Pageable pageable);
+
+    /** Find the Order linked to a specific POS sale. */
+    Optional<Order> findByPosSaleId(UUID posSaleId);
 
     @Query("SELECT o FROM Order o WHERE o.distributor.merchant.id = :merchantId " +
             "AND (o.orderNumber LIKE %:search% OR o.merchant.businessName LIKE %:search%)")
