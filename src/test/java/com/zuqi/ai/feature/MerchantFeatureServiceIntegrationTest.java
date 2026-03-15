@@ -2,8 +2,8 @@ package com.zuqi.ai.feature;
 
 import com.zuqi.domain.credit.CreditLimit;
 import com.zuqi.domain.credit.CreditLimitStatus;
-import com.zuqi.domain.merchant.Merchant;
-import com.zuqi.domain.merchant.MerchantCategory;
+import com.zuqi.domain.customer.Customer;
+import com.zuqi.domain.customer.CustomerCategory;
 import com.zuqi.domain.order.Order;
 import com.zuqi.domain.order.OrderItem;
 import com.zuqi.domain.order.OrderStatus;
@@ -12,7 +12,7 @@ import com.zuqi.domain.payment.PaymentMethod;
 import com.zuqi.domain.payment.PaymentStatus;
 import com.zuqi.domain.product.Product;
 import com.zuqi.repository.CreditLimitRepository;
-import com.zuqi.repository.MerchantRepository;
+import com.zuqi.repository.CustomerRepository;
 import com.zuqi.repository.OrderRepository;
 import com.zuqi.repository.PaymentRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,7 +51,7 @@ import static org.mockito.Mockito.when;
 class MerchantFeatureServiceIntegrationTest {
 
     @Mock
-    private MerchantRepository merchantRepository;
+    private CustomerRepository merchantRepository;
 
     @Mock
     private OrderRepository orderRepository;
@@ -69,13 +69,13 @@ class MerchantFeatureServiceIntegrationTest {
     private static final LocalDateTime AS_OF = LocalDateTime.of(2026, 6, 15, 12, 0);
 
     private UUID merchantId;
-    private Merchant merchant;
+    private Customer merchant;
 
     @BeforeEach
     void setUp() {
         merchantId = UUID.randomUUID();
-        MerchantCategory category = MerchantCategory.builder().id(1L).name("Retail").build();
-        merchant = Merchant.builder()
+        CustomerCategory category = CustomerCategory.builder().id(1L).name("Retail").build();
+        merchant = Customer.builder()
                 .id(merchantId)
                 .businessName("Kamau Supermarket")
                 .city("Nairobi")

@@ -3,6 +3,7 @@ package com.zuqi.ai.agent.tools;
 import com.zuqi.domain.ai.DeliveryRoute;
 import com.zuqi.domain.ai.RouteStatus;
 import com.zuqi.repository.DeliveryRouteRepository;
+import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,7 +28,7 @@ public class DeliveryMetricsTool {
           "and avgDurationMin (average planned duration in minutes across COMPLETED routes). " +
           "Parameter: distributorId (UUID string).")
     @Transactional(readOnly = true)
-    public String getDeliveryMetrics(String distributorId) {
+    public String getDeliveryMetrics(@P("The distributor UUID") String distributorId) {
         try {
             UUID distId = UUID.fromString(distributorId.trim());
 

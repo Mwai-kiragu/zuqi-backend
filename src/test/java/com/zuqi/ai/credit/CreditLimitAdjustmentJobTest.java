@@ -3,10 +3,10 @@ package com.zuqi.ai.credit;
 import com.zuqi.domain.credit.CreditLimit;
 import com.zuqi.domain.credit.CreditLimitStatus;
 import com.zuqi.domain.distributor.Distributor;
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.repository.CreditLimitRepository;
 import com.zuqi.repository.DistributorRepository;
-import com.zuqi.repository.MerchantRepository;
+import com.zuqi.repository.CustomerRepository;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,7 +37,7 @@ import static org.mockito.Mockito.*;
 class CreditLimitAdjustmentJobTest {
 
     @Mock private CreditLimitRegressor   creditLimitRegressor;
-    @Mock private MerchantRepository     merchantRepository;
+    @Mock private CustomerRepository     merchantRepository;
     @Mock private CreditLimitRepository  creditLimitRepository;
     @Mock private DistributorRepository  distributorRepository;
     @Mock private MeterRegistry          meterRegistry;
@@ -47,7 +47,7 @@ class CreditLimitAdjustmentJobTest {
 
     private UUID merchantId;
     private UUID distributorId;
-    private Merchant merchant;
+    private Customer merchant;
     private Distributor distributor;
 
     @BeforeEach
@@ -59,7 +59,7 @@ class CreditLimitAdjustmentJobTest {
         distributor.setId(distributorId);
         distributor.setName("Test Distributor");
 
-        merchant = new Merchant();
+        merchant = new Customer();
         merchant.setId(merchantId);
         merchant.setDistributor(distributor);
         merchant.setBusinessName("Test Merchant");

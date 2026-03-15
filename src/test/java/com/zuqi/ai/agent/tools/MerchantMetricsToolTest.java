@@ -1,8 +1,8 @@
 package com.zuqi.ai.agent.tools;
 
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.order.Order;
-import com.zuqi.repository.MerchantRepository;
+import com.zuqi.repository.CustomerRepository;
 import com.zuqi.repository.OrderRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -23,7 +23,7 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class MerchantMetricsToolTest {
 
-    @Mock private MerchantRepository merchantRepository;
+    @Mock private CustomerRepository merchantRepository;
     @Mock private OrderRepository     orderRepository;
 
     @InjectMocks
@@ -35,12 +35,12 @@ class MerchantMetricsToolTest {
     void getMerchantMetrics_returnsTotalAndActiveCounts() {
         UUID distributorId = UUID.randomUUID();
 
-        Merchant active   = mockMerchant(true);
-        Merchant inactive = mockMerchant(false);
+        Customer active   = mockMerchant(true);
+        Customer inactive = mockMerchant(false);
 
         when(merchantRepository.findByDistributorId(distributorId))
                 .thenReturn(List.of(active, inactive));
-        when(merchantRepository.countNewMerchantsFromDate(eq(distributorId), any()))
+        when(merchantRepository.countNewCustomersFromDate(eq(distributorId), any()))
                 .thenReturn(1L);
 
         // One recent order linked to the active merchant
@@ -65,7 +65,7 @@ class MerchantMetricsToolTest {
         UUID distributorId = UUID.randomUUID();
 
         when(merchantRepository.findByDistributorId(distributorId)).thenReturn(List.of());
-        when(merchantRepository.countNewMerchantsFromDate(any(), any())).thenReturn(0L);
+        when(merchantRepository.countNewCustomersFromDate(any(), any())).thenReturn(0L);
         when(orderRepository.findByDistributorIdAndDateRange(any(), any(), any())).thenReturn(List.of());
 
         String result = tool.getMerchantMetrics(distributorId.toString());
@@ -86,7 +86,7 @@ class MerchantMetricsToolTest {
 
     @Test
     void getMerchantMetrics_whenRepositoryThrows_returnsErrorJson() {
-        when(merchantRepository.findByDistributorId(any()))
+        when(merchantRepository.findByDistributorId(any(UUID.class)))
                 .thenThrow(new RuntimeException("Query timeout"));
 
         String result = tool.getMerchantMetrics(UUID.randomUUID().toString());
@@ -96,8 +96,8 @@ class MerchantMetricsToolTest {
 
     // ── helpers ───────────────────────────────────────────────────────────
 
-    private Merchant mockMerchant(boolean active) {
-        Merchant m = mock(Merchant.class);
+    private Customer mockMerchant(boolean active) {
+        Customer m = mock(Customer.class);
         when(m.isActive()).thenReturn(active);
         return m;
     }

@@ -64,9 +64,10 @@ public interface DemandForecastRepository extends JpaRepository<DemandForecast, 
             Pageable pageable);
 
     /**
-     * Paginated list of forecasts for a distributor (alias of findByDistributorId, kept for API compatibility).
+     * Paginated list of forecasts for a distributor filtered to only include active customers.
      */
     @Query("SELECT f FROM DemandForecast f WHERE f.distributor.id = :distributorId " +
+            "AND f.merchant.id IN (SELECT c.id FROM Customer c WHERE c.distributor.id = :distributorId) " +
             "ORDER BY f.forecastDate DESC, f.createdAt DESC")
     Page<DemandForecast> findByDistributorIdFiltered(
             @Param("distributorId") UUID distributorId,

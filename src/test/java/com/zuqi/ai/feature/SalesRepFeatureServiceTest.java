@@ -1,7 +1,7 @@
 package com.zuqi.ai.feature;
 
 import com.zuqi.domain.distributor.Distributor;
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.order.Order;
 import com.zuqi.domain.payment.Payment;
 import com.zuqi.domain.user.User;
@@ -29,7 +29,7 @@ class SalesRepFeatureServiceTest {
     private UserRepository userRepository;
 
     @Mock
-    private MerchantRepository merchantRepository;
+    private CustomerRepository merchantRepository;
 
     @Mock
     private OrderRepository orderRepository;
@@ -69,7 +69,7 @@ class SalesRepFeatureServiceTest {
     @Test
     void shouldComputeBasicSalesRepFeatures() {
         // Given
-        List<Merchant> assignedMerchants = createAssignedMerchants(5);
+        List<Customer> assignedMerchants = createAssignedMerchants(5);
         List<Order> orders = createOrders(3, assignedMerchants.subList(0, 3));
         List<Payment> payments = createPayments(2, orders.subList(0, 2));
 
@@ -93,7 +93,7 @@ class SalesRepFeatureServiceTest {
     @Test
     void shouldComputeVisitMetrics() {
         // Given - 5 assigned merchants, 3 unique merchants placed orders
-        List<Merchant> assignedMerchants = createAssignedMerchants(5);
+        List<Customer> assignedMerchants = createAssignedMerchants(5);
         List<Order> orders = createOrders(3, assignedMerchants.subList(0, 3));
 
         when(userRepository.findById(salesRepId)).thenReturn(Optional.of(salesRep));
@@ -113,7 +113,7 @@ class SalesRepFeatureServiceTest {
     @Test
     void shouldComputeOrderConversionRate() {
         // Given - 5 visits, 3 orders
-        List<Merchant> assignedMerchants = createAssignedMerchants(5);
+        List<Customer> assignedMerchants = createAssignedMerchants(5);
         List<Order> orders = createOrders(3, assignedMerchants.subList(0, 3));
 
         when(userRepository.findById(salesRepId)).thenReturn(Optional.of(salesRep));
@@ -132,7 +132,7 @@ class SalesRepFeatureServiceTest {
     @Test
     void shouldComputeTotalOrderValue() {
         // Given - 3 orders worth 1000 each
-        List<Merchant> assignedMerchants = createAssignedMerchants(3);
+        List<Customer> assignedMerchants = createAssignedMerchants(3);
         List<Order> orders = createOrdersWithValue(3, assignedMerchants, BigDecimal.valueOf(1000));
 
         when(userRepository.findById(salesRepId)).thenReturn(Optional.of(salesRep));
@@ -151,8 +151,8 @@ class SalesRepFeatureServiceTest {
     @Test
     void shouldComputeNewMerchantsAcquired() {
         // Given - 5 assigned merchants, 2 created in period
-        List<Merchant> assignedMerchants = createAssignedMerchants(5);
-        List<Merchant> newMerchants = createNewMerchantsInPeriod(2);
+        List<Customer> assignedMerchants = createAssignedMerchants(5);
+        List<Customer> newMerchants = createNewMerchantsInPeriod(2);
         assignedMerchants.addAll(newMerchants);
 
         when(userRepository.findById(salesRepId)).thenReturn(Optional.of(salesRep));
@@ -171,7 +171,7 @@ class SalesRepFeatureServiceTest {
     @Test
     void shouldComputeMerchantRetentionRate() {
         // Given - 5 assigned merchants, 3 placed orders
-        List<Merchant> assignedMerchants = createAssignedMerchants(5);
+        List<Customer> assignedMerchants = createAssignedMerchants(5);
         List<Order> orders = createOrders(3, assignedMerchants.subList(0, 3));
 
         when(userRepository.findById(salesRepId)).thenReturn(Optional.of(salesRep));
@@ -189,7 +189,7 @@ class SalesRepFeatureServiceTest {
     @Test
     void shouldComputeCollectionMetrics() {
         // Given - 3 orders worth 1000 each, 2 payments worth 800 each
-        List<Merchant> assignedMerchants = createAssignedMerchants(3);
+        List<Customer> assignedMerchants = createAssignedMerchants(3);
         List<Order> orders = createOrdersWithValue(3, assignedMerchants, BigDecimal.valueOf(1000));
         List<Payment> payments = createPaymentsWithValue(2, orders.subList(0, 2), BigDecimal.valueOf(800));
 
@@ -211,7 +211,7 @@ class SalesRepFeatureServiceTest {
     @Test
     void shouldComputeRouteAdherencePct() {
         // Given
-        List<Merchant> assignedMerchants = createAssignedMerchants(5);
+        List<Customer> assignedMerchants = createAssignedMerchants(5);
         List<Order> orders = createOrders(3, assignedMerchants.subList(0, 3));
 
         when(userRepository.findById(salesRepId)).thenReturn(Optional.of(salesRep));
@@ -231,7 +231,7 @@ class SalesRepFeatureServiceTest {
     @Test
     void shouldComputeTerritoryPenetrationPct() {
         // Given - 10 assigned merchants, visited 6 unique
-        List<Merchant> assignedMerchants = createAssignedMerchants(10);
+        List<Customer> assignedMerchants = createAssignedMerchants(10);
         List<Order> orders = createOrders(6, assignedMerchants.subList(0, 6));
 
         when(userRepository.findById(salesRepId)).thenReturn(Optional.of(salesRep));
@@ -251,7 +251,7 @@ class SalesRepFeatureServiceTest {
     @Test
     void shouldHandleNoOrders() {
         // Given
-        List<Merchant> assignedMerchants = createAssignedMerchants(5);
+        List<Customer> assignedMerchants = createAssignedMerchants(5);
 
         when(userRepository.findById(salesRepId)).thenReturn(Optional.of(salesRep));
         when(merchantRepository.findAll()).thenReturn(assignedMerchants);
@@ -317,10 +317,10 @@ class SalesRepFeatureServiceTest {
 
     // ==================== Helper Methods ====================
 
-    private List<Merchant> createAssignedMerchants(int count) {
-        List<Merchant> merchants = new ArrayList<>();
+    private List<Customer> createAssignedMerchants(int count) {
+        List<Customer> merchants = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            Merchant merchant = Merchant.builder()
+            Customer merchant = Customer.builder()
                     .id(UUID.randomUUID())
                     .businessName("Merchant " + i)
                     .phone("+254700000" + i)
@@ -334,10 +334,10 @@ class SalesRepFeatureServiceTest {
         return merchants;
     }
 
-    private List<Merchant> createNewMerchantsInPeriod(int count) {
-        List<Merchant> merchants = new ArrayList<>();
+    private List<Customer> createNewMerchantsInPeriod(int count) {
+        List<Customer> merchants = new ArrayList<>();
         for (int i = 0; i < count; i++) {
-            Merchant merchant = Merchant.builder()
+            Customer merchant = Customer.builder()
                     .id(UUID.randomUUID())
                     .businessName("New Merchant " + i)
                     .phone("+254700100" + i)
@@ -351,7 +351,7 @@ class SalesRepFeatureServiceTest {
         return merchants;
     }
 
-    private List<Order> createOrders(int count, List<Merchant> merchants) {
+    private List<Order> createOrders(int count, List<Customer> merchants) {
         List<Order> orders = new ArrayList<>();
         for (int i = 0; i < count && i < merchants.size(); i++) {
             Order order = Order.builder()
@@ -367,7 +367,7 @@ class SalesRepFeatureServiceTest {
         return orders;
     }
 
-    private List<Order> createOrdersWithValue(int count, List<Merchant> merchants, BigDecimal value) {
+    private List<Order> createOrdersWithValue(int count, List<Customer> merchants, BigDecimal value) {
         List<Order> orders = new ArrayList<>();
         for (int i = 0; i < count && i < merchants.size(); i++) {
             Order order = Order.builder()

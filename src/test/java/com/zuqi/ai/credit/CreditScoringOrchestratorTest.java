@@ -5,9 +5,9 @@ import com.zuqi.ai.monitoring.LlmMetricsService;
 import com.zuqi.ai.monitoring.PredictionLogger;
 import com.zuqi.ai.synthetic.DataMixer;
 import com.zuqi.domain.ai.EntityType;
-import com.zuqi.domain.merchant.Merchant;
+import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.distributor.Distributor;
-import com.zuqi.repository.MerchantRepository;
+import com.zuqi.repository.CustomerRepository;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,7 +41,7 @@ class CreditScoringOrchestratorTest {
     @Mock private CreditFeatureBuilder featureBuilder;
     @Mock private ChatLanguageModel chatLanguageModel;
     @Mock private PredictionLogger predictionLogger;
-    @Mock private MerchantRepository merchantRepository;
+    @Mock private CustomerRepository merchantRepository;
     @Mock private LlmMetricsService llmMetricsService;
     @Mock private CreditClassifier creditClassifier;
     @Mock private CreditLimitRegressor creditLimitRegressor;
@@ -54,7 +54,7 @@ class CreditScoringOrchestratorTest {
     private static final UUID MERCHANT_ID    = UUID.fromString("aaaaaaaa-0000-0000-0000-000000000001");
     private static final UUID DISTRIBUTOR_ID = UUID.fromString("bbbbbbbb-0000-0000-0000-000000000002");
 
-    private Merchant merchant;
+    private Customer merchant;
     private MerchantCreditProfile profile;
 
     @BeforeEach
@@ -62,7 +62,7 @@ class CreditScoringOrchestratorTest {
         Distributor distributor = new Distributor();
         distributor.setId(DISTRIBUTOR_ID);
 
-        merchant = new Merchant();
+        merchant = new Customer();
         merchant.setId(MERCHANT_ID);
         merchant.setDistributor(distributor);
 
