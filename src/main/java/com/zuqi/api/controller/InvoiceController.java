@@ -212,7 +212,8 @@ public class InvoiceController {
     @Operation(summary = "Initiate M-Pesa STK push for an unpaid invoice (no auth)")
     public ResponseEntity<ApiResponse<StkPushResponse>> payPublicInvoice(
             @PathVariable String invoiceNumber,
-            @RequestParam String phone) {
+            @RequestParam String phone,
+            @RequestParam(required = false) BigDecimal amount) {
 
         // Get the brand merchant ID for this invoice (avoids lazy loading)
         UUID merchantId = invoiceRepository.findMerchantIdByInvoiceNumber(invoiceNumber)
@@ -226,9 +227,11 @@ public class InvoiceController {
                     .body(ApiResponse.error("No active M-Pesa configuration found for this business"));
         }
 
-        // Load invoice to get balance due
-        InvoiceResponse invoice = invoiceService.getInvoiceByNumber(invoiceNumber);
-        BigDecimal amount = invoice.getBalanceDue() != null ? invoice.getBalanceDue() : invoice.getTotalAmount();
+        // Use provided amount or fall back to balance due
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            InvoiceResponse invoice = invoiceService.getInvoiceByNumber(invoiceNumber);
+            amount = invoice.getBalanceDue() != null ? invoice.getBalanceDue() : invoice.getTotalAmount();
+        }
 
         StkPushRequest stkRequest = new StkPushRequest(
                 configs.get(0).getExternalId(),
