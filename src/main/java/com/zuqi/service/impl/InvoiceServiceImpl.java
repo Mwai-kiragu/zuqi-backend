@@ -35,6 +35,7 @@ import com.zuqi.service.PaymentService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -57,6 +58,9 @@ import java.util.stream.Collectors;
 @Slf4j
 @Transactional(readOnly = true)
 public class InvoiceServiceImpl implements InvoiceService {
+
+    @Value("${app.frontend.url}")
+    private String frontendUrl;
 
     private final InvoiceRepository invoiceRepository;
     private final InvoiceItemRepository invoiceItemRepository;
@@ -785,7 +789,10 @@ public class InvoiceServiceImpl implements InvoiceService {
             variables.put("merchantEmail", invoice.getMerchant().getEmail());
         }
 
-        // Order items — mapped to a simple format compatible with the template
+        // Payment status flag for template badge
+        variables.put("isPaid", invoice.getStatus() != null && invoice.getStatus().name().equals("PAID"));
+
+        // Items — order, POS, or manual invoice line items
         if (invoice.getOrder() != null && invoice.getOrder().getItems() != null) {
             variables.put("orderNumber", invoice.getOrder().getOrderNumber());
             List<Map<String, Object>> items = invoice.getOrder().getItems().stream()
@@ -794,6 +801,20 @@ public class InvoiceServiceImpl implements InvoiceService {
                         m.put("productName", i.getProduct() != null ? i.getProduct().getName() : "");
                         m.put("quantity", i.getQuantity());
                         m.put("unitPrice", i.getUnitPrice());
+                        m.put("discountPercent", i.getDiscountPercent());
+                        m.put("totalAmount", i.getTotalAmount());
+                        return m;
+                    })
+                    .collect(Collectors.toList());
+            variables.put("items", items);
+        } else if (invoice.getInvoiceItems() != null && !invoice.getInvoiceItems().isEmpty()) {
+            List<Map<String, Object>> items = invoice.getInvoiceItems().stream()
+                    .map(i -> {
+                        Map<String, Object> m = new HashMap<>();
+                        m.put("productName", i.getDescription());
+                        m.put("quantity", java.math.BigDecimal.valueOf(i.getQuantity()));
+                        m.put("unitPrice", i.getUnitPrice());
+                        m.put("discountPercent", i.getDiscountPercent());
                         m.put("totalAmount", i.getTotalAmount());
                         return m;
                     })
@@ -803,6 +824,7 @@ public class InvoiceServiceImpl implements InvoiceService {
 
         variables.put("companyName", emailConfig.getFromName());
         variables.put("notes", invoice.getNotes());
+        variables.put("payUrl", frontendUrl + "/invoice/view/" + invoice.getInvoiceNumber());
 
         String subject = "Invoice " + invoice.getInvoiceNumber() + " from " +
                 (invoice.getDistributor() != null ? invoice.getDistributor().getName() : emailConfig.getFromName());

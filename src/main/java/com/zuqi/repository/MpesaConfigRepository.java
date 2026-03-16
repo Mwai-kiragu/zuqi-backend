@@ -12,7 +12,7 @@ public interface MpesaConfigRepository extends JpaRepository<MpesaConfig, UUID> 
 
     List<MpesaConfig> findByMerchantId(UUID merchantId);
 
-    Optional<MpesaConfig> findByExternalId(String externalId);
+    List<MpesaConfig> findByExternalId(String externalId);
 
     List<MpesaConfig> findByMerchantIdAndStatus(UUID merchantId, MpesaConfigStatus status);
 

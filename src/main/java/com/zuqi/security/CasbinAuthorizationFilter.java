@@ -31,6 +31,8 @@ public class CasbinAuthorizationFilter extends OncePerRequestFilter {
     private static final List<String> PUBLIC_PATHS = List.of(
             "/v1/auth",
             "/api/v1/auth",
+            "/v1/invoices/public",
+            "/api/v1/invoices/public",
             "/v1/mpesa/callback",
             "/api/v1/mpesa/callback",
             "/v1/kcb/callback",

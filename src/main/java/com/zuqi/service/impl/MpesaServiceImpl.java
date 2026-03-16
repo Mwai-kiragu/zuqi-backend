@@ -183,9 +183,15 @@ public class MpesaServiceImpl implements MpesaService {
     @Override
     @Transactional
     public StkPushResponse initiateStk(StkPushRequest request) {
-        // Look up config by externalId (Zed darajaConfigId)
-        MpesaConfig config = mpesaConfigRepository.findByExternalId(request.businessId())
-                .orElseThrow(() -> new ResourceNotFoundException("MpesaConfig", "businessId", request.businessId()));
+        // Look up config by externalId (may have duplicates — take the first active one)
+        List<MpesaConfig> configs = mpesaConfigRepository.findByExternalId(request.businessId());
+        MpesaConfig config = configs.stream()
+                .filter(c -> c.getStatus() == MpesaConfigStatus.ACTIVE)
+                .findFirst()
+                .orElse(configs.isEmpty() ? null : configs.get(0));
+        if (config == null) {
+            throw new ResourceNotFoundException("MpesaConfig", "businessId", request.businessId());
+        }
 
         if (config.getStatus() != MpesaConfigStatus.ACTIVE) {
             throw new ValidationException("M-Pesa configuration is not active");

@@ -41,14 +41,12 @@ public class ReportServiceImpl implements ReportService {
         LocalDateTime startDateTime = startDate.atStartOfDay();
         LocalDateTime endDateTime = endDate.atTime(LocalTime.MAX);
 
-        // Get total revenue
-        BigDecimal totalRevenue = orderRepository.sumRevenueFromDate(distributorId, startDateTime);
-        if (totalRevenue == null) {
-            totalRevenue = BigDecimal.ZERO;
-        }
+        // Get total revenue in period
+        BigDecimal totalRevenue = orderRepository.sumRevenueInPeriod(distributorId, startDateTime, endDateTime);
+        if (totalRevenue == null) totalRevenue = BigDecimal.ZERO;
 
-        // Get order count
-        long totalOrders = orderRepository.countByDistributorId(distributorId);
+        // Get order count in period
+        long totalOrders = orderRepository.countOrdersInPeriod(distributorId, startDateTime, endDateTime);
 
         // Calculate average order value
         BigDecimal avgOrderValue = totalOrders > 0
@@ -65,6 +63,35 @@ public class ReportServiceImpl implements ReportService {
                         .build())
                 .toList();
 
+        // Get individual orders in period (up to 100)
+        List<com.zuqi.domain.order.Order> rawOrders = orderRepository
+                .findByDistributorIdAndDateRange(distributorId, startDateTime, endDateTime);
+        List<SalesReportResponse.OrderSummary> orderList = rawOrders.stream()
+                .limit(100)
+                .map(o -> SalesReportResponse.OrderSummary.builder()
+                        .orderId(o.getId().toString())
+                        .orderNumber(o.getOrderNumber())
+                        .customerName(o.getMerchant() != null ? o.getMerchant().getBusinessName() : "")
+                        .orderDate(o.getCreatedAt())
+                        .totalAmount(o.getTotalAmount())
+                        .status(o.getStatus() != null ? o.getStatus().name() : "")
+                        .paymentStatus(o.getPaymentStatus() != null ? o.getPaymentStatus().name() : "")
+                        .build())
+                .toList();
+
+        // Get top 20 products sold in period
+        List<Object[]> productRows = orderRepository.findTopProductsSold(
+                distributorId, startDateTime, endDateTime, PageRequest.of(0, 20));
+        List<SalesReportResponse.ProductSoldData> productList = productRows.stream()
+                .map(row -> SalesReportResponse.ProductSoldData.builder()
+                        .productId(row[0].toString())
+                        .productName((String) row[1])
+                        .productSku(row[2] != null ? (String) row[2] : "")
+                        .totalQuantity((BigDecimal) row[3])
+                        .totalRevenue((BigDecimal) row[4])
+                        .build())
+                .toList();
+
         return SalesReportResponse.builder()
                 .startDate(startDate)
                 .endDate(endDate)
@@ -73,6 +100,8 @@ public class ReportServiceImpl implements ReportService {
                 .averageOrderValue(avgOrderValue)
                 .dailyData(dailyList)
                 .salesRepPerformance(new ArrayList<>())
+                .orders(orderList)
+                .productsSold(productList)
                 .build();
     }
 

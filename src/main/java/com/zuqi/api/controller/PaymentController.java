@@ -41,6 +41,7 @@ public class PaymentController {
             @Parameter(description = "Order ID filter") @RequestParam(required = false) UUID orderId,
             @Parameter(description = "Payment status filter") @RequestParam(required = false) PaymentStatus status,
             @Parameter(description = "Reconciled filter") @RequestParam(required = false) Boolean reconciled,
+            @Parameter(description = "Payment method ID filter") @RequestParam(required = false) Long paymentMethodId,
             @Parameter(description = "Start date filter") @RequestParam(required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @Parameter(description = "End date filter") @RequestParam(required = false)
@@ -56,7 +57,7 @@ public class PaymentController {
             payments = paymentService.getPaymentsByOrder(orderId, pageable);
         } else if (distributorId != null) {
             payments = paymentService.getPaymentsByFilters(
-                    distributorId, status, merchantId, reconciled, startDate, endDate, pageable);
+                    distributorId, status, merchantId, reconciled, paymentMethodId, startDate, endDate, pageable);
         } else if (merchantId != null) {
             payments = paymentService.getPaymentsByMerchant(merchantId, pageable);
         } else {

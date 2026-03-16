@@ -153,4 +153,8 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
     java.util.List<Object[]> monthlyRevenueByMerchant(
             @Param("merchantId") UUID merchantId,
             @Param("from") java.time.LocalDate from);
+
+    /** Get the brand Merchant ID for an invoice (for public pay endpoint, avoids lazy-loading). */
+    @Query("SELECT i.distributor.merchant.id FROM Invoice i WHERE i.invoiceNumber = :invoiceNumber")
+    Optional<UUID> findMerchantIdByInvoiceNumber(@Param("invoiceNumber") String invoiceNumber);
 }

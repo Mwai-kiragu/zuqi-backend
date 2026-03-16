@@ -4,8 +4,15 @@ import com.zuqi.api.dto.ApiResponse;
 import com.zuqi.api.dto.invoice.InvoiceResponse;
 import com.zuqi.api.dto.invoice.ManualInvoiceRequest;
 import com.zuqi.api.dto.invoice.SendInvoiceRequest;
+import com.zuqi.api.dto.mpesa.StkPushRequest;
+import com.zuqi.api.dto.mpesa.StkPushResponse;
 import com.zuqi.domain.invoice.InvoiceStatus;
+import com.zuqi.domain.mpesa.MpesaConfig;
+import com.zuqi.domain.mpesa.MpesaConfigStatus;
+import com.zuqi.repository.InvoiceRepository;
+import com.zuqi.repository.MpesaConfigRepository;
 import com.zuqi.service.InvoiceService;
+import com.zuqi.service.MpesaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -33,6 +40,9 @@ import java.util.UUID;
 public class InvoiceController {
 
     private final InvoiceService invoiceService;
+    private final InvoiceRepository invoiceRepository;
+    private final MpesaConfigRepository mpesaConfigRepository;
+    private final MpesaService mpesaService;
 
     @PostMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN', 'SALES_REP')")
@@ -186,5 +196,50 @@ public class InvoiceController {
 
         Map<String, Long> counts = invoiceService.getAllStatusCounts(distributorId);
         return ResponseEntity.ok(ApiResponse.success("Invoice status counts retrieved successfully", counts));
+    }
+
+    // ── PUBLIC (no-auth) endpoints ─────────────────────────────────────────
+
+    @GetMapping("/public/{invoiceNumber}")
+    @Operation(summary = "Get invoice details for public view (no auth)")
+    public ResponseEntity<ApiResponse<InvoiceResponse>> getPublicInvoice(
+            @PathVariable String invoiceNumber) {
+        InvoiceResponse invoice = invoiceService.getInvoiceByNumber(invoiceNumber);
+        return ResponseEntity.ok(ApiResponse.success("Invoice retrieved", invoice));
+    }
+
+    @PostMapping("/public/{invoiceNumber}/pay")
+    @Operation(summary = "Initiate M-Pesa STK push for an unpaid invoice (no auth)")
+    public ResponseEntity<ApiResponse<StkPushResponse>> payPublicInvoice(
+            @PathVariable String invoiceNumber,
+            @RequestParam String phone) {
+
+        // Get the brand merchant ID for this invoice (avoids lazy loading)
+        UUID merchantId = invoiceRepository.findMerchantIdByInvoiceNumber(invoiceNumber)
+                .orElseThrow(() -> new com.zuqi.exception.ResourceNotFoundException("Invoice", "number", invoiceNumber));
+
+        // Find first active M-Pesa config for this merchant
+        List<MpesaConfig> configs = mpesaConfigRepository
+                .findByMerchantIdAndStatus(merchantId, MpesaConfigStatus.ACTIVE);
+        if (configs.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("No active M-Pesa configuration found for this business"));
+        }
+
+        // Load invoice to get balance due
+        InvoiceResponse invoice = invoiceService.getInvoiceByNumber(invoiceNumber);
+        BigDecimal amount = invoice.getBalanceDue() != null ? invoice.getBalanceDue() : invoice.getTotalAmount();
+
+        StkPushRequest stkRequest = new StkPushRequest(
+                configs.get(0).getExternalId(),
+                phone,
+                amount,
+                invoiceNumber,
+                "INVOICE",
+                "Payment for invoice " + invoiceNumber
+        );
+
+        StkPushResponse response = mpesaService.initiateStk(stkRequest);
+        return ResponseEntity.ok(ApiResponse.success("STK push sent", response));
     }
 }

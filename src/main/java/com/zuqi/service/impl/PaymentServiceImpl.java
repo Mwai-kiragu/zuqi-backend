@@ -93,6 +93,7 @@ public class PaymentServiceImpl implements PaymentService {
             PaymentStatus status,
             UUID merchantId,
             Boolean reconciled,
+            Long paymentMethodId,
             LocalDate startDate,
             LocalDate endDate,
             Pageable pageable) {
@@ -113,6 +114,7 @@ public class PaymentServiceImpl implements PaymentService {
                 status != null ? status.name() : null,
                 merchantId,
                 reconciled,
+                paymentMethodId,
                 startDateTime,
                 endDateTime,
                 unsorted

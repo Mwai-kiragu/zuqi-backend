@@ -33,6 +33,7 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
             "AND (:status IS NULL OR p.status = CAST(:status AS VARCHAR)) " +
             "AND (CAST(:merchantId AS UUID) IS NULL OR p.merchant_id = CAST(:merchantId AS UUID)) " +
             "AND (:reconciled IS NULL OR p.reconciled = :reconciled) " +
+            "AND (:paymentMethodId IS NULL OR p.payment_method_id = :paymentMethodId) " +
             "AND (CAST(:startDate AS TIMESTAMP) IS NULL OR p.created_at >= CAST(:startDate AS TIMESTAMP)) " +
             "AND (CAST(:endDate AS TIMESTAMP) IS NULL OR p.created_at <= CAST(:endDate AS TIMESTAMP)) " +
             "ORDER BY p.created_at DESC",
@@ -40,6 +41,7 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
             "AND (:status IS NULL OR p.status = CAST(:status AS VARCHAR)) " +
             "AND (CAST(:merchantId AS UUID) IS NULL OR p.merchant_id = CAST(:merchantId AS UUID)) " +
             "AND (:reconciled IS NULL OR p.reconciled = :reconciled) " +
+            "AND (:paymentMethodId IS NULL OR p.payment_method_id = :paymentMethodId) " +
             "AND (CAST(:startDate AS TIMESTAMP) IS NULL OR p.created_at >= CAST(:startDate AS TIMESTAMP)) " +
             "AND (CAST(:endDate AS TIMESTAMP) IS NULL OR p.created_at <= CAST(:endDate AS TIMESTAMP))",
             nativeQuery = true)
@@ -48,6 +50,7 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
             @Param("status") String status,
             @Param("merchantId") UUID merchantId,
             @Param("reconciled") Boolean reconciled,
+            @Param("paymentMethodId") Long paymentMethodId,
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate,
             Pageable pageable);

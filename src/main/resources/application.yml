@@ -216,7 +216,7 @@ app:
     from-name: ${EMAIL_FROM_NAME:Zuqi}
     enabled: ${EMAIL_ENABLED:true}
   frontend:
-    url: ${FRONTEND_URL:http://localhost:3000}
+    url: ${FRONTEND_URL:https://zuqi.pestoe.com}
 
 # Logging Configuration
 logging:

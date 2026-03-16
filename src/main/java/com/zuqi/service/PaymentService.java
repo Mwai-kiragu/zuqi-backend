@@ -26,6 +26,7 @@ public interface PaymentService {
             PaymentStatus status,
             UUID merchantId,
             Boolean reconciled,
+            Long paymentMethodId,
             LocalDate startDate,
             LocalDate endDate,
             Pageable pageable);
