@@ -1,21 +1,33 @@
 package com.zuqi.service.impl;
 
 import com.zuqi.api.dto.invoice.InvoiceResponse;
+import com.zuqi.api.dto.invoice.ManualInvoiceItemRequest;
+import com.zuqi.api.dto.invoice.ManualInvoiceRequest;
 import com.zuqi.config.EmailConfig;
+import com.zuqi.domain.customer.Customer;
+import com.zuqi.domain.distributor.Distributor;
+import com.zuqi.domain.inventory.Stock;
+import com.zuqi.domain.inventory.Warehouse;
 import com.zuqi.domain.invoice.Invoice;
+import com.zuqi.domain.invoice.InvoiceItem;
 import com.zuqi.domain.invoice.InvoiceStatus;
 import com.zuqi.domain.order.Order;
 import com.zuqi.domain.order.OrderItem;
+import com.zuqi.domain.payment.PaymentStatus;
 import com.zuqi.domain.pos.PosSale;
 import com.zuqi.domain.pos.PosSaleStatus;
-import com.zuqi.domain.inventory.Stock;
+import com.zuqi.domain.product.Product;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.api.dto.payment.PaymentRequest;
-import com.zuqi.domain.payment.PaymentStatus;
+import com.zuqi.repository.CustomerRepository;
+import com.zuqi.repository.DistributorRepository;
+import com.zuqi.repository.InvoiceItemRepository;
 import com.zuqi.repository.InvoiceRepository;
 import com.zuqi.repository.PosSaleRepository;
+import com.zuqi.repository.ProductRepository;
 import com.zuqi.repository.StockRepository;
+import com.zuqi.repository.WarehouseRepository;
 import com.zuqi.service.EmailService;
 import com.zuqi.service.GlAutoPostingService;
 import com.zuqi.service.InvoiceService;
@@ -32,6 +44,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -46,13 +59,139 @@ import java.util.stream.Collectors;
 public class InvoiceServiceImpl implements InvoiceService {
 
     private final InvoiceRepository invoiceRepository;
+    private final InvoiceItemRepository invoiceItemRepository;
     private final PosSaleRepository posSaleRepository;
+    private final CustomerRepository customerRepository;
+    private final DistributorRepository distributorRepository;
+    private final ProductRepository productRepository;
+    private final WarehouseRepository warehouseRepository;
     private final StockRepository stockRepository;
     private final EmailService emailService;
     private final EmailConfig emailConfig;
     private final SecurityUtils securityUtils;
     private final PaymentService paymentService;
     private final GlAutoPostingService glAutoPostingService;
+
+    @Override
+    @Transactional
+    public InvoiceResponse createManualInvoice(ManualInvoiceRequest request) {
+        log.info("Creating manual invoice for customer: {}", request.getCustomerId());
+
+        // Resolve distributor
+        UUID effectiveDistributorId = request.getDistributorId();
+        if (effectiveDistributorId == null) {
+            effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
+        }
+        if (effectiveDistributorId == null) {
+            throw new ValidationException("distributorId is required to create a manual invoice");
+        }
+
+        final UUID resolvedDistributorId = effectiveDistributorId;
+        Distributor distributor = distributorRepository.findById(resolvedDistributorId)
+                .orElseThrow(() -> new ResourceNotFoundException("Distributor", "id", resolvedDistributorId.toString()));
+
+        Customer customer = customerRepository.findById(request.getCustomerId())
+                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getCustomerId().toString()));
+
+        // Build invoice items and compute subtotal
+        List<InvoiceItem> items = new ArrayList<>();
+        BigDecimal subtotal = BigDecimal.ZERO;
+
+        for (ManualInvoiceItemRequest itemReq : request.getItems()) {
+            Product product = productRepository.findById(itemReq.getProductId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Product", "id", itemReq.getProductId().toString()));
+
+            BigDecimal unitPrice = itemReq.getUnitPrice() != null ? itemReq.getUnitPrice() : product.getUnitPrice();
+
+            InvoiceItem item = InvoiceItem.builder()
+                    .product(product)
+                    .description(product.getName())
+                    .quantity(itemReq.getQuantity())
+                    .unitPrice(unitPrice)
+                    .discountPercent(itemReq.getDiscountPercent() != null ? itemReq.getDiscountPercent() : BigDecimal.ZERO)
+                    .build();
+            item.calculateTotal();
+            items.add(item);
+            subtotal = subtotal.add(item.getTotalAmount());
+        }
+
+        BigDecimal discount = request.getDiscountAmount() != null ? request.getDiscountAmount() : BigDecimal.ZERO;
+        BigDecimal tax = request.getTaxAmount() != null ? request.getTaxAmount() : BigDecimal.ZERO;
+        BigDecimal total = subtotal.subtract(discount).add(tax);
+
+        int termsDays = request.getPaymentTermsDays() != null ? request.getPaymentTermsDays()
+                : (customer.getPaymentTermsDays() != null ? customer.getPaymentTermsDays() : 30);
+
+        Invoice invoice = Invoice.builder()
+                .invoiceNumber(generateInvoiceNumber(distributor.getName()))
+                .sourceType("MANUAL")
+                .distributor(distributor)
+                .merchant(customer)
+                .subtotal(subtotal)
+                .amount(total)
+                .discountAmount(discount)
+                .taxAmount(tax)
+                .totalAmount(total)
+                .issueDate(LocalDate.now())
+                .dueDate(LocalDate.now().plusDays(Math.max(termsDays, 1)))
+                .notes(request.getNotes())
+                .termsAndConditions(request.getTermsAndConditions())
+                .build();
+
+        invoice.calculateBalanceDue();
+        Invoice saved = invoiceRepository.save(invoice);
+
+        // Link items to the saved invoice and persist
+        for (InvoiceItem item : items) {
+            item.setInvoice(saved);
+        }
+        invoiceItemRepository.saveAll(items);
+        saved.setInvoiceItems(items);
+
+        // Deduct stock if warehouse specified
+        if (request.getWarehouseId() != null) {
+            warehouseRepository.findById(request.getWarehouseId()).ifPresent(warehouse -> {
+                for (InvoiceItem item : items) {
+                    if (item.getProduct() != null) {
+                        stockRepository.findByWarehouseIdAndProductId(warehouse.getId(), item.getProduct().getId())
+                                .ifPresent(stock -> {
+                                    stock.setQuantity(stock.getQuantity().subtract(BigDecimal.valueOf(item.getQuantity())));
+                                    stockRepository.save(stock);
+                                    log.info("Deducted {} of '{}' for manual invoice {}",
+                                            item.getQuantity(), item.getProduct().getName(), saved.getInvoiceNumber());
+                                });
+                    }
+                }
+            });
+        }
+
+        // GL auto-posting: DR Accounts Receivable / CR Sales Revenue (non-blocking)
+        try {
+            glAutoPostingService.postInvoiceCreated(saved);
+        } catch (Exception e) {
+            log.warn("GL auto-posting failed for manual invoice {}: {}", saved.getInvoiceNumber(), e.getMessage());
+        }
+
+        // GL COGS posting: DR Cost of Goods Sold / CR Inventory (non-blocking)
+        try {
+            glAutoPostingService.postManualInvoiceCogs(saved, items, resolvedDistributorId);
+        } catch (Exception e) {
+            log.warn("GL COGS posting failed for manual invoice {}: {}", saved.getInvoiceNumber(), e.getMessage());
+        }
+
+        // Auto-send email if customer has an email address
+        if (customer.getEmail() != null && !customer.getEmail().isBlank()) {
+            try {
+                sendInvoiceEmailAsync(saved, customer.getEmail());
+                saved.markAsSent(customer.getEmail());
+                invoiceRepository.save(saved);
+            } catch (Exception e) {
+                log.warn("Failed to send manual invoice email to {}: {}", customer.getEmail(), e.getMessage());
+            }
+        }
+
+        return InvoiceResponse.fromEntity(saved);
+    }
 
     @Override
     @Transactional
@@ -540,10 +679,9 @@ public class InvoiceServiceImpl implements InvoiceService {
     }
 
     private String generateInvoiceNumber(String distributorName) {
-        String prefix = initials(distributorName) + "-";
-        Integer maxNum = invoiceRepository.findMaxInvoiceNumberByPrefix(prefix);
+        Integer maxNum = invoiceRepository.findMaxStandardInvoiceNumber();
         int nextNum = (maxNum != null ? maxNum : 0) + 1;
-        return prefix + String.format("%03d", nextNum);
+        return "INV-" + String.format("%02d", nextNum);
     }
 
     /** Extracts uppercase initials — e.g. "Menace Distributor" → "MD". */

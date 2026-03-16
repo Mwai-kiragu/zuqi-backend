@@ -41,21 +41,29 @@ public class CustomerController {
             @RequestParam(required = false) Long categoryId,
             @RequestParam(required = false) UUID salesRepId,
             @RequestParam(required = false) String search,
-            @RequestParam(required = false, defaultValue = "true") Boolean active,
+            @RequestParam(required = false) Boolean active,
             @PageableDefault(size = 20, sort = "businessName", direction = Sort.Direction.ASC) Pageable pageable) {
 
         Page<CustomerResponse> customers;
         if (search != null && !search.isBlank()) {
             customers = customerService.searchCustomers(search, distributorId, active, pageable);
         } else if (distributorId != null) {
-            customers = active ? customerService.getCustomersByDistributor(distributorId, pageable)
-                    : customerService.getInactiveCustomersByDistributor(distributorId, pageable);
+            if (active == null) {
+                customers = customerService.getAllCustomersByDistributor(distributorId, pageable);
+            } else {
+                customers = active ? customerService.getCustomersByDistributor(distributorId, pageable)
+                        : customerService.getInactiveCustomersByDistributor(distributorId, pageable);
+            }
         } else if (categoryId != null) {
             customers = customerService.getCustomersByCategory(categoryId, pageable);
         } else if (salesRepId != null) {
             customers = customerService.getCustomersBySalesRep(salesRepId, pageable);
         } else {
-            customers = active ? customerService.getAllCustomers(pageable) : customerService.getInactiveCustomers(pageable);
+            if (active == null) {
+                customers = customerService.getAllCustomersIncludingInactive(pageable);
+            } else {
+                customers = active ? customerService.getAllCustomers(pageable) : customerService.getInactiveCustomers(pageable);
+            }
         }
         return ResponseEntity.ok(ApiResponse.success(customers));
     }

@@ -15,9 +15,13 @@ public interface CustomerService {
 
     Page<CustomerResponse> getAllCustomers(Pageable pageable);
 
+    Page<CustomerResponse> getAllCustomersIncludingInactive(Pageable pageable);
+
     Page<CustomerResponse> getInactiveCustomers(Pageable pageable);
 
     Page<CustomerResponse> getCustomersByDistributor(UUID distributorId, Pageable pageable);
+
+    Page<CustomerResponse> getAllCustomersByDistributor(UUID distributorId, Pageable pageable);
 
     Page<CustomerResponse> getInactiveCustomersByDistributor(UUID distributorId, Pageable pageable);
 

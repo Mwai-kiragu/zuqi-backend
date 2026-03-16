@@ -2,6 +2,7 @@ package com.zuqi.api.controller;
 
 import com.zuqi.api.dto.ApiResponse;
 import com.zuqi.api.dto.invoice.InvoiceResponse;
+import com.zuqi.api.dto.invoice.ManualInvoiceRequest;
 import com.zuqi.api.dto.invoice.SendInvoiceRequest;
 import com.zuqi.domain.invoice.InvoiceStatus;
 import com.zuqi.service.InvoiceService;
@@ -14,7 +15,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -30,6 +33,16 @@ import java.util.UUID;
 public class InvoiceController {
 
     private final InvoiceService invoiceService;
+
+    @PostMapping
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN', 'SALES_REP')")
+    @Operation(summary = "Create a manual invoice tied to a customer with products")
+    public ResponseEntity<ApiResponse<InvoiceResponse>> createManualInvoice(
+            @Valid @RequestBody ManualInvoiceRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Invoice created successfully",
+                        invoiceService.createManualInvoice(request)));
+    }
 
     @GetMapping
     @Operation(summary = "Get all invoices with optional filters")

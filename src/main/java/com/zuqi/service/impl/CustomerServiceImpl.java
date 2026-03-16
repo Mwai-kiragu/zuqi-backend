@@ -13,6 +13,7 @@ import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.repository.CustomerCategoryRepository;
 import com.zuqi.repository.CustomerRepository;
 import com.zuqi.repository.DistributorRepository;
+import com.zuqi.repository.OrderRepository;
 import com.zuqi.repository.UserRepository;
 import com.zuqi.ai.event.MerchantCreatedEvent;
 import com.zuqi.ai.feature.FeatureStore;
@@ -42,6 +43,7 @@ public class CustomerServiceImpl implements CustomerService {
     private final CustomerCategoryRepository categoryRepository;
     private final DistributorRepository distributorRepository;
     private final UserRepository userRepository;
+    private final OrderRepository orderRepository;
     private final SecurityUtils securityUtils;
     private final ActivityLogService activityLogService;
     private final ApplicationEventPublisher eventPublisher;
@@ -67,8 +69,31 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<CustomerResponse> getAllCustomersIncludingInactive(Pageable pageable) {
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId != null) {
+            return customerRepository.findByDistributorMerchantId(merchantId, pageable)
+                    .map(CustomerResponse::fromEntity);
+        }
+        UUID distributorId = securityUtils.getDistributorIdForFiltering();
+        if (distributorId != null) {
+            return customerRepository.findByDistributorId(distributorId, pageable)
+                    .map(CustomerResponse::fromEntity);
+        }
+        return customerRepository.findAll(pageable).map(CustomerResponse::fromEntity);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Page<CustomerResponse> getCustomersByDistributor(UUID distributorId, Pageable pageable) {
         return customerRepository.findByDistributorIdAndActiveTrue(distributorId, pageable)
+                .map(CustomerResponse::fromEntity);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<CustomerResponse> getAllCustomersByDistributor(UUID distributorId, Pageable pageable) {
+        return customerRepository.findByDistributorId(distributorId, pageable)
                 .map(CustomerResponse::fromEntity);
     }
 
@@ -111,7 +136,11 @@ public class CustomerServiceImpl implements CustomerService {
     public CustomerResponse getCustomerById(UUID id) {
         Customer customer = customerRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", id.toString()));
-        return CustomerResponse.fromEntity(customer);
+        CustomerResponse response = CustomerResponse.fromEntity(customer);
+        // Real-time outstanding balance computed from unpaid orders
+        java.math.BigDecimal outstanding = orderRepository.sumOutstandingByCustomerId(id);
+        response.setCurrentBalance(outstanding != null ? outstanding : java.math.BigDecimal.ZERO);
+        return response;
     }
 
     private String generateCustomerCode() {

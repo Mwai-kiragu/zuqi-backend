@@ -4,6 +4,7 @@ import com.zuqi.domain.gl.JournalSourceModule;
 import com.zuqi.domain.gl.SystemAccountType;
 import com.zuqi.domain.gl.GlAccount;
 import com.zuqi.domain.invoice.Invoice;
+import com.zuqi.domain.invoice.InvoiceItem;
 import com.zuqi.domain.pos.PosSale;
 import com.zuqi.repository.GlAccountRepository;
 import com.zuqi.service.GlAccountService;
@@ -33,8 +34,6 @@ public class GlAutoPostingServiceImpl implements GlAutoPostingService {
     private final GlPostingService glPostingService;
     private final GlAccountService glAccountService;
     private final GlPeriodService glPeriodService;
-
-    // ── Invoice Created ──────────────────────────────────────────────────────
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -71,8 +70,6 @@ public class GlAutoPostingServiceImpl implements GlAutoPostingService {
         }
     }
 
-    // ── Payment Received ─────────────────────────────────────────────────────
-
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void postPaymentReceived(Invoice invoice, BigDecimal amount) {
@@ -105,8 +102,6 @@ public class GlAutoPostingServiceImpl implements GlAutoPostingService {
             log.error("GL auto-post failed (payment received) for {}", invoice.getInvoiceNumber(), e);
         }
     }
-
-    // ── POS Sale Completed ───────────────────────────────────────────────────
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -156,13 +151,6 @@ public class GlAutoPostingServiceImpl implements GlAutoPostingService {
         }
     }
 
-    // ── POS COGS ─────────────────────────────────────────────────────────────
-
-    /**
-     * DR Cost of Goods Sold / CR Inventory for a POS sale.
-     * Runs in a separate REQUIRES_NEW transaction so a missing COGS account never
-     * rolls back the revenue entry posted by {@link #postPosSaleCompleted}.
-     */
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void postPosCogs(PosSale sale) {
@@ -208,8 +196,6 @@ public class GlAutoPostingServiceImpl implements GlAutoPostingService {
         }
     }
 
-    // ── POS Payment Recorded ─────────────────────────────────────────────────
-
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void postPosSalePayment(PosSale sale, BigDecimal paymentAmount) {
@@ -246,13 +232,50 @@ public class GlAutoPostingServiceImpl implements GlAutoPostingService {
         }
     }
 
-    // ── GL accounts bootstrapper ─────────────────────────────────────────────
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void postManualInvoiceCogs(Invoice invoice, List<InvoiceItem> items, UUID distributorId) {
+        Optional<GlAccount> defaultCogs = find(distributorId, SystemAccountType.COST_OF_GOODS_SOLD);
+        Optional<GlAccount> inventory   = find(distributorId, SystemAccountType.INVENTORY);
 
-    /**
-     * Seeds default GL accounts for the distributor if AR or Revenue accounts are missing.
-     * Period creation is handled by {@link com.zuqi.service.impl.JournalEntryServiceImpl#postDirect}
-     * via {@link GlPeriodService#getOrCreatePeriodForAutoPosting}.
-     */
+        if (defaultCogs.isEmpty() || inventory.isEmpty()) {
+            log.debug("GL COGS auto-post skipped (manual invoice): COGS or Inventory account not configured for distributor {}", distributorId);
+            return;
+        }
+
+        Map<UUID, BigDecimal> costByAccount = new java.util.LinkedHashMap<>();
+        for (InvoiceItem item : items) {
+            if (item.getProduct() == null || item.getProduct().getCostPrice() == null
+                    || item.getQuantity() == null || item.getQuantity() <= 0) continue;
+            BigDecimal itemCost = item.getProduct().getCostPrice()
+                    .multiply(BigDecimal.valueOf(item.getQuantity()));
+            UUID accountId = item.getProduct().getCogsAccountId() != null
+                    ? item.getProduct().getCogsAccountId()
+                    : defaultCogs.get().getId();
+            costByAccount.merge(accountId, itemCost, BigDecimal::add);
+        }
+
+        if (costByAccount.isEmpty()) return;
+
+        BigDecimal totalCost = costByAccount.values().stream().reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (totalCost.compareTo(BigDecimal.ZERO) <= 0) return;
+
+        String ref = invoice.getInvoiceNumber();
+        LocalDate date = invoice.getIssueDate() != null ? invoice.getIssueDate() : LocalDate.now();
+        try {
+            List<GlPostingService.PostingLine> lines = new java.util.ArrayList<>();
+            costByAccount.forEach((acctId, amt) ->
+                    lines.add(debit(acctId, "COGS — " + ref, amt)));
+            lines.add(credit(inventory.get().getId(), "Inventory — " + ref, totalCost));
+
+            glPostingService.post(distributorId, JournalSourceModule.SALES, invoice.getId(), date,
+                    "COGS — Invoice " + ref, ref, lines, null);
+            log.info("GL COGS posted for manual invoice {} — total cost {}", ref, totalCost);
+        } catch (Exception e) {
+            log.error("GL COGS auto-post failed for manual invoice {}", ref, e);
+        }
+    }
+
     private void ensureGlAccounts(UUID distId) {
         boolean hasAr      = glAccountRepository.findByDistributorIdAndSystemAccountType(distId, SystemAccountType.ACCOUNTS_RECEIVABLE).isPresent();
         boolean hasRevenue = glAccountRepository.findByDistributorIdAndSystemAccountType(distId, SystemAccountType.SALES_REVENUE).isPresent();
@@ -266,8 +289,6 @@ public class GlAutoPostingServiceImpl implements GlAutoPostingService {
             }
         }
     }
-
-    // ── Helpers ──────────────────────────────────────────────────────────────
 
     private Optional<GlAccount> find(UUID distId, SystemAccountType type) {
         return glAccountRepository.findByDistributorIdAndSystemAccountType(distId, type);

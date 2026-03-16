@@ -1,6 +1,7 @@
 package com.zuqi.service;
 
 import com.zuqi.api.dto.invoice.InvoiceResponse;
+import com.zuqi.api.dto.invoice.ManualInvoiceRequest;
 import com.zuqi.domain.invoice.InvoiceStatus;
 import com.zuqi.domain.order.Order;
 import org.springframework.data.domain.Page;
@@ -12,6 +13,8 @@ import java.util.List;
 import java.util.UUID;
 
 public interface InvoiceService {
+
+    InvoiceResponse createManualInvoice(ManualInvoiceRequest request);
 
     InvoiceResponse createInvoiceFromOrder(Order order);
 

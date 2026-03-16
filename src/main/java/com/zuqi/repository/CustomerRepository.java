@@ -49,14 +49,19 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID>, JpaSp
 
     Page<Customer> findByDistributorIdAndBlacklistedTrue(UUID distributorId, Pageable pageable);
 
+    /** Paginated query without active filter (all statuses). */
+    Page<Customer> findByDistributorId(UUID distributorId, Pageable pageable);
+
     /** Scope to a merchant brand (MERCHANT_ADMIN). */
+    Page<Customer> findByDistributorMerchantId(UUID merchantId, Pageable pageable);
+
     Page<Customer> findByDistributorMerchantIdAndActiveTrue(UUID merchantId, Pageable pageable);
 
     Page<Customer> findByDistributorMerchantIdAndActiveFalse(UUID merchantId, Pageable pageable);
 
     Page<Customer> findByDistributorMerchantIdAndBlacklistedTrue(UUID merchantId, Pageable pageable);
 
-    @Query("SELECT c FROM Customer c WHERE c.distributor.merchant.id = :merchantId AND c.active = :active AND " +
+    @Query("SELECT c FROM Customer c WHERE c.distributor.merchant.id = :merchantId AND (:active IS NULL OR c.active = :active) AND " +
             "(LOWER(c.businessName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
             "LOWER(c.ownerName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
             "c.phone LIKE CONCAT('%', :searchTerm, '%'))")
@@ -69,11 +74,11 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID>, JpaSp
     @Query("SELECT COUNT(c) FROM Customer c")
     long countAll();
 
-    @Query("SELECT c FROM Customer c WHERE c.active = :active AND " +
+    @Query("SELECT c FROM Customer c WHERE (:active IS NULL OR c.active = :active) AND " +
             "LOWER(c.businessName) LIKE LOWER(CONCAT('%', :searchTerm, '%'))")
     Page<Customer> searchByBusinessNameAndActive(@Param("searchTerm") String searchTerm, @Param("active") Boolean active, Pageable pageable);
 
-    @Query("SELECT c FROM Customer c WHERE c.distributor.id = :distributorId AND c.active = :active AND " +
+    @Query("SELECT c FROM Customer c WHERE c.distributor.id = :distributorId AND (:active IS NULL OR c.active = :active) AND " +
             "(LOWER(c.businessName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
             "LOWER(c.ownerName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
             "c.phone LIKE CONCAT('%', :searchTerm, '%'))")

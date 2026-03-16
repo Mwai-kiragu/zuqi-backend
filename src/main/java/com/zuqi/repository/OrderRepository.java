@@ -243,4 +243,9 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     List<Order> findByMerchantIdAndCreatedAtBefore(
             @Param("merchantId") UUID merchantId,
             @Param("asOfDate") LocalDateTime asOfDate);
+
+    /** Sum of unpaid/partial amounts for a specific customer (used for real-time credit utilization). */
+    @Query("SELECT COALESCE(SUM(o.totalAmount - o.paidAmount), 0) FROM Order o " +
+            "WHERE o.merchant.id = :customerId AND o.paymentStatus != 'PAID'")
+    java.math.BigDecimal sumOutstandingByCustomerId(@Param("customerId") UUID customerId);
 }

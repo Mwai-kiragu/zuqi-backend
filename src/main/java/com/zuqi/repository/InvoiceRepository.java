@@ -73,6 +73,12 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
            "FROM Invoice i WHERE i.invoiceNumber LIKE CONCAT(:prefix, '%')")
     Integer findMaxInvoiceNumberByPrefix(@Param("prefix") String prefix);
 
+    /** Safely finds the max sequential number for INV-XXXX format, ignoring old date-based entries. */
+    @Query(value = "SELECT COALESCE(MAX(CAST(SUBSTRING(invoice_number, 5) AS INTEGER)), 0) " +
+                   "FROM invoices WHERE invoice_number ~ '^INV-[0-9]+$'",
+           nativeQuery = true)
+    Integer findMaxStandardInvoiceNumber();
+
     long countByDistributorIdAndStatus(UUID distributorId, InvoiceStatus status);
 
     long countByStatus(InvoiceStatus status);

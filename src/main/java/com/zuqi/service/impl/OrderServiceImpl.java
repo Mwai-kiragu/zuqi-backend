@@ -238,6 +238,15 @@ public class OrderServiceImpl implements OrderService {
         // Save order
         order = orderRepository.save(order);
 
+        // Sync customer's stored currentBalance with real outstanding from all unpaid orders
+        try {
+            BigDecimal outstanding = orderRepository.sumOutstandingByCustomerId(merchant.getId());
+            merchant.setCurrentBalance(outstanding != null ? outstanding : BigDecimal.ZERO);
+            customerRepository.save(merchant);
+        } catch (Exception e) {
+            log.warn("Failed to sync currentBalance for customer {}: {}", merchant.getId(), e.getMessage());
+        }
+
         // Add initial status history
         addStatusHistory(order, OrderStatus.PENDING, "Order created", currentUser);
 

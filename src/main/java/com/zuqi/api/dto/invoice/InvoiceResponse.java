@@ -2,6 +2,7 @@ package com.zuqi.api.dto.invoice;
 
 import com.zuqi.api.dto.order.OrderItemResponse;
 import com.zuqi.domain.invoice.Invoice;
+import com.zuqi.domain.invoice.InvoiceItem;
 import com.zuqi.domain.invoice.InvoiceStatus;
 import com.zuqi.domain.pos.PosSaleItem;
 import lombok.AllArgsConstructor;
@@ -138,6 +139,24 @@ public class InvoiceResponse {
                                 .build())
                         .toList());
             }
+        }
+
+        // Manual invoice items
+        if ("MANUAL".equals(invoice.getSourceType())
+                && invoice.getInvoiceItems() != null
+                && !invoice.getInvoiceItems().isEmpty()) {
+            builder.items(invoice.getInvoiceItems().stream()
+                    .map(item -> OrderItemResponse.builder()
+                            .id(item.getId())
+                            .productId(item.getProduct() != null ? item.getProduct().getId() : null)
+                            .productSku(item.getProduct() != null ? item.getProduct().getSku() : null)
+                            .productName(item.getDescription())
+                            .quantity(BigDecimal.valueOf(item.getQuantity()))
+                            .unitPrice(item.getUnitPrice())
+                            .discountPercent(item.getDiscountPercent())
+                            .totalAmount(item.getTotalAmount())
+                            .build())
+                    .toList());
         }
 
         // Distributor info
