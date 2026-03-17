@@ -137,6 +137,7 @@ public class ShrinkageTrainingPipeline {
                         .discrepancyPct(0.5 + rng.nextDouble() * 2.0)
                         .manualAdjustmentCount7d(rng.nextInt(3))
                         .adjustingUserIds(List.of(UUID.randomUUID()))
+                        .adjustmentTimeDistribution(normalHourDistribution(rng))
                         .consumptionRate7d(BigDecimal.valueOf(rate))
                         .consumptionRate30d(BigDecimal.valueOf(rate * (0.9 + rng.nextDouble() * 0.2)))
                         .consumptionTrend(pickTrend(rng))
@@ -164,7 +165,8 @@ public class ShrinkageTrainingPipeline {
                     .discrepancy(BigDecimal.valueOf(-stock * 0.25))
                     .discrepancyPct(-25.0 - rng.nextDouble() * 20.0)
                     .manualAdjustmentCount7d(8 + rng.nextInt(10))
-                    .adjustingUserIds(List.of(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID()))
+                    .adjustingUserIds(List.of(UUID.randomUUID()))
+                    .adjustmentTimeDistribution(concentratedHourDistribution(rng))  // low entropy = theft signal
                     .consumptionRate7d(BigDecimal.valueOf(rate))
                     .consumptionRate30d(BigDecimal.valueOf(rate))
                     .consumptionTrend("DECREASING")
@@ -173,6 +175,22 @@ public class ShrinkageTrainingPipeline {
                     .build());
         }
         return list;
+    }
+
+    /** Spread adjustments across business hours — high entropy, normal pattern. */
+    private Map<String, Integer> normalHourDistribution(Random rng) {
+        Map<String, Integer> dist = new HashMap<>();
+        for (int h = 8; h <= 18; h++) {
+            int count = rng.nextInt(3);
+            if (count > 0) dist.put(String.valueOf(h), count);
+        }
+        return dist;
+    }
+
+    /** Concentrate all adjustments at 2–4 AM by single user — low entropy, theft pattern. */
+    private Map<String, Integer> concentratedHourDistribution(Random rng) {
+        int hour = 2 + rng.nextInt(3);  // 2, 3, or 4 AM
+        return Map.of(String.valueOf(hour), 5 + rng.nextInt(6));
     }
 
     private String pickTrend(Random rng) {
@@ -219,10 +237,12 @@ public class ShrinkageTrainingPipeline {
                 Map.of("false_positive_rate", fpr, "true_positive_rate", tpr,
                         "training_samples", trainSize),
                 binary,
-                Map.of("feature_count", 8, "feature_names", List.of(
-                        "discrepancy_pct", "manual_adj_count_7d", "unique_adjusting_users",
-                        "consumption_rate_7d", "consumption_trend_numeric",
-                        "pending_reserved_pct", "expected_incoming_pct", "current_stock_normalized")));
+                Map.of("feature_count", 12, "feature_names", List.of(
+                        "discrepancy_pct", "discrepancy_normalized", "manual_adj_count_7d",
+                        "unique_adjusting_users", "adjustment_time_entropy",
+                        "consumption_rate_7d", "consumption_rate_30d", "consumption_trend_numeric",
+                        "pending_reserved_pct", "expected_incoming_pct",
+                        "current_stock_normalized", "expected_stock_normalized")));
 
         modelRegistry.promoteToActive(registry.getId());
         return registry.getId();

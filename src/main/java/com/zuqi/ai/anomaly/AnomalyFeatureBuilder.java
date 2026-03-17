@@ -32,16 +32,20 @@ public class AnomalyFeatureBuilder {
     static final Event EXPECTED  = new Event(Event.EventType.EXPECTED);
     static final Event ANOMALOUS = new Event(Event.EventType.ANOMALOUS);
 
-    // ── Inventory feature names (8 features) ──────────────────────────────
+    // ── Inventory feature names (12 features) ─────────────────────────────
 
     static final String FEAT_DISCREPANCY_PCT         = "discrepancy_pct";
+    static final String FEAT_DISCREPANCY_NORM        = "discrepancy_normalized";
     static final String FEAT_MANUAL_ADJ_COUNT_7D     = "manual_adj_count_7d";
     static final String FEAT_UNIQUE_ADJUSTING_USERS  = "unique_adjusting_users";
+    static final String FEAT_ADJ_TIME_ENTROPY        = "adjustment_time_entropy";
     static final String FEAT_CONSUMPTION_RATE_7D     = "consumption_rate_7d";
+    static final String FEAT_CONSUMPTION_RATE_30D    = "consumption_rate_30d";
     static final String FEAT_CONSUMPTION_TREND       = "consumption_trend_numeric";
     static final String FEAT_PENDING_RESERVED_PCT    = "pending_reserved_pct";
     static final String FEAT_EXPECTED_INCOMING_PCT   = "expected_incoming_pct";
     static final String FEAT_CURRENT_STOCK_NORM      = "current_stock_normalized";
+    static final String FEAT_EXPECTED_STOCK_NORM     = "expected_stock_normalized";
 
     // ── Payment feature names (10 features) ───────────────────────────────
 
@@ -135,14 +139,22 @@ public class AnomalyFeatureBuilder {
         list.add(new Feature(FEAT_DISCREPANCY_PCT,
                 features.discrepancyPct() != null ? features.discrepancyPct() : 0.0));
 
+        list.add(new Feature(FEAT_DISCREPANCY_NORM, computeDiscrepancyNormalized(features)));
+
         list.add(new Feature(FEAT_MANUAL_ADJ_COUNT_7D,
                 features.manualAdjustmentCount7d() != null ? features.manualAdjustmentCount7d().doubleValue() : 0.0));
 
         list.add(new Feature(FEAT_UNIQUE_ADJUSTING_USERS,
                 features.adjustingUserIds() != null ? (double) features.adjustingUserIds().size() : 0.0));
 
+        // Entropy of adjustment hour distribution — low entropy means concentrated at specific hour (theft signal)
+        list.add(new Feature(FEAT_ADJ_TIME_ENTROPY, computeAdjustmentTimeEntropy(features)));
+
         list.add(new Feature(FEAT_CONSUMPTION_RATE_7D,
                 features.consumptionRate7d() != null ? features.consumptionRate7d().doubleValue() : 0.0));
+
+        list.add(new Feature(FEAT_CONSUMPTION_RATE_30D,
+                features.consumptionRate30d() != null ? features.consumptionRate30d().doubleValue() : 0.0));
 
         list.add(new Feature(FEAT_CONSUMPTION_TREND, encodeTrend(features.consumptionTrend())));
 
@@ -151,6 +163,8 @@ public class AnomalyFeatureBuilder {
         list.add(new Feature(FEAT_EXPECTED_INCOMING_PCT, computeExpectedIncomingPct(features)));
 
         list.add(new Feature(FEAT_CURRENT_STOCK_NORM, computeCurrentStockNormalized(features)));
+
+        list.add(new Feature(FEAT_EXPECTED_STOCK_NORM, computeExpectedStockNormalized(features)));
 
         return list;
     }
@@ -218,5 +232,45 @@ public class AnomalyFeatureBuilder {
         if (f.consumptionRate7d() == null || f.consumptionRate7d().doubleValue() == 0.0) return 1.0;
         if (f.currentStock() == null) return 0.0;
         return f.currentStock().doubleValue() / (f.consumptionRate7d().doubleValue() * 30.0);
+    }
+
+    private double computeExpectedStockNormalized(InventoryFeatures f) {
+        if (f.consumptionRate7d() == null || f.consumptionRate7d().doubleValue() == 0.0) return 1.0;
+        if (f.expectedStock() == null) return 0.0;
+        return f.expectedStock().doubleValue() / (f.consumptionRate7d().doubleValue() * 30.0);
+    }
+
+    /**
+     * Normalised absolute discrepancy (|currentStock - expectedStock| / expectedStock).
+     * Captures magnitude of shrinkage independent of direction.
+     */
+    private double computeDiscrepancyNormalized(InventoryFeatures f) {
+        if (f.expectedStock() == null || f.expectedStock().doubleValue() == 0.0) return 0.0;
+        if (f.discrepancy() == null) return 0.0;
+        return Math.abs(f.discrepancy().doubleValue()) / f.expectedStock().doubleValue();
+    }
+
+    /**
+     * Shannon entropy of the hour-of-day adjustment distribution.
+     * High entropy (≈3.5 for 24 equal buckets) = normal, spread across shifts.
+     * Low entropy (≈0) = all adjustments at one hour — theft/shrinkage signal.
+     * Normalised to [0, 1] by dividing by log2(24).
+     */
+    private double computeAdjustmentTimeEntropy(InventoryFeatures f) {
+        if (f.adjustmentTimeDistribution() == null || f.adjustmentTimeDistribution().isEmpty()) {
+            return 1.0; // no adjustments = treat as maximally uniform (not suspicious)
+        }
+        int total = f.adjustmentTimeDistribution().values().stream().mapToInt(Integer::intValue).sum();
+        if (total == 0) return 1.0;
+
+        double entropy = 0.0;
+        for (int count : f.adjustmentTimeDistribution().values()) {
+            if (count > 0) {
+                double p = (double) count / total;
+                entropy -= p * (Math.log(p) / Math.log(2));
+            }
+        }
+        double maxEntropy = Math.log(24) / Math.log(2);  // log2(24) ≈ 4.585
+        return entropy / maxEntropy;
     }
 }

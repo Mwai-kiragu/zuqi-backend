@@ -39,6 +39,4 @@ public interface PosService {
     PosSaleResponse getSaleById(UUID saleId);
 
     PosSummaryResponse getDailySummary(UUID branchId, LocalDate startDate, LocalDate endDate);
-
-    ShiftReconciliationResponse getShiftReconciliation(UUID shiftId);
 }

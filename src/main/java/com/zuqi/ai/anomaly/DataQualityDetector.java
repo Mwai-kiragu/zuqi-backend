@@ -1,11 +1,17 @@
 package com.zuqi.ai.anomaly;
 
 import com.zuqi.ai.event.OrderCreatedEvent;
+import com.zuqi.ai.model.ModelLoaderService;
+import com.zuqi.ai.model.ModelPhaseService;
 import com.zuqi.domain.ai.AlertSeverity;
 import com.zuqi.domain.ai.AlertType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.tribuo.Model;
+import org.tribuo.Prediction;
+import org.tribuo.classification.Label;
+import org.tribuo.impl.ArrayExample;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -15,31 +21,42 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Tier-1 rules-based data quality detector for incoming orders.
+ * Dual-tier data quality detector for incoming orders.
  *
- * Rules checked per order:
- * 1. Order must have at least 1 item
- * 2. Each item: unitPrice != null && unitPrice > 0
- * 3. Each item: quantity > 0
- * 4. Each item: quantity <= 10,000 (suspiciously large threshold)
- * 5. merchantId not null
- * 6. totalAmount consistent with sum of (qty × price) within 1% tolerance
+ * Tier-1 (rules engine): fires synchronously, zero-latency, hard violations only.
+ *   1. Order must have at least 1 item
+ *   2. Each item: unitPrice != null && unitPrice > 0
+ *   3. Each item: quantity > 0
+ *   4. Each item: quantity <= 10,000 (suspiciously large threshold)
+ *   5. merchantId not null
+ *   6. totalAmount consistent with sum of (qty × price) within 1% tolerance
  *
- * If violations are found, an alert is created via AlertService (one per order).
+ * Tier-2 (XGBoost classifier): fires after Tier-1, catches soft anomalies that
+ *   pass the rules engine — e.g. prices technically > 0 but 10× above merchant
+ *   history, or unusual hour + value combination. Uses 14 features.
+ *   Requires a trained model in the registry; skipped gracefully if absent.
  *
- * Tier-2 ML detection is Phase 6.
+ * A single alert per order is raised, merging findings from both tiers.
  *
- * Blueprint reference: plan.md Section 6.3 - DataQualityDetector (Phase 4)
+ * Blueprint reference: plan.md Section 6.3 - DataQualityDetector
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class DataQualityDetector {
 
-    private static final int    MAX_ITEM_QUANTITY   = 10_000;
+    static final String MODEL_NAME = DataQualityTrainingPipeline.MODEL_NAME;
+
+    /** Tier-2 anomaly score threshold above which a soft alert is raised. */
+    static final double ML_SCORE_THRESHOLD = 0.75;
+
+    private static final int    MAX_ITEM_QUANTITY      = 10_000;
     private static final double TOTAL_AMOUNT_TOLERANCE = 0.01;  // 1%
 
-    private final AlertService alertService;
+    private final AlertService              alertService;
+    private final DataQualityFeatureBuilder featureBuilder;
+    private final ModelLoaderService        modelLoader;
+    private final ModelPhaseService         phaseService;
 
     /**
      * Validate an order for data quality violations and raise an alert if any are found.
@@ -113,6 +130,15 @@ public class DataQualityDetector {
             }
         }
 
+        // ── Tier-2: XGBoost ML classifier ─────────────────────────────────
+        double mlScore = runTier2(event);
+        if (mlScore >= ML_SCORE_THRESHOLD) {
+            violations.add(new DataQualityViolation(
+                    "order", "ML_ANOMALY_DETECTED",
+                    String.format("score=%.3f threshold=%.2f", mlScore, ML_SCORE_THRESHOLD),
+                    AlertSeverity.MEDIUM));
+        }
+
         // Create a single alert if violations found
         if (!violations.isEmpty()) {
             AlertSeverity maxSeverity = violations.stream()
@@ -140,6 +166,32 @@ public class DataQualityDetector {
         }
 
         return violations;
+    }
+
+    /**
+     * Run Tier-2 ML classifier. Returns anomaly score in [0,1] where 1 = most anomalous.
+     * Returns 0.0 safely if no model is available.
+     */
+    private double runTier2(OrderCreatedEvent event) {
+        try {
+            @SuppressWarnings("unchecked")
+            Model<Label> model = (Model<Label>) modelLoader.loadModel(MODEL_NAME);
+            if (model == null) return 0.0;
+
+            ArrayExample<Label> example = featureBuilder.buildInferenceExample(event);
+            Prediction<Label> prediction = model.predict(example);
+
+            // Extract probability of ANOMALOUS label
+            Map<String, Label> scores = prediction.getOutputScores();
+            Label anomalousScore = scores.get(DataQualityFeatureBuilder.ANOMALOUS.getLabel());
+            double rawScore = anomalousScore != null ? anomalousScore.getScore() : 0.0;
+
+            return phaseService.applyModifier(rawScore, MODEL_NAME);
+        } catch (Exception e) {
+            log.warn("Tier-2 data quality check skipped for order {}: {}",
+                    event.orderId(), e.getMessage());
+            return 0.0;
+        }
     }
 
     private Map<String, Object> buildContext(List<DataQualityViolation> violations) {
