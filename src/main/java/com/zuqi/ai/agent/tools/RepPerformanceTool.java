@@ -30,6 +30,7 @@ public class RepPerformanceTool {
           "Parameter: distributorId (UUID string).")
     @Transactional(readOnly = true)
     public String getRepPerformance(@P("The distributor UUID") String distributorId) {
+        log.info("[TOOL CALLED] getRepPerformance distributorId={}", distributorId);
         try {
             UUID distId = UUID.fromString(distributorId.trim());
 

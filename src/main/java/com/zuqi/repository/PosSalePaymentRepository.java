@@ -24,4 +24,7 @@ public interface PosSalePaymentRepository extends JpaRepository<PosSalePayment, 
             @Param("status") PosSaleStatus status,
             @Param("from") LocalDateTime from,
             @Param("to") LocalDateTime to);
+
+    @Query("SELECT p FROM PosSalePayment p WHERE p.sale.shift.id = :shiftId")
+    List<PosSalePayment> findByShiftId(@Param("shiftId") UUID shiftId);
 }

@@ -37,8 +37,7 @@ This plan replaces **Spring AI + OpenAI with Langchain4j + Ollama** (local LLMs 
 ```yaml
 langchain4j:
   ollama:
-    chat-model:
-      base-url: ${OLLAMA_BASE_URL:http://192.168.2.17:11434}
+    ch/192.168.2.17:11434}
       model-name: ${OLLAMA_MODEL:qwen2.5-coder:32b}
       temperature: 0.3
       timeout: PT60S
@@ -69,7 +68,8 @@ DB tables exist (V1 migration) but have no Java entities:
 | `Route` | `domain.sales` | `routes` | distributor, name, assignedRep, schedule (JSONB), active |
 | `Delivery` | `domain.sales` | `deliveries` | order, driver, vehicleInfo, scheduledDate, actualDeliveryDate, proofOfDeliveryUrl, status |
 | `PaymentTransaction` | `domain.payment` | `payment_transactions` | payment, transactionType, amount, status, gatewayResponse (JSONB) |
-| `AiConfiguration` | `domain.ai` | `ai_configurations` | configKey, configValue (JSONB), category, active |
+| `AiConfiguration` | `domain.ai` | `ai_configurationsat-model:
+      base-url: ${OLLAMA_BASE_URL:http:/` | configKey, configValue (JSONB), category, active |
 | `CreditApplication` | `domain.credit` | `credit_applications` | merchant, distributor, requestedAmount, approvedAmount, status, creditScore FK, reviewedBy |
 | `CreditApplicationStatus` | `domain.credit` | — | Enum: PENDING, AUTO_APPROVED, ESCALATED, MANUALLY_APPROVED, AUTO_DECLINED, MANUALLY_DECLINED |
 

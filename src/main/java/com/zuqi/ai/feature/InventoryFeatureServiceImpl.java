@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -34,6 +35,7 @@ public class InventoryFeatureServiceImpl implements InventoryFeatureService {
     private final ProductRepository productRepository;
     private final StockRepository stockRepository;
     private final StockMovementRepository stockMovementRepository;
+    private final DemandForecastRepository demandForecastRepository;
 
     @Override
     @Cacheable(value = "inventoryFeatures", key = "#warehouseId + ':' + #productId")
@@ -44,7 +46,7 @@ public class InventoryFeatureServiceImpl implements InventoryFeatureService {
     @Override
     public InventoryFeatures computeFeatures(UUID warehouseId, UUID productId, LocalDateTime asOfDate) {
         // Validate warehouse and product exist
-        warehouseRepository.findById(warehouseId)
+        var warehouse = warehouseRepository.findById(warehouseId)
                 .orElseThrow(() -> new IllegalArgumentException("Warehouse not found: " + warehouseId));
 
         productRepository.findById(productId)
@@ -70,6 +72,22 @@ public class InventoryFeatureServiceImpl implements InventoryFeatureService {
         // Get manual adjustments in last 7 days
         List<StockMovement> adjustments7d = getManualAdjustments(movements, asOfDate, 7);
 
+        // Pull demand forecast for next 7 days from ai_demand_forecasts (null-safe — no forecast = null)
+        BigDecimal predictedDemand7d = null;
+        try {
+            UUID distributorId = warehouse.getDistributor().getId();
+            LocalDate fromDate = asOfDate.toLocalDate();
+            LocalDate toDate   = fromDate.plusDays(6);
+            double forecastSum = demandForecastRepository.sumPredictedQtyForProduct(
+                    productId, distributorId, fromDate, toDate);
+            if (forecastSum > 0.0) {
+                predictedDemand7d = BigDecimal.valueOf(forecastSum).setScale(3, RoundingMode.HALF_UP);
+            }
+        } catch (Exception e) {
+            log.debug("No demand forecast available for product={} warehouse={}: {}",
+                    productId, warehouseId, e.getMessage());
+        }
+
         return InventoryFeatures.builder()
                 .warehouseId(warehouseId)
                 .productId(productId)
@@ -90,6 +108,8 @@ public class InventoryFeatureServiceImpl implements InventoryFeatureService {
                 // Pending quantities
                 .pendingReservedQty(reservedQty)
                 .expectedIncomingQty(computeExpectedIncoming(movements, asOfDate))
+                // Demand forecast
+                .predictedDemand7d(predictedDemand7d)
                 .build();
     }
 

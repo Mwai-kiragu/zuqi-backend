@@ -7,10 +7,6 @@ import com.zuqi.domain.ai.ReportType;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.repository.ChatMessageRepository;
 import com.zuqi.repository.DistributorRepository;
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.SystemMessage;
-import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.chat.ChatLanguageModel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,25 +16,24 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * Orchestrates the AI assistant chat and report generation workflows.
+ * Orchestrates AI assistant chat and report generation.
  *
- * Chat strategy (primary + fallback)
- * ------------------------------------
- * PRIMARY — Direct context injection (no LLM tool calling):
- *   AssistantContextFetcher calls all 9 DB tools directly in Java,
- *   injects the results as a data block into the prompt, then calls
- *   the LLM for plain text generation (like Keza). Works with any
- *   model including gpt-oss which has broken tool-calling in Ollama.
+ * Chat strategy
+ * -------------
+ * Uses LangChain4j AiServices tool calling exclusively (qwen2.5:7b supports function calling).
+ * The role-scoped agent built by AssistantAgentFactory only has tools registered for
+ * the caller's role — so tool filtering enforces data access at the LLM level (Layer 1 security).
+ * The system prompt provides scope guidance (Layer 2).
+ * Casbin policies protect the endpoint (Layer 3).
  *
- * FALLBACK — LangChain4j AiServices tool calling (AssistantAgent):
- *   Used if the direct approach throws. Requires a model that supports
- *   function/tool calling (e.g. qwen2.5:7b, llama3-groq-tool-use).
+ * Reports
+ * -------
+ * Report generation uses AssistantReportBuilder which fetches structured data and calls
+ * the LLM section-by-section for narrative prose — this is intentional and separate from chat.
  */
 @SuppressWarnings("DataFlowIssue")
 @Service
@@ -48,25 +43,14 @@ public class AssistantService {
 
     private static final String HISTORY_CACHE = "chat-history";
 
-    private static final String SYSTEM_PROMPT = """
-            You are an intelligent business assistant for Zuqi, a field sales and supply chain \
-            platform operating in Kenya. You help distributors, sales reps, and managers \
-            understand their business data and make better decisions.
-
-            The user's live business data is provided below each question. \
-            Use ONLY the provided data to answer. Format monetary values in KES with comma \
-            separators (e.g. KES 1,250,000). Be concise — keep answers under 300 words \
-            unless a detailed breakdown is requested. \
-            Do not answer questions unrelated to Zuqi business operations.
-            """;
-
-    private final AssistantAgent            assistantAgent;
-    private final AssistantContextFetcher   contextFetcher;
+    private final AssistantAgent            assistantAgent;    // singleton — full access (SUPER_ADMIN default)
+    private final AssistantAgentFactory     assistantAgentFactory;
+    private final AssistantChatMemoryStore  chatMemoryStore;
     private final AssistantReportBuilder    reportBuilder;
     private final ChatMessageRepository     chatMessageRepository;
     private final DistributorRepository     distributorRepository;
     private final CacheManager              cacheManager;
-    private final ChatLanguageModel         chatLanguageModel;
+    private final com.zuqi.util.SecurityUtils securityUtils;
 
     @Value("${langchain4j.ollama.chat-model.model-name}")
     private String chatModelName;
@@ -77,109 +61,25 @@ public class AssistantService {
     // ── Chat ─────────────────────────────────────────────────────────────────
 
     /**
-     * Process a single chat turn.
-     *
-     * Strategy:
-     *  1. Fetch all business data directly from DB via AssistantContextFetcher
-     *  2. Build conversation history + data context as plain ChatMessage list
-     *  3. Call LLM directly (no tool calling) — works with gpt-oss and any model
-     *  4. If direct call fails, fallback to AssistantAgent (LangChain4j tool calling)
-     *  5. Persist both user message and AI reply to ai_chat_messages
+     * Process a single chat turn using LangChain4j tool calling.
+     * The agent calls only the tools registered for the user's role.
+     * Persistence is handled by AssistantChatMemoryStore.
      */
     public ChatMessage chat(UUID distributorId, UUID userId,
                             UUID conversationId, String userText) {
 
         Distributor distributor = loadDistributor(distributorId);
+        String primaryRole = resolvePrimaryRole();
         AssistantMemoryContext.set(distributorId, userId, chatModelName);
 
         try {
+            AssistantAgent roleAgent = assistantAgentFactory.buildForRole(primaryRole);
+            // Prefix DISTRIBUTOR_ID so the LLM passes it correctly to every tool
+            String contextualMessage = "USER ROLE: " + primaryRole +
+                    "\nDISTRIBUTOR_ID: " + distributorId + "\n\n" + userText;
+
             long t0 = System.currentTimeMillis();
-            String reply = chatDirect(distributorId, conversationId, userText);
-            long durationMs = System.currentTimeMillis() - t0;
-
-            // Persist user message
-            chatMessageRepository.save(ChatMessage.builder()
-                    .conversationId(conversationId)
-                    .distributor(distributor)
-                    .userId(userId)
-                    .role(ChatRole.USER)
-                    .content(userText)
-                    .messageType(ChatMessageType.CHAT)
-                    .modelName(chatModelName)
-                    .build());
-
-            // Persist assistant reply
-            chatMessageRepository.save(ChatMessage.builder()
-                    .conversationId(conversationId)
-                    .distributor(distributor)
-                    .userId(userId)
-                    .role(ChatRole.ASSISTANT)
-                    .content(reply)
-                    .messageType(ChatMessageType.CHAT)
-                    .modelName(chatModelName)
-                    .durationMs(durationMs)
-                    .build());
-
-            evictHistoryCache(conversationId);
-
-            return chatMessageRepository
-                    .findByConversationIdOrderByCreatedAtDesc(conversationId, PageRequest.of(0, 1))
-                    .getContent().get(0);
-
-        } catch (Exception e) {
-            log.error("Direct chat failed for conversation={}, falling back to agent: {}",
-                    conversationId, e.getMessage());
-            return chatWithAgentFallback(distributor, distributorId, userId, conversationId, userText);
-        } finally {
-            AssistantMemoryContext.clear();
-        }
-    }
-
-    /**
-     * PRIMARY: Fetch DB data in Java, build prompt, call LLM directly.
-     * No LLM tool calling — works with any model.
-     */
-    private String chatDirect(UUID distributorId, UUID conversationId, String userText) {
-        // 1. Fetch all business data directly from DB
-        String businessContext = contextFetcher.fetchContext(distributorId);
-
-        // 2. Load conversation history for context (last 20 messages)
-        List<ChatMessage> history = chatMessageRepository
-                .findByConversationIdOrderByCreatedAtAsc(conversationId);
-        if (history.size() > 20) {
-            history = history.subList(history.size() - 20, history.size());
-        }
-
-        // 3. Build LangChain4j message list
-        List<dev.langchain4j.data.message.ChatMessage> messages = new ArrayList<>();
-        messages.add(SystemMessage.from(SYSTEM_PROMPT));
-
-        for (ChatMessage prior : history) {
-            if (prior.getRole() == ChatRole.USER) {
-                messages.add(UserMessage.from(prior.getContent()));
-            } else if (prior.getRole() == ChatRole.ASSISTANT) {
-                messages.add(AiMessage.from(prior.getContent()));
-            }
-        }
-
-        // 4. User message with pre-fetched data injected
-        String userMessageWithData = businessContext + "\n\nUSER QUESTION: " + userText;
-        messages.add(UserMessage.from(userMessageWithData));
-
-        // 5. Plain LLM call — no tool calling required
-        return chatLanguageModel.generate(messages).content().text();
-    }
-
-    /**
-     * FALLBACK: Use LangChain4j AiServices with tool calling.
-     * Handles its own persistence via AssistantChatMemoryStore.
-     */
-    private ChatMessage chatWithAgentFallback(Distributor distributor, UUID distributorId,
-                                               UUID userId, UUID conversationId, String userText) {
-        try {
-            String contextualMessage = "DISTRIBUTOR_ID: " + distributorId + "\n\n" + userText;
-            long t0 = System.currentTimeMillis();
-            String reply = assistantAgent.chat(conversationId, contextualMessage);
+            String reply = roleAgent.chat(conversationId, contextualMessage);
             long durationMs = System.currentTimeMillis() - t0;
 
             updateLatestAssistantDuration(conversationId, durationMs);
@@ -190,7 +90,7 @@ public class AssistantService {
                     .getContent().get(0);
 
         } catch (Exception e) {
-            log.error("Agent fallback also failed for conversation={}: {}", conversationId, e.getMessage(), e);
+            log.error("Agent chat failed for conversation={}: {}", conversationId, e.getMessage(), e);
             String errorReply = "I'm sorry, I encountered an error while processing your request. " +
                     "Please try again or contact support if the issue persists.";
             saveErrorAssistantMessage(conversationId, distributor, userId, errorReply);
@@ -198,6 +98,9 @@ public class AssistantService {
             return chatMessageRepository
                     .findByConversationIdOrderByCreatedAtDesc(conversationId, PageRequest.of(0, 1))
                     .getContent().get(0);
+        } finally {
+            AssistantMemoryContext.clear();
+            chatMemoryStore.clearTurnBuffer(conversationId);
         }
     }
 
@@ -205,9 +108,7 @@ public class AssistantService {
 
     /**
      * Generate a structured report and persist it as a REPORT-type ASSISTANT message.
-     *
-     * Reports are NOT routed through the LangChain4j agent — data is gathered directly
-     * from tools by AssistantReportBuilder, then sent to AssistantReportAiService.
+     * AssistantReportBuilder fetches structured data then calls the LLM section-by-section.
      */
     @Transactional
     public ChatMessage generateReport(UUID distributorId, UUID userId,
@@ -305,5 +206,27 @@ public class AssistantService {
     private Distributor loadDistributor(UUID id) {
         return distributorRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Distributor not found: " + id));
+    }
+
+    /**
+     * Resolve the primary role of the currently authenticated user.
+     * Priority: SUPER_ADMIN > DISTRIBUTOR_ADMIN > FINANCE > WAREHOUSE_MANAGER > SALES_REP > DRIVER > MERCHANT_ADMIN > CUSTOMER.
+     */
+    private String resolvePrimaryRole() {
+        try {
+            com.zuqi.domain.user.User user = securityUtils.getCurrentUser();
+            if (user == null || user.getRoles() == null || user.getRoles().isEmpty()) return "UNKNOWN";
+            java.util.List<String> roleNames = user.getRoles().stream()
+                    .map(r -> r.getName())
+                    .toList();
+            for (String r : java.util.List.of("SUPER_ADMIN", "DISTRIBUTOR_ADMIN", "FINANCE",
+                    "WAREHOUSE_MANAGER", "SALES_REP", "DRIVER", "MERCHANT_ADMIN", "CUSTOMER")) {
+                if (roleNames.contains(r)) return r;
+            }
+            return roleNames.get(0);
+        } catch (Exception e) {
+            log.warn("Could not resolve primary role: {}", e.getMessage());
+            return "UNKNOWN";
+        }
     }
 }

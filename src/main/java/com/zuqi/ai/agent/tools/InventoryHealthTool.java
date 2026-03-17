@@ -1,15 +1,16 @@
 package com.zuqi.ai.agent.tools;
 
+import com.zuqi.domain.inventory.Stock;
 import com.zuqi.repository.StockRepository;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Component
@@ -19,36 +20,18 @@ public class InventoryHealthTool {
 
     private final StockRepository stockRepository;
 
-    @Tool("Get inventory health summary for a distributor. Returns totalSkus (total stock-keeping units " +
-          "tracked), belowReorderLevel (SKUs with quantity at or below their reorder threshold), " +
-          "and outOfStock (SKUs with zero or negative quantity). " +
+    @Tool("Get inventory health summary for a distributor. Returns overall health status, " +
+          "aggregate counts (belowReorderLevel, outOfStock), and the actual product names with " +
+          "quantities for out-of-stock items and the top 10 low-stock items. " +
           "Parameter: distributorId (UUID string).")
     @Transactional(readOnly = true)
     public String getInventoryHealth(@P("The distributor UUID") String distributorId) {
+        log.info("[TOOL CALLED] getInventoryHealth distributorId={}", distributorId);
         try {
             UUID distId = UUID.fromString(distributorId.trim());
 
             long belowReorderLevel = stockRepository.countLowStockByDistributorId(distId);
             long outOfStock        = stockRepository.countOutOfStockByDistributorId(distId);
-
-            // Derive total SKUs by fetching a large page and using the total elements count.
-            // We use a warehouse-scoped query available on the repo; for distributor-wide totals
-            // we use findLowStockByDistributorId with a very large page to get the page metadata,
-            // but that is heavy — instead use the sum of known counts as a lower-bound proxy
-            // and separately count all low stock + healthy stock via the Page result.
-            Page<?> lowStockPage = stockRepository.findLowStockByDistributorId(
-                    distId, PageRequest.of(0, 1));
-            long totalLowStockSkus = lowStockPage.getTotalElements();
-
-            // For total SKUs we use findAllLowStock as a signal only; to get true total we
-            // rely on the distributor page query.  Use a generous page to get the count.
-            // NOTE: StockRepository does not have a countByDistributorId — so we approximate
-            // total as (outOfStock + belowReorderLevel unique + healthy) via the low-stock
-            // page total plus a broad scan.  The cleanest safe approach is the Page total.
-            // Here we combine both out-of-stock and low-stock using the pageable count:
-            long totalSkus = totalLowStockSkus + outOfStock;
-            // totalSkus is at minimum the sum of problematic SKUs; actual healthy SKUs
-            // are not separately countable without a custom query, so we report what is safe.
 
             String healthStatus;
             if (outOfStock == 0 && belowReorderLevel == 0) {
@@ -61,14 +44,48 @@ public class InventoryHealthTool {
                 healthStatus = "FAIR";
             }
 
-            return String.format(
-                    "{ \"tool\": \"InventoryHealth\", \"distributorId\": \"%s\", " +
-                    "\"belowReorderLevel\": %d, \"outOfStock\": %d, " +
-                    "\"problematicSkus\": %d, \"healthStatus\": \"%s\" }",
-                    distId,
-                    belowReorderLevel, outOfStock,
-                    totalSkus, healthStatus
-            );
+            // Out-of-stock items with product names
+            List<Stock> outOfStockItems = stockRepository.findOutOfStockByDistributorId(distId);
+
+            // Low-stock items (below reorder level, not zero) — top 10
+            List<Stock> lowStockItems = stockRepository
+                    .findLowStockByDistributorId(distId, PageRequest.of(0, 10))
+                    .getContent();
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("{ \"tool\": \"InventoryHealth\", \"distributorId\": \"").append(distId).append("\", ");
+            sb.append("\"healthStatus\": \"").append(healthStatus).append("\", ");
+            sb.append("\"belowReorderLevel\": ").append(belowReorderLevel).append(", ");
+            sb.append("\"outOfStock\": ").append(outOfStock).append(", ");
+
+            // Out-of-stock product details
+            sb.append("\"outOfStockItems\": [");
+            for (int i = 0; i < outOfStockItems.size(); i++) {
+                Stock s = outOfStockItems.get(i);
+                String productName = s.getProduct() != null ? s.getProduct().getName().replace("\"", "'") : "Unknown";
+                String warehouseName = s.getWarehouse() != null ? s.getWarehouse().getName().replace("\"", "'") : "Unknown";
+                sb.append(String.format("{ \"product\": \"%s\", \"warehouse\": \"%s\", \"quantity\": %s }",
+                        productName, warehouseName, s.getQuantity().toPlainString()));
+                if (i < outOfStockItems.size() - 1) sb.append(", ");
+            }
+            sb.append("], ");
+
+            // Low-stock product details
+            sb.append("\"lowStockItems\": [");
+            for (int i = 0; i < lowStockItems.size(); i++) {
+                Stock s = lowStockItems.get(i);
+                String productName = s.getProduct() != null ? s.getProduct().getName().replace("\"", "'") : "Unknown";
+                String warehouseName = s.getWarehouse() != null ? s.getWarehouse().getName().replace("\"", "'") : "Unknown";
+                String reorderLevel = s.getReorderLevel() != null ? s.getReorderLevel().toPlainString() : "null";
+                sb.append(String.format(
+                        "{ \"product\": \"%s\", \"warehouse\": \"%s\", \"quantity\": %s, \"reorderLevel\": %s }",
+                        productName, warehouseName,
+                        s.getQuantity().toPlainString(), reorderLevel));
+                if (i < lowStockItems.size() - 1) sb.append(", ");
+            }
+            sb.append("] }");
+
+            return sb.toString();
 
         } catch (IllegalArgumentException e) {
             log.error("InventoryHealthTool: invalid distributorId '{}'", distributorId, e);

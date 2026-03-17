@@ -23,6 +23,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * REST API for AI-powered route optimization.
@@ -49,7 +50,7 @@ public class AiRoutingController {
             summary = "Trigger route optimization for a distributor",
             description = "Builds optimized delivery routes for the given distributor and date. " +
                           "Uses Timefold VRP solver with Haversine distance estimation.")
-    public ResponseEntity<ApiResponse<List<DeliveryRoute>>> optimize(
+    public ResponseEntity<ApiResponse<List<DeliveryRouteDto>>> optimize(
             @Parameter(required = true) @RequestParam UUID distributorId,
             @Parameter(description = "Target delivery date (ISO 8601). Defaults to tomorrow.")
             @RequestParam(required = false)
@@ -60,7 +61,7 @@ public class AiRoutingController {
 
         try {
             List<DeliveryRoute> routes = routeSolver.optimize(distributorId, targetDate);
-            return ResponseEntity.ok(ApiResponse.success(routes));
+            return ResponseEntity.ok(ApiResponse.success(routes.stream().map(this::toDto).collect(Collectors.toList())));
         } catch (Exception e) {
             log.error("Route optimization failed: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError()
@@ -75,14 +76,14 @@ public class AiRoutingController {
             summary = "Re-optimize an existing route (intraday)",
             description = "Adjusts an in-progress route after disruptions. " +
                           "Only PENDING stops are re-sequenced.")
-    public ResponseEntity<ApiResponse<DeliveryRoute>> reoptimize(
+    public ResponseEntity<ApiResponse<DeliveryRouteDto>> reoptimize(
             @Parameter(required = true) @RequestParam UUID routeId) {
 
         log.info("POST /v1/ai/routing/reoptimize routeId={}", routeId);
 
         try {
             DeliveryRoute route = routeSolver.reoptimize(routeId);
-            return ResponseEntity.ok(ApiResponse.success(route));
+            return ResponseEntity.ok(ApiResponse.success(toDto(route)));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
         } catch (Exception e) {
@@ -94,30 +95,30 @@ public class AiRoutingController {
 
     // ── GET /routes/{date} ────────────────────────────────────────────────
 
-    @GetMapping("/routes/{date}")
+    @GetMapping("/routes/date/{date}")
     @Operation(summary = "Get all routes for a distributor on a given date")
-    public ResponseEntity<ApiResponse<List<DeliveryRoute>>> getRoutesByDate(
+    public ResponseEntity<ApiResponse<List<DeliveryRouteDto>>> getRoutesByDate(
             @PathVariable @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
             @Parameter(required = true) @RequestParam UUID distributorId) {
 
-        log.info("GET /v1/ai/routing/routes/{} distributor={}", date, distributorId);
+        log.info("GET /v1/ai/routing/routes/date/{} distributor={}", date, distributorId);
 
         List<DeliveryRoute> routes = deliveryRouteRepository
                 .findActiveRoutesForDate(distributorId, date);
 
-        return ResponseEntity.ok(ApiResponse.success(routes));
+        return ResponseEntity.ok(ApiResponse.success(routes.stream().map(this::toDto).collect(Collectors.toList())));
     }
 
     // ── GET /routes/{id} ─────────────────────────────────────────────────
 
     @GetMapping("/routes/{id}")
     @Operation(summary = "Get a single route by ID")
-    public ResponseEntity<ApiResponse<DeliveryRoute>> getRouteById(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<DeliveryRouteDto>> getRouteById(@PathVariable UUID id) {
 
         log.info("GET /v1/ai/routing/routes/{}", id);
 
         return deliveryRouteRepository.findById(id)
-                .map(r -> ResponseEntity.ok(ApiResponse.success(r)))
+                .map(r -> ResponseEntity.ok(ApiResponse.success(toDto(r))))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
@@ -235,7 +236,84 @@ public class AiRoutingController {
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 
-    // ── Inner DTO ─────────────────────────────────────────────────────────
+    // ── Mapper ────────────────────────────────────────────────────────────
+
+    @SuppressWarnings("unchecked")
+    private DeliveryRouteDto toDto(DeliveryRoute r) {
+        String driverName = "Unassigned";
+        if (r.getDriver() != null) {
+            String first = r.getDriver().getFirstName() != null ? r.getDriver().getFirstName() : "";
+            String last  = r.getDriver().getLastName()  != null ? r.getDriver().getLastName()  : "";
+            driverName = (first + " " + last).trim();
+        }
+
+        List<RouteStopDto> stops = r.getStopSequence() == null ? List.of() :
+            r.getStopSequence().stream().map(s -> new RouteStopDto(
+                s.get("sequence")  != null ? ((Number) s.get("sequence")).intValue()   : 0,
+                s.getOrDefault("merchantId",   "").toString(),
+                s.getOrDefault("merchantName", "").toString(),
+                s.getOrDefault("address",      "").toString(),
+                s.get("latitude")  != null ? ((Number) s.get("latitude")).doubleValue()  : 0.0,
+                s.get("longitude") != null ? ((Number) s.get("longitude")).doubleValue() : 0.0,
+                s.get("estimatedArrival") != null ? s.get("estimatedArrival").toString() : null,
+                s.get("actualArrival")    != null ? s.get("actualArrival").toString()    : null,
+                s.getOrDefault("status", "PENDING").toString(),
+                s.getOrDefault("orderId", "").toString(),
+                s.get("orderItems") instanceof List<?> list
+                    ? list.stream().map(Object::toString).collect(Collectors.toList())
+                    : List.of()
+            )).collect(Collectors.toList());
+
+        return new DeliveryRouteDto(
+            r.getId().toString(),
+            r.getRouteDate() != null ? r.getRouteDate().toString() : null,
+            r.getVehicleId() != null ? r.getVehicleId().toString() : null,
+            r.getVehicleInfo(),
+            driverName,
+            stops,
+            r.getTotalDistanceKm()     != null ? r.getTotalDistanceKm()     : 0.0,
+            r.getTotalDurationMin()    != null ? r.getTotalDurationMin()     : 0.0,
+            r.getLoadUtilizationPct()  != null ? r.getLoadUtilizationPct()  : 0.0,
+            null, // savingsPct — not persisted on entity
+            0.0,  // totalWeight — not persisted on entity
+            0.0,  // totalVolume — not persisted on entity
+            r.getStatus() != null ? r.getStatus().name() : "PLANNED",
+            r.getCreatedAt() != null ? r.getCreatedAt().toString() : null
+        );
+    }
+
+    // ── Inner DTOs ────────────────────────────────────────────────────────
+
+    public record RouteStopDto(
+            int          sequence,
+            String       merchantId,
+            String       merchantName,
+            String       address,
+            double       latitude,
+            double       longitude,
+            String       estimatedArrival,
+            String       actualArrival,
+            String       status,
+            String       orderId,
+            List<String> orderItems
+    ) {}
+
+    public record DeliveryRouteDto(
+            String               id,
+            String               date,
+            String               vehicleId,
+            Map<String, Object>  vehicleInfo,
+            String               driverName,
+            List<RouteStopDto>   stops,
+            double               totalDistanceKm,
+            double               estimatedDurationMinutes,
+            double               loadUtilizationPct,
+            Double               savingsPct,
+            double               totalWeight,
+            double               totalVolume,
+            String               status,
+            String               createdAt
+    ) {}
 
     public record RouteHistoryEntry(
             UUID      id,

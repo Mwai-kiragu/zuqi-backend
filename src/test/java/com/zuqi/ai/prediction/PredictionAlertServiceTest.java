@@ -177,9 +177,13 @@ class PredictionAlertServiceTest {
         return StockoutPredictor.StockoutResult.builder()
                 .warehouseId(WAREHOUSE_ID)
                 .productId(PRODUCT_ID)
-                .stockoutProbability(probability)
+                .riskScore(probability)
                 .prediction(probability >= 0.5 ? "STOCKOUT" : "NO_STOCKOUT")
-                .daysOfStockRemaining(probability >= 0.5 ? 2.0 : 20.0)
+                .daysUntilStockout(probability >= 0.5 ? 2.0 : 20.0)
+                .currentStock(100.0)
+                .demand7d(0.0)
+                .consumptionTrend("STABLE")
+                .trendPct(0.0)
                 .modelVersion("stockout_predictor")
                 .build();
     }

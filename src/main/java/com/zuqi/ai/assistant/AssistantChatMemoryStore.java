@@ -14,10 +14,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -25,21 +27,22 @@ import java.util.stream.Collectors;
  *
  * Strategy
  * --------
- * • getMessages  : loads the conversation from DB, maps rows → LangChain4j message objects.
- *                  This gives the LLM proper alternating Human/AI messages (not just a
- *                  flat text dump) so Ollama understands conversation structure natively.
+ * • getMessages  : on the FIRST call of a new turn (after clearTurnBuffer) loads from DB and
+ *                  seeds turnBuffer. On subsequent calls within the SAME turn (LC4j 0.35.0
+ *                  calls this after every MessageWindowChatMemory.add() inside the agentic
+ *                  tool-calling loop), returns the in-memory buffer instead of reloading from DB.
+ *                  This preserves ToolExecutionRequestMessage / ToolExecutionResultMessage
+ *                  entries in the context window so the model sees its own tool results and
+ *                  does NOT call the same tool again — fixing the "infinite tool loop" bug.
  *
- * • updateMessages: called by LangChain4j after each agent step (after user msg is added,
- *                   after each tool result, after the final AI reply).
- *                   We compare the new list length against the current DB count to identify
- *                   and persist only the newly-added messages.
- *                   distributor + userId context is supplied via AssistantMemoryContext (ThreadLocal).
+ * • updateMessages: always updates turnBuffer with the FULL message list (including tool
+ *                   messages), then persists only NEW USER / ASSISTANT rows to DB using
+ *                   countByConversationId as the DB watermark.
  *
- * • deleteMessages: cleans up all DB rows for a conversation (used by the DELETE endpoint).
+ * • deleteMessages: cleans up all DB rows and clears the buffer.
  *
- * Tool messages (ToolExecutionRequestMessage, ToolExecutionResultMessage) are skipped when
- * persisting because our schema has only USER and ASSISTANT roles.  They are reconstructed
- * naturally on every turn since the LLM re-calls tools when needed.
+ * • clearTurnBuffer: call at the END of each agent turn (AssistantService.chat() finally block)
+ *                    so the next turn reloads fresh history from DB.
  */
 @Component
 @RequiredArgsConstructor
@@ -49,11 +52,20 @@ public class AssistantChatMemoryStore implements ChatMemoryStore {
     private final ChatMessageRepository chatMessageRepository;
     private final DistributorRepository distributorRepository;
 
+    /**
+     * In-memory buffer per conversation that preserves ALL message types
+     * (including ToolExecutionRequestMessage / ToolExecutionResultMessage)
+     * for the duration of a single agent turn. Cleared by clearTurnBuffer()
+     * at the end of the turn so the next turn reloads from DB.
+     */
+    private final ConcurrentHashMap<UUID, List<dev.langchain4j.data.message.ChatMessage>>
+            turnBuffer = new ConcurrentHashMap<>();
+
     // ── Read ──────────────────────────────────────────────────────────────────
 
     /**
-     * Load all persisted messages for the given conversationId and convert them
-     * to LangChain4j message objects for injection into the ChatMemory window.
+     * Returns the in-memory turn buffer if present (preserving tool messages across
+     * LC4j's internal agentic loop steps), otherwise loads USER/ASSISTANT history from DB.
      */
     @Override
     @Transactional(readOnly = true)
@@ -61,6 +73,18 @@ public class AssistantChatMemoryStore implements ChatMemoryStore {
         UUID conversationId = toUuid(memoryId);
         if (conversationId == null) return Collections.emptyList();
 
+        // If we have an active turn buffer return it — this is the key fix:
+        // tool call + result messages are kept in the buffer between LC4j steps
+        // so the model sees "I already called getSalesTrend and got a result"
+        // and does not call it again.
+        List<dev.langchain4j.data.message.ChatMessage> buffered = turnBuffer.get(conversationId);
+        if (buffered != null) {
+            log.debug("ChatMemoryStore.getMessages conversation={} returning turn buffer (size={})",
+                    conversationId, buffered.size());
+            return new ArrayList<>(buffered);
+        }
+
+        // No active turn — load history from DB (USER + ASSISTANT only)
         try {
             List<com.zuqi.domain.ai.ChatMessage> rows =
                     chatMessageRepository.findByConversationIdOrderByCreatedAtAsc(conversationId);
@@ -70,8 +94,8 @@ public class AssistantChatMemoryStore implements ChatMemoryStore {
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList());
 
-            log.debug("ChatMemoryStore.getMessages conversation={} rows={} lc4j={}",
-                    conversationId, rows.size(), messages.size());
+            log.debug("ChatMemoryStore.getMessages conversation={} loaded {} rows from DB",
+                    conversationId, messages.size());
             return messages;
 
         } catch (Exception e) {
@@ -84,14 +108,9 @@ public class AssistantChatMemoryStore implements ChatMemoryStore {
     // ── Write ─────────────────────────────────────────────────────────────────
 
     /**
-     * Persist any messages in {@code messages} that are not yet in the DB.
-     *
-     * LangChain4j calls this after every agent step, passing the FULL current
-     * window.  We derive "new" messages by comparing the list size against the
-     * DB row count for this conversation, then save the tail.
-     *
-     * Context (distributor, userId, modelName) comes from AssistantMemoryContext
-     * which AssistantService sets on the thread before calling the agent.
+     * Updates the in-memory turn buffer with the FULL message list (including tool messages),
+     * then persists only NEW USER/ASSISTANT messages to DB using countByConversationId
+     * as the DB watermark.
      */
     @Override
     @Transactional
@@ -99,6 +118,9 @@ public class AssistantChatMemoryStore implements ChatMemoryStore {
                                List<dev.langchain4j.data.message.ChatMessage> messages) {
         UUID conversationId = toUuid(memoryId);
         if (conversationId == null || messages == null || messages.isEmpty()) return;
+
+        // Always update the in-memory buffer with the complete list (preserves tool messages)
+        turnBuffer.put(conversationId, new ArrayList<>(messages));
 
         AssistantMemoryContext.MemoryContext ctx = AssistantMemoryContext.get();
         if (ctx == null) {
@@ -108,16 +130,21 @@ public class AssistantChatMemoryStore implements ChatMemoryStore {
         }
 
         try {
+            // Count only persistable (USER + ASSISTANT with text) messages in the current list
+            List<dev.langchain4j.data.message.ChatMessage> persistable = messages.stream()
+                    .filter(m -> m instanceof UserMessage ||
+                            (m instanceof AiMessage am && am.text() != null))
+                    .collect(Collectors.toList());
+
             long dbCount = chatMessageRepository.countByConversationId(conversationId);
-            if (messages.size() <= dbCount) {
-                log.debug("ChatMemoryStore.updateMessages conversation={} — no new messages (db={}, list={})",
-                        conversationId, dbCount, messages.size());
+            if (persistable.size() <= dbCount) {
+                log.debug("ChatMemoryStore.updateMessages conversation={} — no new persistable msgs (db={}, list={})",
+                        conversationId, dbCount, persistable.size());
                 return;
             }
 
-            // Only new messages not yet persisted
-            List<dev.langchain4j.data.message.ChatMessage> newMessages =
-                    messages.subList((int) dbCount, messages.size());
+            List<dev.langchain4j.data.message.ChatMessage> newPersistable =
+                    persistable.subList((int) dbCount, persistable.size());
 
             Distributor distributor = distributorRepository.findById(ctx.distributorId())
                     .orElse(null);
@@ -127,7 +154,7 @@ public class AssistantChatMemoryStore implements ChatMemoryStore {
             }
 
             int saved = 0;
-            for (dev.langchain4j.data.message.ChatMessage msg : newMessages) {
+            for (dev.langchain4j.data.message.ChatMessage msg : newPersistable) {
                 com.zuqi.domain.ai.ChatMessage entity =
                         toDbMessage(msg, conversationId, distributor, ctx);
                 if (entity != null) {
@@ -136,8 +163,8 @@ public class AssistantChatMemoryStore implements ChatMemoryStore {
                 }
             }
 
-            log.debug("ChatMemoryStore.updateMessages conversation={} saved {} of {} new messages",
-                    conversationId, saved, newMessages.size());
+            log.debug("ChatMemoryStore.updateMessages conversation={} persisted {} new messages (buffer size={})",
+                    conversationId, saved, messages.size());
 
         } catch (Exception e) {
             log.error("ChatMemoryStore.updateMessages failed for conversation={}: {}",
@@ -153,16 +180,27 @@ public class AssistantChatMemoryStore implements ChatMemoryStore {
         UUID conversationId = toUuid(memoryId);
         if (conversationId == null) return;
         chatMessageRepository.deleteByConversationId(conversationId);
+        turnBuffer.remove(conversationId);
         log.debug("ChatMemoryStore.deleteMessages conversation={}", conversationId);
+    }
+
+    // ── Turn lifecycle ────────────────────────────────────────────────────────
+
+    /**
+     * Clears the in-memory turn buffer for the given conversation.
+     * Call this at the END of each agent turn (in AssistantService.chat() finally block)
+     * so that the next turn's first getMessages() reloads history from DB.
+     */
+    public void clearTurnBuffer(UUID conversationId) {
+        if (conversationId == null) return;
+        turnBuffer.remove(conversationId);
+        log.debug("ChatMemoryStore.clearTurnBuffer conversation={}", conversationId);
     }
 
     // ── Converters ────────────────────────────────────────────────────────────
 
     /**
      * DB row → LangChain4j message.
-     * REPORT-type rows are treated as ASSISTANT chat messages (full content included
-     * here because the ChatMemory window is controlled by MessageWindowChatMemory's
-     * maxMessages limit, not by content size).
      */
     private dev.langchain4j.data.message.ChatMessage toLC4jMessage(
             com.zuqi.domain.ai.ChatMessage m) {
@@ -175,8 +213,7 @@ public class AssistantChatMemoryStore implements ChatMemoryStore {
 
     /**
      * LangChain4j message → DB row.
-     * Tool messages (ToolExecutionRequestMessage, ToolExecutionResultMessage) are
-     * skipped — our schema has no TOOL role and they don't need long-term persistence.
+     * Tool messages are skipped — our schema has no TOOL role and they don't need persistence.
      */
     private com.zuqi.domain.ai.ChatMessage toDbMessage(
             dev.langchain4j.data.message.ChatMessage msg,
@@ -193,12 +230,11 @@ public class AssistantChatMemoryStore implements ChatMemoryStore {
         } else if (msg instanceof AiMessage am) {
             role    = ChatRole.ASSISTANT;
             content = am.text();
-            if (content == null) return null; // AiMessage with only tool-call requests, no text
+            if (content == null) return null; // tool-call-only AiMessage, no text yet
         } else if (msg instanceof ToolExecutionResultMessage) {
-            return null; // skip — not user-facing, not in our schema
+            return null; // skip — ephemeral, not in our schema
         } else {
-            // ToolExecutionRequestMessage or future types
-            return null;
+            return null; // ToolExecutionRequestMessage or future types
         }
 
         return com.zuqi.domain.ai.ChatMessage.builder()

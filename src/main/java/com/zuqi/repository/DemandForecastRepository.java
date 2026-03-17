@@ -50,6 +50,19 @@ public interface DemandForecastRepository extends JpaRepository<DemandForecast, 
     int deleteExpiredForecasts(@Param("now") LocalDateTime now);
 
     /**
+     * Sum total predicted demand for a product across all merchants in a distributor
+     * over a date range. Used by InventoryFeatureService to populate predictedDemand7d.
+     */
+    @Query("SELECT COALESCE(SUM(f.predictedQty), 0.0) FROM DemandForecast f " +
+            "WHERE f.sku.id = :skuId " +
+            "AND f.distributor.id = :distributorId " +
+            "AND f.forecastDate >= :fromDate AND f.forecastDate <= :toDate")
+    double sumPredictedQtyForProduct(@Param("skuId") UUID skuId,
+                                     @Param("distributorId") UUID distributorId,
+                                     @Param("fromDate") LocalDate fromDate,
+                                     @Param("toDate") LocalDate toDate);
+
+    /**
      * Count forecasts for a distributor on a specific date.
      */
     long countByDistributorIdAndForecastDate(UUID distributorId, LocalDate forecastDate);

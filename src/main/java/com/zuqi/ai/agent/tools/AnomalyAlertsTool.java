@@ -32,6 +32,7 @@ public class AnomalyAlertsTool {
     public String getAnomalyAlerts(
             @P("The distributor UUID") String distributorId,
             @P("Number of days to look back (e.g. 7, 30, 90). Default is 30.") String periodDays) {
+        log.info("[TOOL CALLED] getAnomalyAlerts distributorId={}", distributorId);
         try {
             UUID distId = UUID.fromString(distributorId.trim());
 

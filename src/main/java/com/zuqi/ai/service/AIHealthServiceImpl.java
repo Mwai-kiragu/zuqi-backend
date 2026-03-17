@@ -3,6 +3,11 @@ package com.zuqi.ai.service;
 import com.zuqi.ai.dto.AIModelListResponse;
 import com.zuqi.ai.dto.AIModelPerformanceResponse;
 import com.zuqi.ai.dto.AISystemHealthResponse;
+import com.zuqi.ai.model.ModelRegistry;
+import com.zuqi.ai.synthetic.SyntheticDataConfig;
+import com.zuqi.ai.synthetic.SyntheticDataOrchestrator;
+import com.zuqi.ai.synthetic.SyntheticGenerationService;
+import com.zuqi.domain.ai.AISyntheticRun;
 import com.zuqi.domain.ai.AIModelPerformance;
 import com.zuqi.domain.ai.AIModelRegistry;
 import com.zuqi.domain.ai.MetricName;
@@ -15,6 +20,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.CacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -42,6 +50,9 @@ public class AIHealthServiceImpl implements AIHealthService {
     private final AIModelPerformanceRepository modelPerformanceRepository;
     private final CacheManager cacheManager;
     private final RedisConnectionFactory redisConnectionFactory;
+    private final ModelRegistry modelRegistry;
+    private final SyntheticDataOrchestrator syntheticDataOrchestrator;
+    private final SyntheticGenerationService syntheticGenerationService;
 
     @Value("${langchain4j.ollama.base-url}")
     private String ollamaBaseUrl;
@@ -171,6 +182,34 @@ public class AIHealthServiceImpl implements AIHealthService {
                 .build();
     }
 
+    @Override
+    public void retireModel(String modelName) {
+        log.info("Retiring active model: {}", modelName);
+        AIModelRegistry active = modelRegistryRepository.findByModelNameAndStatus(modelName, ModelStatus.ACTIVE)
+                .orElseThrow(() -> new IllegalArgumentException("No active model: " + modelName));
+        modelRegistry.retireModel(active.getId());
+        log.info("Model {} (id={}) retired successfully", modelName, active.getId());
+    }
+
+    @Override
+    public void triggerRetrainAll() {
+        log.info("Retrain-all requested — launching async synthetic generation + model training");
+        SyntheticDataConfig config = SyntheticDataConfig.defaultConfig(null, 42L);
+        AISyntheticRun run = syntheticDataOrchestrator.createRunRecord(null, config, "retrain-all");
+        syntheticGenerationService.generateAsync(run.getId(), config);
+        log.info("Retrain-all: async run {} enqueued (merchants={}, months={}, seed={})",
+                run.getId(), config.merchantCount(), config.historyMonths(), config.randomSeed());
+    }
+
+    @Override
+    public void triggerRetrainModel(String modelName) {
+        log.info("Retrain requested for model '{}' — launching full pipeline (models are co-trained)", modelName);
+        SyntheticDataConfig config = SyntheticDataConfig.defaultConfig(null, 42L);
+        AISyntheticRun run = syntheticDataOrchestrator.createRunRecord(null, config, "retrain-model:" + modelName);
+        syntheticGenerationService.generateAsync(run.getId(), config);
+        log.info("Retrain-model '{}': async run {} enqueued", modelName, run.getId());
+    }
+
     /**
      * Extract a metric value from the model's performanceMetrics JSON field.
      */
@@ -246,25 +285,76 @@ public class AIHealthServiceImpl implements AIHealthService {
     }
 
     private AISystemHealthResponse.LLMConnectivityHealth checkLLMConnectivity() {
-        // TODO Phase 2: Implement actual Ollama connectivity check
-        AISystemHealthResponse.OllamaStatus ollamaStatus = AISystemHealthResponse.OllamaStatus.builder()
-                .status("NOT_CONFIGURED")
-                .baseUrl(ollamaBaseUrl)
-                .model(ollamaModelName)
-                .message("Ollama connectivity check not yet implemented")
-                .build();
+        AISystemHealthResponse.OllamaStatus ollamaStatus = pingOllama();
 
         AISystemHealthResponse.CloudLLMStatus cloudStatus = AISystemHealthResponse.CloudLLMStatus.builder()
                 .status("NOT_CONFIGURED")
                 .provider("OpenAI/Anthropic")
-                .message("Cloud LLM fallback will be configured in Phase 2")
+                .message("Cloud LLM fallback not in use — local Ollama is primary")
                 .build();
 
+        String overallStatus = "UP".equals(ollamaStatus.status()) ? "UP" : "DOWN";
         return AISystemHealthResponse.LLMConnectivityHealth.builder()
-                .status("NOT_CONFIGURED")
+                .status(overallStatus)
                 .ollama(ollamaStatus)
                 .cloudLLM(cloudStatus)
                 .build();
+    }
+
+    /**
+     * Pings the Ollama /api/tags endpoint to verify connectivity and confirm
+     * the configured model is available on the server.
+     */
+    private AISystemHealthResponse.OllamaStatus pingOllama() {
+        try {
+            org.springframework.http.client.SimpleClientHttpRequestFactory factory =
+                    new org.springframework.http.client.SimpleClientHttpRequestFactory();
+            factory.setConnectTimeout(3000);
+            factory.setReadTimeout(5000);
+            RestTemplate restTemplate = new RestTemplate(factory);
+
+            ResponseEntity<String> response = restTemplate.getForEntity(
+                    ollamaBaseUrl + "/api/tags", String.class);
+
+            String body = response.getBody();
+            if (response.getStatusCode() == HttpStatus.OK && body != null) {
+                boolean modelPresent = body.contains("\"" + ollamaModelName + "\"")
+                        || body.contains(ollamaModelName.replace(":", "\":\""));
+
+                if (modelPresent) {
+                    log.debug("Ollama health check: UP, model {} confirmed available", ollamaModelName);
+                    return AISystemHealthResponse.OllamaStatus.builder()
+                            .status("UP")
+                            .baseUrl(ollamaBaseUrl)
+                            .model(ollamaModelName)
+                            .message("Ollama reachable and model " + ollamaModelName + " is available")
+                            .build();
+                } else {
+                    log.warn("Ollama health check: reachable but model {} not found in tag list", ollamaModelName);
+                    return AISystemHealthResponse.OllamaStatus.builder()
+                            .status("DEGRADED")
+                            .baseUrl(ollamaBaseUrl)
+                            .model(ollamaModelName)
+                            .message("Ollama reachable but model '" + ollamaModelName + "' not found — check OLLAMA_MODEL config")
+                            .build();
+                }
+            } else {
+                return AISystemHealthResponse.OllamaStatus.builder()
+                        .status("DOWN")
+                        .baseUrl(ollamaBaseUrl)
+                        .model(ollamaModelName)
+                        .message("Ollama returned unexpected status: " + response.getStatusCode())
+                        .build();
+            }
+        } catch (Exception e) {
+            log.warn("Ollama health check failed: {}", e.getMessage());
+            return AISystemHealthResponse.OllamaStatus.builder()
+                    .status("DOWN")
+                    .baseUrl(ollamaBaseUrl)
+                    .model(ollamaModelName)
+                    .message("Cannot reach Ollama at " + ollamaBaseUrl + " — " + e.getMessage())
+                    .build();
+        }
     }
 
     private AISystemHealthResponse.CacheHealth checkCacheHealth() {

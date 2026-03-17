@@ -100,6 +100,8 @@ public class SyntheticInventoryFeatureBuilder {
                 // Pending quantities (simplified — no purchase order tracking in synthetic data)
                 .pendingReservedQty(BigDecimal.ZERO)
                 .expectedIncomingQty(computeExpectedIncoming(movements, asOfDate))
+                // Simulate demand forecast as ±15% variation around 7-day consumption rate
+                .predictedDemand7d(simulatePredictedDemand(rate7d))
                 .build();
     }
 
@@ -156,6 +158,20 @@ public class SyntheticInventoryFeatureBuilder {
                 .filter(Objects::nonNull)
                 .distinct()
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * Simulate demand forecast as ±15% variation around historical consumption rate.
+     * Returns null (no forecast) when consumption rate is zero.
+     */
+    private BigDecimal simulatePredictedDemand(BigDecimal consumptionRate7d) {
+        if (consumptionRate7d == null || consumptionRate7d.compareTo(BigDecimal.ZERO) == 0) {
+            return null;
+        }
+        // Add ±15% noise to mimic demand forecaster output
+        double base = consumptionRate7d.doubleValue();
+        double noise = 1.0 + (Math.random() * 0.30 - 0.15);
+        return BigDecimal.valueOf(base * noise).setScale(3, java.math.RoundingMode.HALF_UP);
     }
 
     /** Approximate expected incoming: sum of IN movements in the last 7 days. */

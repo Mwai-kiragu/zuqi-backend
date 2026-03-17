@@ -157,27 +157,38 @@ p, FINANCE, /v1/reports/:id, GET
 p, FINANCE, /v1/credit, GET
 p, FINANCE, /v1/credit/:id, GET
 
-# AI System Health - SUPER_ADMIN only
+# AI System Health - SUPER_ADMIN + DISTRIBUTOR_ADMIN (read)
 p, SUPER_ADMIN, /v1/ai/system/*, .*
+p, DISTRIBUTOR_ADMIN, /v1/ai/system/health, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/system/models, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/system/models/:name, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/system/models/:name/performance, GET
 
 # AI Credit Scoring - SUPER_ADMIN, DISTRIBUTOR_ADMIN, FINANCE
 p, SUPER_ADMIN, /v1/ai/credit/*, .*
-p, DISTRIBUTOR_ADMIN, /v1/ai/credit/evaluate/:id, POST
+p, DISTRIBUTOR_ADMIN, /v1/ai/credit/evaluations, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/credit/evaluations/detail/:id, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/credit/evaluations/:id, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/credit/evaluations/:id/review, PUT
+p, DISTRIBUTOR_ADMIN, /v1/ai/credit/evaluate/:id, POST
 p, DISTRIBUTOR_ADMIN, /v1/ai/credit/score/:id, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/credit/adjust/:id, POST
-p, FINANCE, /v1/ai/credit/evaluate/:id, POST
+p, FINANCE, /v1/ai/credit/evaluations, GET
+p, FINANCE, /v1/ai/credit/evaluations/detail/:id, GET
 p, FINANCE, /v1/ai/credit/evaluations/:id, GET
+p, FINANCE, /v1/ai/credit/evaluate/:id, POST
 p, FINANCE, /v1/ai/credit/score/:id, GET
 p, FINANCE, /v1/ai/credit/adjust/:id, POST
 
 # AI Demand Forecasting - DISTRIBUTOR_ADMIN, SALES_REP, WAREHOUSE_MANAGER
-p, DISTRIBUTOR_ADMIN, /v1/ai/demand/forecast/:id, GET
-p, DISTRIBUTOR_ADMIN, /v1/ai/demand/forecast/warehouse/:id, GET
-p, DISTRIBUTOR_ADMIN, /v1/ai/demand/suggestions/:id, GET
-p, SALES_REP, /v1/ai/demand/suggestions/:id, GET
-p, WAREHOUSE_MANAGER, /v1/ai/demand/forecast/:id, GET
-p, WAREHOUSE_MANAGER, /v1/ai/demand/forecast/warehouse/:id, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/demand/forecasts, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/demand/forecasts/:merchantId/:productId, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/demand/suggestions/:merchantId, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/demand/health, GET
+p, SALES_REP, /v1/ai/demand/forecasts, GET
+p, SALES_REP, /v1/ai/demand/suggestions/:merchantId, GET
+p, WAREHOUSE_MANAGER, /v1/ai/demand/forecasts, GET
+p, WAREHOUSE_MANAGER, /v1/ai/demand/forecasts/:merchantId/:productId, GET
 
 # AI Anomaly Detection - DISTRIBUTOR_ADMIN, WAREHOUSE_MANAGER, FINANCE
 p, DISTRIBUTOR_ADMIN, /v1/ai/anomaly/alerts, GET
@@ -192,17 +203,26 @@ p, FINANCE, /v1/ai/anomaly/alerts/summary, GET
 
 # AI Predictions - DISTRIBUTOR_ADMIN, WAREHOUSE_MANAGER
 p, DISTRIBUTOR_ADMIN, /v1/ai/prediction/stockout/:id, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/prediction/stockout/train, POST
 p, DISTRIBUTOR_ADMIN, /v1/ai/prediction/rep-performance, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/prediction/rep-performance/:id, GET
 p, WAREHOUSE_MANAGER, /v1/ai/prediction/stockout/:id, GET
+p, MERCHANT_ADMIN, /v1/ai/prediction/stockout/:id, GET
+p, MERCHANT_ADMIN, /v1/ai/prediction/rep-performance, GET
+p, MERCHANT_ADMIN, /v1/ai/prediction/rep-performance/:id, GET
 
 # AI Route Optimization - DISTRIBUTOR_ADMIN, DRIVER
 p, DISTRIBUTOR_ADMIN, /v1/ai/routing/optimize, POST
 p, DISTRIBUTOR_ADMIN, /v1/ai/routing/reoptimize, POST
-p, DISTRIBUTOR_ADMIN, /v1/ai/routing/routes/:date, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/routing/routes/date/:date, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/routing/routes/:id, GET
-p, DRIVER, /v1/ai/routing/routes/:date, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/routing/my-route, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/routing/history, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/routing/routes/:routeId/stops/:stopSequence/complete, PUT
+p, DRIVER, /v1/ai/routing/routes/date/:date, GET
 p, DRIVER, /v1/ai/routing/routes/:id, GET
+p, DRIVER, /v1/ai/routing/my-route, GET
+p, DRIVER, /v1/ai/routing/routes/:routeId/stops/:stopSequence/complete, PUT
 
 # AI Recommendations - DISTRIBUTOR_ADMIN only
 p, DISTRIBUTOR_ADMIN, /v1/ai/recommendations/:distributorId, GET
@@ -217,11 +237,14 @@ p, DISTRIBUTOR_ADMIN, /v1/ai/reports/compliance/generate, POST
 p, DISTRIBUTOR_ADMIN, /v1/ai/reports/compliance/templates, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/reports/compliance/:id, GET
 
-# AI Assistant - Chat, report generation, and structured report data
+# AI Assistant - Chat available to all roles (content is scoped by role server-side)
 p, SUPER_ADMIN, /v1/ai/assistant/chat, POST
 p, DISTRIBUTOR_ADMIN, /v1/ai/assistant/chat, POST
 p, SALES_REP, /v1/ai/assistant/chat, POST
 p, FINANCE, /v1/ai/assistant/chat, POST
+p, WAREHOUSE_MANAGER, /v1/ai/assistant/chat, POST
+p, DRIVER, /v1/ai/assistant/chat, POST
+p, MERCHANT_ADMIN, /v1/ai/assistant/chat, POST
 
 p, SUPER_ADMIN, /v1/ai/assistant/report, POST
 p, DISTRIBUTOR_ADMIN, /v1/ai/assistant/report, POST
@@ -236,10 +259,17 @@ p, SUPER_ADMIN, /v1/ai/assistant/history/:id, GET|DELETE
 p, DISTRIBUTOR_ADMIN, /v1/ai/assistant/history/:id, GET|DELETE
 p, SALES_REP, /v1/ai/assistant/history/:id, GET|DELETE
 p, FINANCE, /v1/ai/assistant/history/:id, GET|DELETE
+p, WAREHOUSE_MANAGER, /v1/ai/assistant/history/:id, GET|DELETE
+p, DRIVER, /v1/ai/assistant/history/:id, GET|DELETE
+p, MERCHANT_ADMIN, /v1/ai/assistant/history/:id, GET|DELETE
 
 p, SUPER_ADMIN, /v1/ai/assistant/conversations/:id, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/assistant/conversations/:id, GET
 p, FINANCE, /v1/ai/assistant/conversations/:id, GET
+p, SALES_REP, /v1/ai/assistant/conversations/:id, GET
+p, WAREHOUSE_MANAGER, /v1/ai/assistant/conversations/:id, GET
+p, DRIVER, /v1/ai/assistant/conversations/:id, GET
+p, MERCHANT_ADMIN, /v1/ai/assistant/conversations/:id, GET
 
 # DRIVER - Delivery operations
 p, DRIVER, /v1/roles/name/:name, GET

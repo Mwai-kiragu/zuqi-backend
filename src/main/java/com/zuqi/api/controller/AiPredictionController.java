@@ -3,7 +3,10 @@ package com.zuqi.api.controller;
 import com.zuqi.ai.prediction.PredictionAlertService;
 import com.zuqi.ai.prediction.RepPerformancePredictor;
 import com.zuqi.ai.prediction.StockoutPredictor;
+import com.zuqi.ai.prediction.StockoutTrainingPipeline;
+import com.zuqi.ai.synthetic.DataPhaseTracker;
 import com.zuqi.api.dto.ApiResponse;
+import com.zuqi.domain.inventory.Stock;
 import com.zuqi.repository.StockRepository;
 import com.zuqi.repository.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
@@ -37,6 +40,8 @@ public class AiPredictionController {
     private final PredictionAlertService   predictionAlertService;
     private final StockRepository          stockRepository;
     private final UserRepository           userRepository;
+    private final StockoutTrainingPipeline stockoutTrainingPipeline;
+    private final DataPhaseTracker         dataPhaseTracker;
 
     // ── GET /stockout/{warehouseId} ───────────────────────────────────────
 
@@ -53,27 +58,45 @@ public class AiPredictionController {
 
         try {
             // Fetch all active product-stock entries for this warehouse
-            List<UUID> productIds = stockRepository
+            List<Stock> stocks = stockRepository
                     .findByWarehouseId(warehouseId, PageRequest.of(0, 500))
-                    .stream()
-                    .map(s -> s.getProduct().getId())
-                    .toList();
+                    .getContent();
 
-            List<StockoutPredictor.StockoutResult> results = productIds.stream()
-                    .map(productId -> {
+            String dataPhase = dataPhaseTracker
+                    .getPhase(StockoutPredictor.MODEL_NAME, distributorId)
+                    .name();
+
+            List<StockoutDisplayItem> results = stocks.stream()
+                    .map(stock -> {
+                        UUID productId = stock.getProduct().getId();
                         StockoutPredictor.StockoutResult r = stockoutPredictor.predict(warehouseId, productId);
-                        // Raise alert if above threshold
                         predictionAlertService.evaluateStockoutAndAlert(r, distributorId);
-                        return r;
+
+                        String trendStr = formatTrend(r.trendPct());
+
+                        return new StockoutDisplayItem(
+                                productId,
+                                stock.getProduct().getName(),
+                                warehouseId,
+                                stock.getWarehouse().getName(),
+                                r.riskScore(),
+                                r.daysUntilStockout(),
+                                (int) r.currentStock(),
+                                stock.getReorderLevel() != null ? stock.getReorderLevel().intValue() : 0,
+                                (int) r.demand7d(),
+                                r.consumptionTrend(),
+                                trendStr
+                        );
                     })
+                    .sorted(java.util.Comparator.comparingDouble(StockoutDisplayItem::riskScore).reversed())
                     .toList();
 
             long atRisk = results.stream()
-                    .filter(r -> r.stockoutProbability() >= 0.5)
+                    .filter(r -> r.riskScore() >= 0.5)
                     .count();
 
             StockoutBatchResponse response = new StockoutBatchResponse(
-                    warehouseId, results.size(), (int) atRisk, results);
+                    warehouseId, results.size(), (int) atRisk, dataPhase, results);
 
             return ResponseEntity.ok(ApiResponse.success(response));
 
@@ -147,14 +170,59 @@ public class AiPredictionController {
         }
     }
 
+    // ── POST /stockout/train ──────────────────────────────────────────────
+
+    @PostMapping("/stockout/train")
+    @Operation(
+            summary = "Retrain the stockout predictor model",
+            description = "Runs the full training pipeline synchronously. Promotes the new model if AUC ≥ 0.75."
+    )
+    public ResponseEntity<ApiResponse<StockoutTrainingPipeline.TrainingPipelineResult>> trainStockoutModel() {
+        log.info("POST /v1/ai/prediction/stockout/train — retraining stockout predictor");
+        try {
+            StockoutTrainingPipeline.TrainingPipelineResult result = stockoutTrainingPipeline.runPipeline();
+            if (result.success()) {
+                return ResponseEntity.ok(ApiResponse.success(result));
+            } else {
+                return ResponseEntity.internalServerError()
+                        .body(ApiResponse.error("Training failed: " + result.errorMessage()));
+            }
+        } catch (Exception e) {
+            log.error("Stockout training endpoint error: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("Training error: " + e.getMessage()));
+        }
+    }
+
     // ── Inner DTOs ────────────────────────────────────────────────────────
+
+    /** All fields the frontend StockoutPrediction interface expects. */
+    public record StockoutDisplayItem(
+            UUID   productId,
+            String productName,
+            UUID   warehouseId,
+            String warehouseName,
+            double riskScore,
+            double daysUntilStockout,
+            int    currentQuantity,
+            int    reorderLevel,
+            int    demand7d,
+            String consumptionTrend,
+            String trend
+    ) {}
 
     public record StockoutBatchResponse(
             UUID warehouseId,
             int  totalProducts,
             int  atRiskCount,
-            List<StockoutPredictor.StockoutResult> predictions
+            String dataPhase,
+            List<StockoutDisplayItem> predictions
     ) {}
+
+    private String formatTrend(double pct) {
+        if (Math.abs(pct) < 0.5) return "~0%";
+        return (pct > 0 ? "+" : "") + String.format("%.0f%%", pct);
+    }
 
     public record RepBatchResponse(
             int  totalReps,

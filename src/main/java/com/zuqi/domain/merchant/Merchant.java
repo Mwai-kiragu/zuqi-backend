@@ -1,6 +1,7 @@
 package com.zuqi.domain.merchant;
 
 import com.zuqi.domain.customer.KycStatus;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -14,6 +15,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 @Entity
 @Table(name = "merchants", indexes = {
         @Index(name = "idx_merchants_active", columnList = "active")

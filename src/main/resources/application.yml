@@ -84,7 +84,7 @@ casbin:
 langchain4j:
   ollama:
     base-url: http://100.109.211.20:11434  # Tailscale
-#    base-url: http://192.168.2.17:11434   # LAN
+#   base-url: http://192.168.2.17:11434   # LAN
     chat-model:
       model-name: gpt-oss:latest
       temperature: 0.1  # Low for consistency in credit scoring
@@ -111,7 +111,7 @@ zuqi:
         low-ml-confidence: 0.6    # Validate if ML confidence < 0.6
         new-category-validation: true  # Validate new merchant categories
         sample-rate: 0.3          # Random validation sample (30%)
-      retraining-enabled: false  # Enable weekly model retraining with real outcomes
+      retraining-enabled: true   # Enable weekly model retraining with real outcomes
       retraining-cron: "0 0 2 ? * SUN"  # Every Sunday at 2:00 AM
 
     demand-forecasting:
@@ -122,43 +122,43 @@ zuqi:
       min-confidence-threshold: 0.5  # Filter suggestions with confidence < 0.5
       max-suggestions-per-merchant: 20  # Limit order suggestions
       llm-enrichment-enabled: false  # Phase 5+ feature (sales tips from LLM)
-      training-enabled: false  # Enable weekly model training
+      training-enabled: true   # Enable weekly model training
       training-cron: "0 0 2 ? * SUN"  # Every Sunday at 2:00 AM (before forecast job at 3:00 AM)
       forecast-schedule: "0 0 3 * * *"  # Every day at 3:00 AM
 
     anomaly-detection:
-      training-enabled: false            # Set true to enable weekly anomaly model retraining
+      training-enabled: true             # Enable weekly anomaly model retraining
       shrinkage-training-cron: "0 0 2 ? * SUN"
       payment-training-cron: "0 30 2 ? * SUN"
       shrinkage-threshold: 0.5
       payment-anomaly-threshold: 0.5
 
     prediction:
-      training-enabled: false            # Set true to enable weekly prediction model retraining
+      training-enabled: true             # Enable weekly prediction model retraining
       stockout-training-cron: "0 0 3 ? * SUN"
       rep-training-cron: "0 30 3 ? * SUN"
       stockout-alert-threshold: 0.5
       rep-performance-alert-threshold: 60.0
 
     routing:
-      enabled: false                     # Set true to enable nightly route optimization job
+      enabled: true                      # Enable nightly route optimization job
       optimization-cron: "0 0 18 * * *"  # 6 PM daily
 
     agent:
-      enabled: false                          # Set true to run weekly recommendation job
+      enabled: true                           # Enable weekly recommendation job
       recommendation-cron: "0 0 8 ? * MON"   # Every Monday at 08:00
 
     reporting:
       compliance-cron: "0 0 4 1 * *"         # 1st of every month at 04:00
 
     credit:
-      adjustment-enabled: false               # Set true to enable monthly credit limit adjustments
+      adjustment-enabled: true                # Enable monthly credit limit adjustments
       adjustment-cron: "0 0 1 1 * *"         # 1st of every month at 01:00
       max-increase-pct: 20.0
       min-limit-kes: 50000.0
 
     monitoring:
-      drift-detection-enabled: false          # Set true to enable weekly drift detection
+      drift-detection-enabled: true           # Enable weekly drift detection
       drift-check-cron: "0 0 6 ? * SUN"
       performance-tracking-cron: "0 0 5 * * *"
       psi-threshold: 0.2
@@ -279,3 +279,4 @@ spring:
 logging:
   level:
     com.zuqi: DEBUG
+    dev.langchain4j: DEBUG
