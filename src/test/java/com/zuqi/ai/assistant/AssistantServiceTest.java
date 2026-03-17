@@ -7,6 +7,7 @@ import com.zuqi.domain.ai.ReportType;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.repository.ChatMessageRepository;
 import com.zuqi.repository.DistributorRepository;
+import com.zuqi.util.SecurityUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,12 +43,15 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AssistantServiceTest {
 
-    @Mock private AssistantAgent          assistantAgent;
-    @Mock private AssistantReportBuilder  reportBuilder;
-    @Mock private ChatMessageRepository   chatMessageRepository;
-    @Mock private DistributorRepository   distributorRepository;
-    @Mock private CacheManager            cacheManager;
-    @Mock private Cache                   cache;
+    @Mock private AssistantAgent            assistantAgent;
+    @Mock private AssistantAgentFactory     assistantAgentFactory;
+    @Mock private AssistantChatMemoryStore  chatMemoryStore;
+    @Mock private AssistantReportBuilder    reportBuilder;
+    @Mock private ChatMessageRepository     chatMessageRepository;
+    @Mock private DistributorRepository     distributorRepository;
+    @Mock private CacheManager              cacheManager;
+    @Mock private Cache                     cache;
+    @Mock private SecurityUtils             securityUtils;
 
     @InjectMocks
     private AssistantService service;
@@ -70,6 +74,9 @@ class AssistantServiceTest {
         // Inject @Value fields via reflection
         ReflectionTestUtils.setField(service, "chatModelName",   "qwen2.5-coder:32b");
         ReflectionTestUtils.setField(service, "reportModelName", "qwen2.5-coder:32b");
+
+        // Factory always returns the mock agent (only used by chat() tests, not report tests)
+        lenient().when(assistantAgentFactory.buildForRole(anyString())).thenReturn(assistantAgent);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -155,7 +162,7 @@ class AssistantServiceTest {
         service.chat(distributorId, userId, conversationId, "What are my sales?");
 
         String captured = messageCaptor.getValue();
-        assertThat(captured).startsWith("DISTRIBUTOR_ID: " + distributorId);
+        assertThat(captured).contains("DISTRIBUTOR_ID: " + distributorId);
     }
 
     @Test
