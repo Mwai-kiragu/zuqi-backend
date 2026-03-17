@@ -25,8 +25,9 @@ public class PosSalesTool {
     private final DistributorBranchRepository branchRepository;
     private final PosSaleRepository           posSaleRepository;
 
-    @Tool("Get point-of-sale (POS) summary for a distributor. Returns total POS sales count, " +
-         "completed sales count, total revenue KES for last 30 days across all branches. " +
+    @Tool("Get point-of-sale (POS) summary for a distributor. Returns completed sales count " +
+         "and total revenue KES for last 30 days across all branches, plus a per-branch breakdown " +
+         "with branch name, sales count, and revenue. " +
          "Use for questions about POS, point of sale, retail sales, walk-in sales, till sales.")
     @Transactional(readOnly = true)
     public String getPosSummary(@P("The distributor UUID") String distributorId) {
@@ -46,19 +47,39 @@ public class PosSalesTool {
             long completedSales = 0;
             BigDecimal revenue  = BigDecimal.ZERO;
 
+            // Per-branch data
+            java.util.List<long[]> branchSalesCounts = new java.util.ArrayList<>();
+            java.util.List<BigDecimal> branchRevenues = new java.util.ArrayList<>();
+
             for (DistributorBranch branch : branches) {
-                completedSales += posSaleRepository.countByBranchAndStatusAndDateRange(
+                long branchSales = posSaleRepository.countByBranchAndStatusAndDateRange(
                         branch.getId(), PosSaleStatus.COMPLETED, from, to);
-                revenue = revenue.add(
-                        posSaleRepository.sumTotalByBranchAndStatusAndDateRange(
-                                branch.getId(), PosSaleStatus.COMPLETED, from, to));
+                BigDecimal branchRevenue = posSaleRepository.sumTotalByBranchAndStatusAndDateRange(
+                        branch.getId(), PosSaleStatus.COMPLETED, from, to);
+                completedSales += branchSales;
+                revenue = revenue.add(branchRevenue);
+                branchSalesCounts.add(new long[]{branchSales});
+                branchRevenues.add(branchRevenue);
             }
 
-            return String.format(
+            StringBuilder sb = new StringBuilder();
+            sb.append(String.format(
                 "{ \"tool\": \"PosSummary\", \"distributorId\": \"%s\", " +
-                "\"branches\": %d, \"totalCompletedSales\": %d, \"last30DaysRevenueKES\": \"%s\" }",
-                distId, branches.size(), completedSales, revenue.toPlainString()
-            );
+                "\"branches\": %d, \"totalCompletedSales\": %d, \"last30DaysRevenueKES\": \"%s\", ",
+                distId, branches.size(), completedSales, revenue.toPlainString()));
+
+            sb.append("\"branchBreakdown\": [");
+            for (int i = 0; i < branches.size(); i++) {
+                String branchName = branches.get(i).getName() != null
+                        ? branches.get(i).getName().replace("\"", "'") : "Unknown";
+                sb.append(String.format(
+                        "{ \"branch\": \"%s\", \"completedSales\": %d, \"revenueKES\": \"%s\" }",
+                        branchName, branchSalesCounts.get(i)[0], branchRevenues.get(i).toPlainString()));
+                if (i < branches.size() - 1) sb.append(", ");
+            }
+            sb.append("] }");
+
+            return sb.toString();
         } catch (Exception e) {
             log.error("PosSalesTool: error for distributorId '{}': {}", distributorId, e.getMessage());
             return "{ \"error\": \"Failed to retrieve POS summary: " + e.getMessage() + "\" }";

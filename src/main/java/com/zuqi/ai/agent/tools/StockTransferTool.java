@@ -28,7 +28,8 @@ public class StockTransferTool {
     private final StockTransferRepository stockTransferRepository;
 
     @Tool("Get stock transfer summary for a distributor. Returns counts by status " +
-         "(PENDING, APPROVED, IN_TRANSIT, RECEIVED, CANCELLED) across all warehouses. " +
+         "(PENDING, APPROVED, IN_TRANSIT, RECEIVED, CANCELLED) across all warehouses, " +
+         "and the top 5 in-transit transfers with reference number, source warehouse, and destination warehouse. " +
          "Use for questions about stock transfers, inter-warehouse movements, transfer requests.")
     @Transactional(readOnly = true)
     public String getStockTransferSummary(@P("The distributor UUID") String distributorId) {
@@ -61,12 +62,33 @@ public class StockTransferTool {
             long received  = transfers.stream().filter(t -> StockTransferStatus.RECEIVED  == t.getStatus()).count();
             long cancelled = transfers.stream().filter(t -> StockTransferStatus.CANCELLED == t.getStatus()).count();
 
-            return String.format(
+            // Top 5 in-transit transfers with route info
+            List<StockTransfer> inTransitDetails = transfers.stream()
+                    .filter(t -> StockTransferStatus.IN_TRANSIT == t.getStatus())
+                    .limit(5)
+                    .collect(Collectors.toList());
+
+            StringBuilder sb = new StringBuilder();
+            sb.append(String.format(
                 "{ \"tool\": \"StockTransferSummary\", \"distributorId\": \"%s\", " +
                 "\"warehouses\": %d, \"totalTransfers\": %d, " +
-                "\"pending\": %d, \"approved\": %d, \"inTransit\": %d, \"received\": %d, \"cancelled\": %d }",
-                distId, warehouses.size(), total, pending, approved, inTransit, received, cancelled
-            );
+                "\"pending\": %d, \"approved\": %d, \"inTransit\": %d, \"received\": %d, \"cancelled\": %d, ",
+                distId, warehouses.size(), total, pending, approved, inTransit, received, cancelled));
+
+            sb.append("\"inTransitDetails\": [");
+            for (int i = 0; i < inTransitDetails.size(); i++) {
+                StockTransfer t = inTransitDetails.get(i);
+                String ref  = t.getReferenceNumber() != null ? t.getReferenceNumber() : "N/A";
+                String src  = t.getSourceWarehouse() != null ? t.getSourceWarehouse().getName().replace("\"", "'") : "Unknown";
+                String dest = t.getDestinationWarehouse() != null ? t.getDestinationWarehouse().getName().replace("\"", "'") : "Unknown";
+                sb.append(String.format(
+                        "{ \"referenceNumber\": \"%s\", \"from\": \"%s\", \"to\": \"%s\" }",
+                        ref, src, dest));
+                if (i < inTransitDetails.size() - 1) sb.append(", ");
+            }
+            sb.append("] }");
+
+            return sb.toString();
         } catch (Exception e) {
             log.error("StockTransferTool: error for distributorId '{}': {}", distributorId, e.getMessage());
             return "{ \"error\": \"Failed to retrieve stock transfer summary: " + e.getMessage() + "\" }";

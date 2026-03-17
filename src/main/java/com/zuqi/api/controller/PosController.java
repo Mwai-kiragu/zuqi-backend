@@ -67,6 +67,13 @@ public class PosController {
         return ResponseEntity.ok(ApiResponse.success("Shift closed", posService.closeShift(shiftId, request, cashierId)));
     }
 
+    @GetMapping("/shifts/{shiftId}/reconciliation")
+    @Operation(summary = "Get shift reconciliation summary")
+    public ResponseEntity<ApiResponse<ShiftReconciliationResponse>> getShiftReconciliation(
+            @PathVariable UUID shiftId) {
+        return ResponseEntity.ok(ApiResponse.success(posService.getShiftReconciliation(shiftId)));
+    }
+
     @GetMapping("/shifts/current")
     @Operation(summary = "Get current open shift for the cashier")
     public ResponseEntity<ApiResponse<PosShiftResponse>> getCurrentShift(@RequestParam UUID branchId) {

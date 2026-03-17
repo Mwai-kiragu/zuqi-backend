@@ -593,4 +593,65 @@ public class PosServiceImpl implements PosService {
                 .updatedAt(sale.getUpdatedAt())
                 .build();
     }
+
+    // ── Shift Reconciliation ──────────────────────────────────────────────────
+
+    @Override
+    public ShiftReconciliationResponse getShiftReconciliation(UUID shiftId) {
+        PosShift shift = shiftRepository.findById(shiftId)
+                .orElseThrow(() -> new ResourceNotFoundException("PosShift", "id", shiftId));
+
+        // Collect all payments for completed sales in this shift
+        List<PosSalePayment> payments = paymentRepository.findByShiftId(shiftId);
+
+        BigDecimal cashCollected  = BigDecimal.ZERO;
+        BigDecimal cardCollected  = BigDecimal.ZERO;
+        BigDecimal mpesaCollected = BigDecimal.ZERO;
+        BigDecimal otherCollected = BigDecimal.ZERO;
+
+        for (PosSalePayment p : payments) {
+            BigDecimal amt = p.getAmount() != null ? p.getAmount() : BigDecimal.ZERO;
+            switch (p.getPaymentMethod()) {
+                case CASH          -> cashCollected  = cashCollected.add(amt);
+                case CARD          -> cardCollected  = cardCollected.add(amt);
+                case MPESA         -> mpesaCollected = mpesaCollected.add(amt);
+                default            -> otherCollected = otherCollected.add(amt);
+            }
+        }
+
+        // Count completed sales
+        Page<PosSale> salesPage = saleRepository.findByShiftId(shiftId,
+                org.springframework.data.domain.Pageable.unpaged());
+        long completedCount = salesPage.stream()
+                .filter(s -> PosSaleStatus.COMPLETED.equals(s.getStatus()))
+                .count();
+        BigDecimal totalSales = salesPage.stream()
+                .filter(s -> PosSaleStatus.COMPLETED.equals(s.getStatus()))
+                .map(PosSale::getTotalAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal openingFloat = shift.getOpeningFloat() != null
+                ? shift.getOpeningFloat() : BigDecimal.ZERO;
+
+        String cashierName = shift.getCashier() != null
+                ? (shift.getCashier().getFirstName() + " " + shift.getCashier().getLastName()).trim()
+                : "Unknown";
+        String branchName = shift.getBranch() != null
+                ? shift.getBranch().getName() : "Unknown";
+
+        return ShiftReconciliationResponse.builder()
+                .shiftId(shift.getId())
+                .cashierName(cashierName)
+                .branchName(branchName)
+                .openedAt(shift.getOpenedAt())
+                .openingFloat(openingFloat)
+                .totalTransactions((int) completedCount)
+                .totalSales(totalSales)
+                .cashCollected(cashCollected)
+                .cardCollected(cardCollected)
+                .mpesaCollected(mpesaCollected)
+                .otherCollected(otherCollected)
+                .expectedCash(openingFloat.add(cashCollected))
+                .build();
+    }
 }

@@ -20,6 +20,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.CacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -282,25 +285,76 @@ public class AIHealthServiceImpl implements AIHealthService {
     }
 
     private AISystemHealthResponse.LLMConnectivityHealth checkLLMConnectivity() {
-        // TODO Phase 2: Implement actual Ollama connectivity check
-        AISystemHealthResponse.OllamaStatus ollamaStatus = AISystemHealthResponse.OllamaStatus.builder()
-                .status("NOT_CONFIGURED")
-                .baseUrl(ollamaBaseUrl)
-                .model(ollamaModelName)
-                .message("Ollama connectivity check not yet implemented")
-                .build();
+        AISystemHealthResponse.OllamaStatus ollamaStatus = pingOllama();
 
         AISystemHealthResponse.CloudLLMStatus cloudStatus = AISystemHealthResponse.CloudLLMStatus.builder()
                 .status("NOT_CONFIGURED")
                 .provider("OpenAI/Anthropic")
-                .message("Cloud LLM fallback will be configured in Phase 2")
+                .message("Cloud LLM fallback not in use — local Ollama is primary")
                 .build();
 
+        String overallStatus = "UP".equals(ollamaStatus.status()) ? "UP" : "DOWN";
         return AISystemHealthResponse.LLMConnectivityHealth.builder()
-                .status("NOT_CONFIGURED")
+                .status(overallStatus)
                 .ollama(ollamaStatus)
                 .cloudLLM(cloudStatus)
                 .build();
+    }
+
+    /**
+     * Pings the Ollama /api/tags endpoint to verify connectivity and confirm
+     * the configured model is available on the server.
+     */
+    private AISystemHealthResponse.OllamaStatus pingOllama() {
+        try {
+            org.springframework.http.client.SimpleClientHttpRequestFactory factory =
+                    new org.springframework.http.client.SimpleClientHttpRequestFactory();
+            factory.setConnectTimeout(3000);
+            factory.setReadTimeout(5000);
+            RestTemplate restTemplate = new RestTemplate(factory);
+
+            ResponseEntity<String> response = restTemplate.getForEntity(
+                    ollamaBaseUrl + "/api/tags", String.class);
+
+            String body = response.getBody();
+            if (response.getStatusCode() == HttpStatus.OK && body != null) {
+                boolean modelPresent = body.contains("\"" + ollamaModelName + "\"")
+                        || body.contains(ollamaModelName.replace(":", "\":\""));
+
+                if (modelPresent) {
+                    log.debug("Ollama health check: UP, model {} confirmed available", ollamaModelName);
+                    return AISystemHealthResponse.OllamaStatus.builder()
+                            .status("UP")
+                            .baseUrl(ollamaBaseUrl)
+                            .model(ollamaModelName)
+                            .message("Ollama reachable and model " + ollamaModelName + " is available")
+                            .build();
+                } else {
+                    log.warn("Ollama health check: reachable but model {} not found in tag list", ollamaModelName);
+                    return AISystemHealthResponse.OllamaStatus.builder()
+                            .status("DEGRADED")
+                            .baseUrl(ollamaBaseUrl)
+                            .model(ollamaModelName)
+                            .message("Ollama reachable but model '" + ollamaModelName + "' not found — check OLLAMA_MODEL config")
+                            .build();
+                }
+            } else {
+                return AISystemHealthResponse.OllamaStatus.builder()
+                        .status("DOWN")
+                        .baseUrl(ollamaBaseUrl)
+                        .model(ollamaModelName)
+                        .message("Ollama returned unexpected status: " + response.getStatusCode())
+                        .build();
+            }
+        } catch (Exception e) {
+            log.warn("Ollama health check failed: {}", e.getMessage());
+            return AISystemHealthResponse.OllamaStatus.builder()
+                    .status("DOWN")
+                    .baseUrl(ollamaBaseUrl)
+                    .model(ollamaModelName)
+                    .message("Cannot reach Ollama at " + ollamaBaseUrl + " — " + e.getMessage())
+                    .build();
+        }
     }
 
     private AISystemHealthResponse.CacheHealth checkCacheHealth() {

@@ -9,6 +9,7 @@ import com.zuqi.ai.agent.tools.ProcurementTool;
 import com.zuqi.ai.agent.tools.FundsTransferTool;
 import com.zuqi.ai.agent.tools.PosSalesTool;
 import com.zuqi.ai.agent.tools.StockTransferTool;
+import com.zuqi.ai.agent.tools.HelpTool;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -23,13 +24,13 @@ import java.util.List;
  * can bypass a tool that was never registered in the agent's toolbox.
  *
  * Role → permitted tool methods:
- *   DRIVER            → deliveryMetricsTool
- *   SALES_REP         → salesTrendTool, merchantMetricsTool, deliveryMetricsTool, demandForecastSummaryTool
- *   WAREHOUSE_MANAGER → inventoryHealthTool, anomalyAlertsTool, demandForecastSummaryTool
- *   FINANCE           → paymentPerformanceTool, creditSummaryTool, salesTrendTool
+ *   DRIVER            → deliveryMetricsTool, helpTool
+ *   SALES_REP         → salesTrendTool, merchantMetricsTool, deliveryMetricsTool, demandForecastSummaryTool, helpTool
+ *   WAREHOUSE_MANAGER → inventoryHealthTool, anomalyAlertsTool, demandForecastSummaryTool, helpTool
+ *   FINANCE           → paymentPerformanceTool, creditSummaryTool, salesTrendTool, helpTool
  *   MERCHANT_ADMIN /
- *   CUSTOMER / MERCHANT → salesTrendTool, paymentPerformanceTool
- *   default (DISTRIBUTOR_ADMIN / SUPER_ADMIN / UNKNOWN) → all 9 tools
+ *   CUSTOMER / MERCHANT → salesTrendTool, paymentPerformanceTool, helpTool
+ *   default (DISTRIBUTOR_ADMIN / SUPER_ADMIN / UNKNOWN) → all tools including helpTool
  */
 @Component
 @RequiredArgsConstructor
@@ -50,33 +51,34 @@ public class RoleAwareToolProvider {
     private final FundsTransferTool         fundsTransferTool;
     private final PosSalesTool              posSalesTool;
     private final StockTransferTool         stockTransferTool;
+    private final HelpTool                  helpTool;
 
     /** Returns the tool instances permitted for the given role. */
     public List<Object> getToolsForRole(String role) {
         if (role == null) return allTools();
         return switch (role.toUpperCase()) {
             case "DRIVER" ->
-                    List.of(deliveryMetricsTool);
+                    List.of(deliveryMetricsTool, helpTool);
 
             case "SALES_REP" ->
                     List.of(salesTrendTool, merchantMetricsTool, invoiceTool,
-                            deliveryMetricsTool, demandForecastSummaryTool);
+                            deliveryMetricsTool, demandForecastSummaryTool, helpTool);
 
             case "WAREHOUSE_MANAGER" ->
                     List.of(inventoryHealthTool, anomalyAlertsTool, demandForecastSummaryTool,
-                            stockTransferTool, procurementTool, posSalesTool);
+                            stockTransferTool, procurementTool, posSalesTool, helpTool);
 
             case "FINANCE" ->
                     List.of(paymentPerformanceTool, creditSummaryTool, salesTrendTool,
-                            invoiceTool, expensesTool, fundsTransferTool);
+                            invoiceTool, expensesTool, fundsTransferTool, helpTool);
 
             case "MERCHANT_ADMIN" ->
                     List.of(salesTrendTool, inventoryHealthTool, paymentPerformanceTool,
                             anomalyAlertsTool, demandForecastSummaryTool, invoiceTool,
-                            expensesTool, procurementTool, posSalesTool, stockTransferTool);
+                            expensesTool, procurementTool, posSalesTool, stockTransferTool, helpTool);
 
             case "CUSTOMER", "MERCHANT" ->
-                    List.of(salesTrendTool, paymentPerformanceTool, invoiceTool);
+                    List.of(salesTrendTool, paymentPerformanceTool, invoiceTool, helpTool);
 
             // DISTRIBUTOR_ADMIN, SUPER_ADMIN, or unknown → full access
             default -> allTools();
@@ -88,6 +90,6 @@ public class RoleAwareToolProvider {
                 repPerformanceTool, merchantMetricsTool, anomalyAlertsTool,
                 deliveryMetricsTool, creditSummaryTool, demandForecastSummaryTool,
                 invoiceTool, expensesTool, procurementTool,
-                fundsTransferTool, posSalesTool, stockTransferTool);
+                fundsTransferTool, posSalesTool, stockTransferTool, helpTool);
     }
 }

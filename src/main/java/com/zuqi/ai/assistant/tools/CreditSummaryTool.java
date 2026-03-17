@@ -1,8 +1,8 @@
 package com.zuqi.ai.assistant.tools;
 
+import com.zuqi.domain.credit.CreditLimit;
 import com.zuqi.domain.credit.CreditLimitStatus;
 import com.zuqi.repository.CreditLimitRepository;
-import com.zuqi.repository.CreditScoreRepository;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import lombok.RequiredArgsConstructor;
@@ -12,24 +12,21 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
-/**
- * LangChain4j tool that retrieves credit risk summary data for a distributor.
- * Used by AssistantAgent to answer credit-related questions and build CREDIT_RISK reports.
- */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class CreditSummaryTool {
 
     private final CreditLimitRepository creditLimitRepository;
-    private final CreditScoreRepository creditScoreRepository;
 
-    @Tool("Get credit risk summary for a distributor. Returns: totalActiveLimits (count of merchants " +
-          "with an active credit limit), totalCreditExposureKes (sum of all approved limits), " +
-          "totalUtilizedKes (sum of utilized amounts), merchantsAtRisk (limits with utilization > 80%), " +
-          "suspendedLimits (count of SUSPENDED limits). " +
+    @Tool("Get credit risk summary for a distributor. Returns totalActiveLimits, totalSuspendedLimits, " +
+          "totalCreditExposureKes, totalUtilizedKes, merchantsAtRisk (utilization > 80%), " +
+          "and the names of up to 5 at-risk merchants with their utilization percentage. " +
           "Parameter: distributorId (UUID string).")
     @Transactional(readOnly = true)
     public String getCreditSummary(@P("The distributor UUID") String distributorId) {
@@ -37,44 +34,65 @@ public class CreditSummaryTool {
         try {
             UUID distId = UUID.fromString(distributorId.trim());
 
-            long totalActive = creditLimitRepository.countByDistributorIdAndStatus(
-                    distId, CreditLimitStatus.ACTIVE);
+            long totalActive    = creditLimitRepository.countByDistributorIdAndStatus(distId, CreditLimitStatus.ACTIVE);
+            long totalSuspended = creditLimitRepository.countByDistributorIdAndStatus(distId, CreditLimitStatus.SUSPENDED);
 
-            long totalSuspended = creditLimitRepository.countByDistributorIdAndStatus(
-                    distId, CreditLimitStatus.SUSPENDED);
-
-            // Sum approved limits and utilized amounts for active limits
-            var activeLimits = creditLimitRepository
+            List<CreditLimit> activeLimits = creditLimitRepository
                     .findByDistributorIdAndStatus(distId, CreditLimitStatus.ACTIVE, PageRequest.of(0, 10000))
                     .getContent();
 
             BigDecimal totalApproved = activeLimits.stream()
                     .filter(l -> l.getApprovedLimit() != null)
-                    .map(l -> l.getApprovedLimit())
+                    .map(CreditLimit::getApprovedLimit)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
             BigDecimal totalUtilized = activeLimits.stream()
                     .filter(l -> l.getUtilizedAmount() != null)
-                    .map(l -> l.getUtilizedAmount())
+                    .map(CreditLimit::getUtilizedAmount)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            long atRisk = activeLimits.stream()
+            // At-risk: utilization > 80%
+            List<CreditLimit> atRiskLimits = activeLimits.stream()
                     .filter(l -> l.getApprovedLimit() != null
                               && l.getUtilizedAmount() != null
                               && l.getApprovedLimit().compareTo(BigDecimal.ZERO) > 0
-                              && l.getUtilizedAmount().divide(l.getApprovedLimit(), 2,
-                                    java.math.RoundingMode.HALF_UP)
+                              && l.getUtilizedAmount()
+                                    .divide(l.getApprovedLimit(), 2, RoundingMode.HALF_UP)
                                     .compareTo(new BigDecimal("0.80")) > 0)
-                    .count();
+                    .collect(Collectors.toList());
 
-            return String.format(
+            long atRiskCount = atRiskLimits.size();
+
+            // Top 5 at-risk merchant names with utilization %
+            List<CreditLimit> top5AtRisk = atRiskLimits.stream().limit(5).collect(Collectors.toList());
+
+            StringBuilder sb = new StringBuilder();
+            sb.append(String.format(
                     "{ \"tool\": \"CreditSummary\", \"distributorId\": \"%s\", " +
                     "\"totalActiveLimits\": %d, \"totalSuspendedLimits\": %d, " +
                     "\"totalCreditExposureKes\": \"%s\", \"totalUtilizedKes\": \"%s\", " +
-                    "\"merchantsAtRisk\": %d }",
+                    "\"merchantsAtRisk\": %d, ",
                     distId, totalActive, totalSuspended,
                     totalApproved.toPlainString(), totalUtilized.toPlainString(),
-                    atRisk);
+                    atRiskCount));
+
+            sb.append("\"atRiskMerchants\": [");
+            for (int i = 0; i < top5AtRisk.size(); i++) {
+                CreditLimit l = top5AtRisk.get(i);
+                String name = l.getMerchant() != null ? l.getMerchant().getBusinessName().replace("\"", "'") : "Unknown";
+                String utilizationPct = l.getApprovedLimit().compareTo(BigDecimal.ZERO) > 0
+                        ? l.getUtilizedAmount().divide(l.getApprovedLimit(), 3, RoundingMode.HALF_UP)
+                                .multiply(BigDecimal.valueOf(100)).setScale(1, RoundingMode.HALF_UP).toPlainString()
+                        : "0";
+                sb.append(String.format("{ \"merchant\": \"%s\", \"utilizationPct\": \"%s%%\", \"approvedKES\": \"%s\", \"utilizedKES\": \"%s\" }",
+                        name, utilizationPct,
+                        l.getApprovedLimit().toPlainString(),
+                        l.getUtilizedAmount().toPlainString()));
+                if (i < top5AtRisk.size() - 1) sb.append(", ");
+            }
+            sb.append("] }");
+
+            return sb.toString();
 
         } catch (IllegalArgumentException e) {
             log.error("CreditSummaryTool: invalid distributorId '{}'", distributorId, e);

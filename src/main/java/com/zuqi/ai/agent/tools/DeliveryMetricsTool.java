@@ -23,9 +23,8 @@ public class DeliveryMetricsTool {
 
     @Tool("Get delivery route metrics for a distributor. Returns totalRoutes (all routes ever created), " +
           "plannedRoutes, inProgressRoutes, completedRoutes, cancelledRoutes, " +
-          "avgDistanceKm (average planned distance in km across COMPLETED routes), " +
-          "avgLoadUtilizationPct (average load utilisation percentage across COMPLETED routes), " +
-          "and avgDurationMin (average planned duration in minutes across COMPLETED routes). " +
+          "avgDistanceKm, avgLoadUtilizationPct, avgDurationMin (all over COMPLETED routes), " +
+          "and the top 5 in-progress routes with route date, driver name, stop count, and distance. " +
           "Parameter: distributorId (UUID string).")
     @Transactional(readOnly = true)
     public String getDeliveryMetrics(@P("The distributor UUID") String distributorId) {
@@ -72,17 +71,41 @@ public class DeliveryMetricsTool {
             String avgDurStr   = avgDurationMin.isPresent()
                     ? String.format("%.1f", avgDurationMin.getAsDouble())   : "N/A";
 
-            return String.format(
+            // Top 5 in-progress routes with details
+            List<DeliveryRoute> top5InProgress = inProgressRoutes.stream().limit(5).collect(java.util.stream.Collectors.toList());
+
+            StringBuilder sb = new StringBuilder();
+            sb.append(String.format(
                     "{ \"tool\": \"DeliveryMetrics\", \"distributorId\": \"%s\", " +
                     "\"totalRoutes\": %d, \"planned\": %d, \"inProgress\": %d, " +
                     "\"completed\": %d, \"cancelled\": %d, " +
                     "\"avgDistanceKm\": \"%s\", \"avgLoadUtilizationPct\": \"%s\", " +
-                    "\"avgDurationMin\": \"%s\" }",
+                    "\"avgDurationMin\": \"%s\", ",
                     distId,
                     totalRoutes, plannedCount, inProgressCount,
                     completedCount, cancelledCount,
-                    avgDistStr, avgLoadStr, avgDurStr
-            );
+                    avgDistStr, avgLoadStr, avgDurStr));
+
+            sb.append("\"inProgressRoutes\": [");
+            for (int i = 0; i < top5InProgress.size(); i++) {
+                DeliveryRoute r = top5InProgress.get(i);
+                String routeDate = r.getRouteDate() != null ? r.getRouteDate().toString() : "unknown";
+                String driver = "Unassigned";
+                if (r.getDriver() != null) {
+                    String first = r.getDriver().getFirstName() != null ? r.getDriver().getFirstName() : "";
+                    String last  = r.getDriver().getLastName()  != null ? r.getDriver().getLastName()  : "";
+                    driver = (first + " " + last).trim().replace("\"", "'");
+                }
+                int stopCount   = r.getStopSequence() != null ? r.getStopSequence().size() : 0;
+                String distKm   = r.getTotalDistanceKm() != null ? String.format("%.2f", r.getTotalDistanceKm()) : "N/A";
+                sb.append(String.format(
+                        "{ \"routeDate\": \"%s\", \"driver\": \"%s\", \"stops\": %d, \"distanceKm\": \"%s\" }",
+                        routeDate, driver, stopCount, distKm));
+                if (i < top5InProgress.size() - 1) sb.append(", ");
+            }
+            sb.append("] }");
+
+            return sb.toString();
 
         } catch (IllegalArgumentException e) {
             log.error("DeliveryMetricsTool: invalid distributorId '{}'", distributorId, e);

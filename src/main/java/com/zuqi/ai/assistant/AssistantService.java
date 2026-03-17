@@ -45,6 +45,7 @@ public class AssistantService {
 
     private final AssistantAgent            assistantAgent;    // singleton — full access (SUPER_ADMIN default)
     private final AssistantAgentFactory     assistantAgentFactory;
+    private final AssistantChatMemoryStore  chatMemoryStore;
     private final AssistantReportBuilder    reportBuilder;
     private final ChatMessageRepository     chatMessageRepository;
     private final DistributorRepository     distributorRepository;
@@ -99,6 +100,7 @@ public class AssistantService {
                     .getContent().get(0);
         } finally {
             AssistantMemoryContext.clear();
+            chatMemoryStore.clearTurnBuffer(conversationId);
         }
     }
 

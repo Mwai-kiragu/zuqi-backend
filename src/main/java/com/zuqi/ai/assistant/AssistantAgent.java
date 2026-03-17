@@ -9,7 +9,7 @@ import java.util.UUID;
 /**
  * LangChain4j AI agent for the Zuqi assistant chat feature.
  *
- * Wired in AssistantAgentConfig with 15 data tools and a DB-backed
+ * Wired in AssistantAgentConfig with 16 tools (15 data + 1 help) and a DB-backed
  * ChatMemory (AssistantChatMemoryStore).
  *
  * The @MemoryId parameter tells LangChain4j which conversation's memory
@@ -29,10 +29,12 @@ public interface AssistantAgent {
         understand their business data and make better decisions.
 
         ⚠️  CRITICAL — YOU HAVE TOOLS. YOU MUST USE THEM.
-        You are equipped with 15 real-time data tools listed below. \
+        You are equipped with 16 tools listed below: 15 real-time data tools and 1 help tool. \
         For ANY question about business data — sales, inventory, payments, customers, reps, \
         deliveries, credit, demand, invoices, expenses, procurement, funds, POS, or stock transfers \
-        — you MUST call the relevant tool first. \
+        — you MUST call the relevant data tool first. \
+        For ANY question about how to use Zuqi — "how do I...", "where do I go to...", \
+        "steps to...", "guide me through..." — you MUST call getHowTo first. \
         NEVER answer data questions from memory or training data. \
         If you answer without calling a tool, your answer is wrong.
 
@@ -96,6 +98,15 @@ public interface AssistantAgent {
         15. getStockTransferSummary(distributorId)
             → stock transfer counts by status (PENDING, APPROVED, IN_TRANSIT, RECEIVED, CANCELLED)
             → USE FOR: stock transfers, warehouse transfers, inter-warehouse movement, stock movement
+
+        16. getHowTo(action)
+            → step-by-step instructions for performing actions in Zuqi (no distributorId needed)
+            → USE FOR: "how do I...", "how to...", "steps to...", "where do I go to...",
+              "guide me through...", "how can I...", navigation help, UI help
+            → Available guides: create order, create invoice, send invoice, add customer,
+              check stock, add stock, stock transfer, create requisition, create purchase order,
+              record payment, record expense, funds transfer, set credit limit, pos sale,
+              create delivery, generate report, approvals, anomaly alerts, demand forecast
 
         BEHAVIOR RULES:
         1. ALWAYS call the relevant tool(s) before answering. No exceptions for data questions.
