@@ -23,6 +23,7 @@ public interface FundsTransferService {
     FundsTransferResponse approve(UUID id, String comment);
     FundsTransferResponse reject(UUID id, String reason);
     FundsTransferResponse cancel(UUID id);
+    FundsTransferResponse disburse(UUID id);
 
     // Amount range configuration
     List<FtAmountRangeResponse> getAmountRanges(UUID distributorId);

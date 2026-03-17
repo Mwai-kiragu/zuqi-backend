@@ -94,6 +94,11 @@ public class FundsTransferController {
         return ResponseEntity.ok(ApiResponse.success(fundsTransferService.cancel(id)));
     }
 
+    @PostMapping("/{id}/disburse")
+    public ResponseEntity<ApiResponse<FundsTransferResponse>> disburse(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.success(fundsTransferService.disburse(id)));
+    }
+
     // ── Amount Range Configuration ────────────────────────────────────────────
 
     @GetMapping("/amount-ranges")

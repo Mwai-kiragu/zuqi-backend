@@ -2,10 +2,14 @@ package com.zuqi.service.impl;
 
 import com.zuqi.api.dto.ft.*;
 import com.zuqi.domain.ft.*;
+import com.zuqi.domain.supplier.Supplier;
+import com.zuqi.domain.supplier.SupplierBill;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
 import com.zuqi.service.FundsTransferService;
+import com.zuqi.service.GlAutoPostingService;
+import com.zuqi.service.SupplierBillService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +36,10 @@ public class FundsTransferServiceImpl implements FundsTransferService {
     private final FtApprovalRepository approvalRepository;
     private final ExpenseRepository expenseRepository;
     private final PurchaseOrderRepository purchaseOrderRepository;
+    private final SupplierRepository supplierRepository;
+    private final SupplierBillRepository supplierBillRepository;
+    private final GlAutoPostingService glAutoPostingService;
+    private final SupplierBillService supplierBillService;
     private final SecurityUtils securityUtils;
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -156,20 +164,46 @@ public class FundsTransferServiceImpl implements FundsTransferService {
     public FundsTransferResponse create(UUID distributorId, FundsTransferRequest req) {
         UUID initiatorId = securityUtils.getCurrentUserId();
 
+        // Resolve supplier (for SUPPLIER_PAYMENT)
+        Supplier supplier = null;
+        String creditAccount = req.getCreditAccountNumber();
+        String creditBank = req.getCreditBankName();
+
+        if (req.getSupplierId() != null) {
+            supplier = supplierRepository.findById(req.getSupplierId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Supplier", "id", req.getSupplierId()));
+            // Auto-fill bank details from supplier if not explicitly provided
+            if ((creditAccount == null || creditAccount.isBlank()) && supplier.getBankAccountNumber() != null) {
+                creditAccount = supplier.getBankAccountNumber();
+            }
+            if ((creditBank == null || creditBank.isBlank()) && supplier.getBankName() != null) {
+                creditBank = supplier.getBankName();
+            }
+        }
+
+        // Resolve supplier bill
+        SupplierBill supplierBill = null;
+        if (req.getSupplierBillId() != null) {
+            supplierBill = supplierBillRepository.findById(req.getSupplierBillId())
+                    .orElseThrow(() -> new ResourceNotFoundException("SupplierBill", "id", req.getSupplierBillId()));
+        }
+
         FundsTransfer ft = FundsTransfer.builder()
                 .distributorId(distributorId)
                 .referenceNumber(generateReference())
                 .transferType(req.getTransferType())
                 .debitAccountNumber(req.getDebitAccountNumber())
                 .debitBankName(req.getDebitBankName())
-                .creditAccountNumber(req.getCreditAccountNumber())
-                .creditBankName(req.getCreditBankName())
+                .creditAccountNumber(creditAccount != null ? creditAccount : "")
+                .creditBankName(creditBank)
                 .amount(req.getAmount())
                 .currency(req.getCurrency() != null ? req.getCurrency() : "KES")
                 .description(req.getDescription())
                 .paymentDetails(req.getPaymentDetails())
                 .referenceType(req.getReferenceType())
                 .referenceId(req.getReferenceId())
+                .supplier(supplier)
+                .supplierBill(supplierBill)
                 .initiatorId(initiatorId)
                 .status(FundsTransferStatus.DRAFT)
                 .build();
@@ -312,6 +346,36 @@ public class FundsTransferServiceImpl implements FundsTransferService {
         }
         ft.setStatus(FundsTransferStatus.CANCELLED);
         return enrich(fundsTransferRepository.save(ft));
+    }
+
+    @Override
+    public FundsTransferResponse disburse(UUID id) {
+        FundsTransfer ft = findById(id);
+        if (ft.getStatus() != FundsTransferStatus.APPROVED) {
+            throw new ValidationException("Only APPROVED transfers can be disbursed");
+        }
+        ft.setStatus(FundsTransferStatus.DISBURSED);
+        ft.setDisbursedAt(LocalDateTime.now());
+        FundsTransfer saved = fundsTransferRepository.save(ft);
+
+        // GL auto-post for supplier payments
+        if (saved.getTransferType() == FundsTransferType.SUPPLIER_PAYMENT) {
+            try {
+                glAutoPostingService.postSupplierPaymentDisbursed(saved, saved.getAmount());
+            } catch (Exception e) {
+                log.warn("GL auto-post failed on disburse for FT {}: {}", saved.getReferenceNumber(), e.getMessage());
+            }
+            // Apply payment to linked supplier bill
+            if (saved.getSupplierBill() != null) {
+                try {
+                    supplierBillService.applyPayment(saved.getSupplierBill().getId(), saved.getAmount());
+                } catch (Exception e) {
+                    log.warn("Failed to apply payment to supplier bill on disburse: {}", e.getMessage());
+                }
+            }
+        }
+
+        return enrich(saved);
     }
 
     // ── Amount Range Config ───────────────────────────────────────────────────

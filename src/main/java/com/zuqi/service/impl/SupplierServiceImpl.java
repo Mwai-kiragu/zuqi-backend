@@ -136,6 +136,17 @@ public class SupplierServiceImpl implements SupplierService {
         if (request.getDistributorId() != null) {
             supplier.setDistributor(distributorRepository.findById(request.getDistributorId())
                     .orElseThrow(() -> new ResourceNotFoundException("Distributor", "id", request.getDistributorId().toString())));
+        } else {
+            // Auto-resolve distributor from security context (DISTRIBUTOR_ADMIN or MERCHANT_ADMIN)
+            UUID distributorId = securityUtils.getDistributorIdForFiltering();
+            if (distributorId != null) {
+                distributorRepository.findById(distributorId).ifPresent(supplier::setDistributor);
+            } else {
+                UUID merchantId = securityUtils.getCurrentUserMerchantId();
+                if (merchantId != null) {
+                    distributorRepository.findFirstByMerchantId(merchantId).ifPresent(supplier::setDistributor);
+                }
+            }
         }
 
         return SupplierResponse.fromEntity(supplierRepository.save(supplier));

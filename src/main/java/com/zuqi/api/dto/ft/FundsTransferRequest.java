@@ -34,4 +34,10 @@ public class FundsTransferRequest {
     /** Optional: 'EXPENSE' or 'PURCHASE_ORDER' */
     private String referenceType;
     private UUID referenceId;
+
+    /** Optional: link to a supplier for SUPPLIER_PAYMENT transfers */
+    private UUID supplierId;
+
+    /** Optional: link to a specific supplier bill */
+    private UUID supplierBillId;
 }

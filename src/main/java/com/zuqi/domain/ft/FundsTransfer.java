@@ -1,5 +1,7 @@
 package com.zuqi.domain.ft;
 
+import com.zuqi.domain.supplier.Supplier;
+import com.zuqi.domain.supplier.SupplierBill;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
@@ -94,6 +96,14 @@ public class FundsTransfer {
 
     @Column(name = "rejected_reason", columnDefinition = "TEXT")
     private String rejectedReason;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "supplier_id")
+    private Supplier supplier;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "supplier_bill_id")
+    private SupplierBill supplierBill;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

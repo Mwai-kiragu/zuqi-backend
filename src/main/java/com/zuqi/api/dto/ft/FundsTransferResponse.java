@@ -41,6 +41,12 @@ public class FundsTransferResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
+    // Supplier payment linkage
+    private UUID supplierId;
+    private String supplierName;
+    private UUID supplierBillId;
+    private String billNumber;
+
     // Approval workflow detail
     private List<FtApprovalLevelDto> approvalLevels;     // configured approvers per level
     private List<FtApprovalDecisionDto> approvalHistory; // recorded decisions
@@ -68,6 +74,10 @@ public class FundsTransferResponse {
                 .referenceId(ft.getReferenceId())
                 .disbursedAt(ft.getDisbursedAt())
                 .rejectedReason(ft.getRejectedReason())
+                .supplierId(ft.getSupplier() != null ? ft.getSupplier().getId() : null)
+                .supplierName(ft.getSupplier() != null ? ft.getSupplier().getName() : null)
+                .supplierBillId(ft.getSupplierBill() != null ? ft.getSupplierBill().getId() : null)
+                .billNumber(ft.getSupplierBill() != null ? ft.getSupplierBill().getBillNumber() : null)
                 .createdAt(ft.getCreatedAt())
                 .updatedAt(ft.getUpdatedAt())
                 .build();

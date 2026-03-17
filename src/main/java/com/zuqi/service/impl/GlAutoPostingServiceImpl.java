@@ -1,11 +1,14 @@
 package com.zuqi.service.impl;
 
+import com.zuqi.domain.ft.FundsTransfer;
 import com.zuqi.domain.gl.JournalSourceModule;
 import com.zuqi.domain.gl.SystemAccountType;
 import com.zuqi.domain.gl.GlAccount;
 import com.zuqi.domain.invoice.Invoice;
 import com.zuqi.domain.invoice.InvoiceItem;
 import com.zuqi.domain.pos.PosSale;
+import com.zuqi.domain.supplier.SupplierBill;
+import com.zuqi.domain.supplier.SupplierBillType;
 import com.zuqi.repository.GlAccountRepository;
 import com.zuqi.service.GlAccountService;
 import com.zuqi.service.GlAutoPostingService;
@@ -273,6 +276,84 @@ public class GlAutoPostingServiceImpl implements GlAutoPostingService {
             log.info("GL COGS posted for manual invoice {} — total cost {}", ref, totalCost);
         } catch (Exception e) {
             log.error("GL COGS auto-post failed for manual invoice {}", ref, e);
+        }
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void postSupplierBillReceived(SupplierBill bill) {
+        UUID distId = bill.getDistributor().getId();
+
+        Optional<GlAccount> ap = find(distId, SystemAccountType.ACCOUNTS_PAYABLE);
+        // Choose debit account: Inventory for GOODS, Other Expense for SERVICES
+        SystemAccountType debitType = bill.getBillType() == SupplierBillType.GOODS
+                ? SystemAccountType.INVENTORY
+                : SystemAccountType.OTHER_EXPENSE;
+        Optional<GlAccount> debitAccount = find(distId, debitType);
+
+        if (ap.isEmpty() || debitAccount.isEmpty()) {
+            log.warn("GL auto-post skipped (supplier bill received): AP or {} account not configured for distributor {}",
+                    debitType, distId);
+            return;
+        }
+
+        BigDecimal amount = bill.getTotalAmount();
+        String ref = bill.getBillNumber();
+        String debitDesc = bill.getBillType() == SupplierBillType.GOODS
+                ? "Inventory received — " + ref
+                : "Expense — " + ref;
+
+        try {
+            glPostingService.post(
+                    distId,
+                    JournalSourceModule.PROCUREMENT,
+                    bill.getId(),
+                    bill.getBillDate() != null ? bill.getBillDate() : java.time.LocalDate.now(),
+                    "Supplier bill " + ref + " — " + bill.getSupplier().getName(),
+                    ref,
+                    List.of(
+                            debit(debitAccount.get().getId(), debitDesc, amount),
+                            credit(ap.get().getId(), "Accounts Payable — " + ref, amount)
+                    ),
+                    null
+            );
+            log.info("GL posted for supplier bill {} — {} DR, AP CR, amount {}", ref, debitType, amount);
+        } catch (Exception e) {
+            log.error("GL auto-post failed (supplier bill received) for {}", ref, e);
+        }
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void postSupplierPaymentDisbursed(FundsTransfer ft, BigDecimal amount) {
+        UUID distId = ft.getDistributorId();
+
+        Optional<GlAccount> ap   = find(distId, SystemAccountType.ACCOUNTS_PAYABLE);
+        Optional<GlAccount> cash = find(distId, SystemAccountType.CASH_AND_BANK);
+
+        if (ap.isEmpty() || cash.isEmpty()) {
+            log.warn("GL auto-post skipped (supplier payment): AP or Cash account not configured for distributor {}", distId);
+            return;
+        }
+
+        String ref = ft.getReferenceNumber() != null ? ft.getReferenceNumber() : ft.getId().toString();
+        try {
+            glPostingService.post(
+                    distId,
+                    JournalSourceModule.TREASURY,
+                    ft.getId(),
+                    java.time.LocalDate.now(),
+                    "Supplier payment — " + ref,
+                    ref,
+                    List.of(
+                            debit(ap.get().getId(),   "AP cleared — " + ref, amount),
+                            credit(cash.get().getId(), "Cash paid — "  + ref, amount)
+                    ),
+                    null
+            );
+            log.info("GL posted for supplier payment {} — AP DR, Cash CR, amount {}", ref, amount);
+        } catch (Exception e) {
+            log.error("GL auto-post failed (supplier payment) for {}", ref, e);
         }
     }
 

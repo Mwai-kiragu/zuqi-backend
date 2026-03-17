@@ -2,5 +2,6 @@ package com.zuqi.domain.ft;
 
 public enum FundsTransferType {
     INTERNAL,
-    EXTERNAL
+    EXTERNAL,
+    SUPPLIER_PAYMENT
 }
