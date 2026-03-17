@@ -69,6 +69,8 @@ public class LangChain4jConfig {
                 .temperature(temperature)
                 .timeout(chatTimeout)
                 .maxRetries(1)
+                .logRequests(true)
+                .logResponses(true)
                 .build();
     }
 

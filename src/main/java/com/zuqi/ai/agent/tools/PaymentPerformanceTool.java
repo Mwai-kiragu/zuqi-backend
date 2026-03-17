@@ -33,6 +33,7 @@ public class PaymentPerformanceTool {
           "Parameter: distributorId (UUID string).")
     @Transactional(readOnly = true)
     public String getPaymentPerformance(@P("The distributor UUID") String distributorId) {
+        log.info("[TOOL CALLED] getPaymentPerformance distributorId={}", distributorId);
         try {
             UUID distId = UUID.fromString(distributorId.trim());
 

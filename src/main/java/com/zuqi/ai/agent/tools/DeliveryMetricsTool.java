@@ -29,6 +29,7 @@ public class DeliveryMetricsTool {
           "Parameter: distributorId (UUID string).")
     @Transactional(readOnly = true)
     public String getDeliveryMetrics(@P("The distributor UUID") String distributorId) {
+        log.info("[TOOL CALLED] getDeliveryMetrics distributorId={}", distributorId);
         try {
             UUID distId = UUID.fromString(distributorId.trim());
 

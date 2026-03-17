@@ -77,7 +77,8 @@ public class StockoutTrainingPipeline {
             // Step 5: Evaluate
             log.info("Step 5/6: Evaluating…");
             Dataset<Label> testDataset = featureBuilder.buildDataset(testFeatures, testLabels);
-            ModelEvaluator.ClassifierEvaluationResult eval = modelEvaluator.evaluateClassifier(model, testDataset);
+            ModelEvaluator.ClassifierEvaluationResult eval = modelEvaluator.evaluateClassifier(
+                    model, testDataset, StockoutFeatureBuilder.LABEL_STOCKOUT);
 
             // Step 6: Promote
             UUID modelId = null;
@@ -117,11 +118,26 @@ public class StockoutTrainingPipeline {
         List<InventoryFeatures> list = new ArrayList<>();
         Random rng = new Random(42L);
 
+        // 30% stockout scenarios, 70% healthy — ensures the model sees enough of each class
+        int stockoutCount = (int) (count * 0.30);
+
         for (int i = 0; i < count; i++) {
+            boolean isStockoutScenario = i < stockoutCount;
             double dailyRate = 5.0 + rng.nextDouble() * 95.0;
-            double stock     = dailyRate * rng.nextDouble() * 30.0; // 0-30 days of stock
-            double incoming  = dailyRate * rng.nextDouble() * 14.0;
             int    month     = 1 + rng.nextInt(12);
+            double forecastNoise = 0.85 + rng.nextDouble() * 0.30;
+            BigDecimal predictedDemand7d = BigDecimal.valueOf(dailyRate * 7 * forecastNoise);
+
+            double stock, incoming;
+            if (isStockoutScenario) {
+                // Engineer stockout: < 3 days stock, very little incoming
+                stock    = dailyRate * rng.nextDouble() * 2.9;           // 0–2.9 days of stock
+                incoming = dailyRate * rng.nextDouble() * 0.5;            // < half a day incoming
+            } else {
+                // Engineer healthy: 3–30 days stock, normal incoming
+                stock    = dailyRate * (3.0 + rng.nextDouble() * 27.0);  // 3–30 days
+                incoming = dailyRate * rng.nextDouble() * 14.0;           // 0–14 days incoming
+            }
 
             list.add(InventoryFeatures.builder()
                     .warehouseId(UUID.randomUUID())
@@ -138,8 +154,11 @@ public class StockoutTrainingPipeline {
                     .adjustingUserIds(List.of(UUID.randomUUID()))
                     .discrepancy(BigDecimal.valueOf(stock * 0.01))
                     .expectedStock(BigDecimal.valueOf(stock * 1.01))
+                    .predictedDemand7d(predictedDemand7d)
                     .build());
         }
+        // Shuffle so stockout/healthy examples are interleaved (not all stockouts first)
+        Collections.shuffle(list, rng);
         return list;
     }
 

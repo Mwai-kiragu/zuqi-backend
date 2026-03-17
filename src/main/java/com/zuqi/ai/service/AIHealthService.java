@@ -37,4 +37,26 @@ public interface AIHealthService {
      * @return performance metrics including accuracy, precision, recall, and history
      */
     AIModelPerformanceResponse getModelPerformance(String modelName);
+
+    /**
+     * Retires the currently active version of a model.
+     *
+     * @param modelName the model name whose active version should be retired
+     * @throws IllegalArgumentException if no active model exists with the given name
+     */
+    void retireModel(String modelName);
+
+    /**
+     * Triggers async retraining of all models via SyntheticGenerationService.
+     * Returns immediately — training runs in background.
+     */
+    void triggerRetrainAll();
+
+    /**
+     * Enqueues retraining for a specific model.
+     * In the current synthetic phase this triggers the full pipeline (all models retrained together).
+     *
+     * @param modelName the model name to retrain
+     */
+    void triggerRetrainModel(String modelName);
 }

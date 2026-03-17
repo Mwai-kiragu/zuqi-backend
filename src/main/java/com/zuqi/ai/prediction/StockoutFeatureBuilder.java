@@ -16,10 +16,11 @@ import java.util.List;
 /**
  * Builds Tribuo classification feature vectors for stockout prediction.
  *
- * 12 features:
+ * 13 features:
  *   current_stock, consumption_rate_7d, consumption_rate_30d, consumption_trend,
  *   pending_reserved_qty, expected_incoming_qty, days_of_stock_remaining,
- *   discrepancy_pct, manual_adj_count_7d, month_of_year, day_of_week, is_payday_week
+ *   discrepancy_pct, manual_adj_count_7d, month_of_year, day_of_week, is_payday_week,
+ *   predicted_demand_7d
  *
  * Blueprint reference: implementation_plan.md Phase 4, Step 7a
  */
@@ -41,9 +42,10 @@ public class StockoutFeatureBuilder {
     static final String FEAT_MONTH_OF_YEAR          = "month_of_year";
     static final String FEAT_DAY_OF_WEEK            = "day_of_week";
     static final String FEAT_IS_PAYDAY_WEEK         = "is_payday_week";
+    static final String FEAT_PREDICTED_DEMAND_7D    = "predicted_demand_7d";
 
-    static final String LABEL_STOCKOUT    = "STOCKOUT";
-    static final String LABEL_NO_STOCKOUT = "NO_STOCKOUT";
+    public static final String LABEL_STOCKOUT    = "STOCKOUT";
+    public static final String LABEL_NO_STOCKOUT = "NO_STOCKOUT";
 
     /**
      * Build example for inference (labelled NO_STOCKOUT — label unused during prediction).
@@ -120,13 +122,27 @@ public class StockoutFeatureBuilder {
         list.add(new Feature(FEAT_IS_PAYDAY_WEEK,
                 f.computedAt() != null && isPaydayWeek(f.computedAt().getDayOfMonth()) ? 1.0 : 0.0));
 
+        // Demand forecast — 0.0 when unavailable (SYNTHETIC phase); real value once forecaster is active
+        list.add(new Feature(FEAT_PREDICTED_DEMAND_7D,
+                f.predictedDemand7d() != null ? f.predictedDemand7d().doubleValue() : 0.0));
+
         return list;
     }
 
-    double computeDaysOfStockRemaining(InventoryFeatures f) {
+    public double computeDaysOfStockRemaining(InventoryFeatures f) {
         if (f.currentStock() == null) return 0.0;
-        if (f.consumptionRate7d() == null || f.consumptionRate7d().doubleValue() == 0.0) return 30.0;
-        double dailyRate = f.consumptionRate7d().doubleValue() / 7.0;
+
+        // Prefer demand forecast (forward-looking) over historical consumption rate
+        double effectiveDemand7d;
+        if (f.predictedDemand7d() != null && f.predictedDemand7d().doubleValue() > 0.0) {
+            effectiveDemand7d = f.predictedDemand7d().doubleValue();
+        } else if (f.consumptionRate7d() != null && f.consumptionRate7d().doubleValue() > 0.0) {
+            effectiveDemand7d = f.consumptionRate7d().doubleValue();
+        } else {
+            return 30.0; // no consumption signal — default safe value
+        }
+
+        double dailyRate = effectiveDemand7d / 7.0;
         return f.currentStock().doubleValue() / dailyRate;
     }
 
@@ -144,6 +160,6 @@ public class StockoutFeatureBuilder {
     }
 
     public int getFeatureCount() {
-        return 12;
+        return 13;
     }
 }

@@ -84,7 +84,7 @@ casbin:
 langchain4j:
   ollama:
     base-url: http://100.109.211.20:11434  # Tailscale
-#    base-url: http://192.168.2.17:11434   # LAN
+#   base-url: http://192.168.2.17:11434   # LAN
     chat-model:
       model-name: gpt-oss:latest
       temperature: 0.1  # Low for consistency in credit scoring
@@ -277,3 +277,4 @@ spring:
 logging:
   level:
     com.zuqi: DEBUG
+    dev.langchain4j: DEBUG

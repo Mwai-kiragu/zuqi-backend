@@ -6,21 +6,22 @@ import com.zuqi.ai.assistant.tools.DemandForecastSummaryTool;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Component;
 
+import java.util.Set;
 import java.util.UUID;
 
 /**
- * Fetches all 9 business data points directly in Java (no LLM tool calling).
+ * Fetches business data directly in Java (no LLM tool calling) and returns
+ * a role-scoped context string injected into the LLM prompt.
  *
- * This is the primary data-fetching strategy for chat Q&A.
- * Each tool is called directly — same DB queries, same results — but without
- * requiring the LLM to support function/tool calling.
- *
- * The returned context string is injected into the LLM prompt so gpt-oss
- * (or any model) can answer questions from real data without needing to
- * call tools itself.
+ * Role data access:
+ *  DRIVER            → deliveries only
+ *  SALES_REP         → sales, customers, deliveries, demand forecasts
+ *  WAREHOUSE_MANAGER → inventory, deliveries, anomaly alerts
+ *  FINANCE           → payments, credit, sales
+ *  MERCHANT_ADMIN    → (own merchant data only — limited context)
+ *  DISTRIBUTOR_ADMIN / SUPER_ADMIN → all data
  */
 @Component
 @RequiredArgsConstructor
@@ -38,35 +39,79 @@ public class AssistantContextFetcher {
     private final DemandForecastSummaryTool demandForecastSummaryTool;
 
     /**
-     * Fetch all business context for a distributor and return as a formatted string.
-     * Cached in Redis for 5 minutes per distributorId — avoids 9 DB queries on every message.
-     * Each tool call is individually guarded — a single failure won't abort the whole fetch.
+     * Fetch role-scoped business context for a distributor.
+     * @param distributorId  The distributor to fetch data for
+     * @param userRole       The primary role of the requesting user (e.g. "DRIVER", "SALES_REP")
      */
-    @Cacheable(value = "assistant-context", key = "#distributorId")
-    public String fetchContext(UUID distributorId) {
+    public String fetchContext(UUID distributorId, String userRole) {
         String id = distributorId.toString();
-        log.debug("AssistantContextFetcher: fetching context for distributor={}", id);
+        log.debug("AssistantContextFetcher: fetching context for distributor={} role={}", id, userRole);
+
+        Set<String> allowedSections = allowedSections(userRole);
 
         StringBuilder ctx = new StringBuilder();
-        ctx.append("=== LIVE BUSINESS DATA (fetched from database) ===\n\n");
+        ctx.append("=== LIVE BUSINESS DATA (role-scoped for ").append(userRole).append(") ===\n\n");
 
-        ctx.append("SALES (last 30 days):\n").append(safe(() -> salesTrendTool.getSalesTrend(id, "30"))).append("\n\n");
-        ctx.append("INVENTORY:\n").append(safe(() -> inventoryHealthTool.getInventoryHealth(id))).append("\n\n");
-        ctx.append("PAYMENTS:\n").append(safe(() -> paymentPerformanceTool.getPaymentPerformance(id))).append("\n\n");
-        ctx.append("SALES REPS:\n").append(safe(() -> repPerformanceTool.getRepPerformance(id))).append("\n\n");
-        ctx.append("CUSTOMERS:\n").append(safe(() -> merchantMetricsTool.getMerchantMetrics(id))).append("\n\n");
-        ctx.append("ANOMALY ALERTS:\n").append(safe(() -> anomalyAlertsTool.getAnomalyAlerts(id, "30"))).append("\n\n");
-        ctx.append("DELIVERIES:\n").append(safe(() -> deliveryMetricsTool.getDeliveryMetrics(id))).append("\n\n");
-        ctx.append("CREDIT:\n").append(safe(() -> creditSummaryTool.getCreditSummary(id))).append("\n\n");
-        ctx.append("DEMAND FORECASTS:\n").append(safe(() -> demandForecastSummaryTool.getDemandForecastSummary(id))).append("\n\n");
+        if (allowedSections.contains("SALES")) {
+            ctx.append("SALES (last 30 days):\n").append(safe(() -> salesTrendTool.getSalesTrend(id, "30"))).append("\n\n");
+        }
+        if (allowedSections.contains("INVENTORY")) {
+            ctx.append("INVENTORY:\n").append(safe(() -> inventoryHealthTool.getInventoryHealth(id))).append("\n\n");
+        }
+        if (allowedSections.contains("PAYMENTS")) {
+            ctx.append("PAYMENTS:\n").append(safe(() -> paymentPerformanceTool.getPaymentPerformance(id))).append("\n\n");
+        }
+        if (allowedSections.contains("REPS")) {
+            ctx.append("SALES REPS:\n").append(safe(() -> repPerformanceTool.getRepPerformance(id))).append("\n\n");
+        }
+        if (allowedSections.contains("CUSTOMERS")) {
+            ctx.append("CUSTOMERS:\n").append(safe(() -> merchantMetricsTool.getMerchantMetrics(id))).append("\n\n");
+        }
+        if (allowedSections.contains("ANOMALY")) {
+            ctx.append("ANOMALY ALERTS:\n").append(safe(() -> anomalyAlertsTool.getAnomalyAlerts(id, "30"))).append("\n\n");
+        }
+        if (allowedSections.contains("DELIVERIES")) {
+            ctx.append("DELIVERIES:\n").append(safe(() -> deliveryMetricsTool.getDeliveryMetrics(id))).append("\n\n");
+        }
+        if (allowedSections.contains("CREDIT")) {
+            ctx.append("CREDIT:\n").append(safe(() -> creditSummaryTool.getCreditSummary(id))).append("\n\n");
+        }
+        if (allowedSections.contains("DEMAND")) {
+            ctx.append("DEMAND FORECASTS:\n").append(safe(() -> demandForecastSummaryTool.getDemandForecastSummary(id))).append("\n\n");
+        }
+
         ctx.append("=== END OF BUSINESS DATA ===");
-
         return ctx.toString();
+    }
+
+    /** Backward-compatible overload — defaults to full access (SUPER_ADMIN behaviour). */
+    public String fetchContext(UUID distributorId) {
+        return fetchContext(distributorId, "SUPER_ADMIN");
     }
 
     @CacheEvict(value = "assistant-context", key = "#distributorId")
     public void evictContext(UUID distributorId) {
         log.debug("AssistantContextFetcher: evicted context cache for distributor={}", distributorId);
+    }
+
+    /**
+     * Returns the set of data sections a given role may see.
+     */
+    private static Set<String> allowedSections(String role) {
+        if (role == null) return Set.of();
+        return switch (role.toUpperCase()) {
+            case "DRIVER"            -> Set.of("DELIVERIES");
+            case "SALES_REP"         -> Set.of("SALES", "CUSTOMERS", "DELIVERIES", "DEMAND");
+            case "WAREHOUSE_MANAGER" -> Set.of("INVENTORY", "DELIVERIES", "ANOMALY");
+            case "FINANCE"           -> Set.of("PAYMENTS", "CREDIT", "SALES");
+            case "MERCHANT_ADMIN"    -> Set.of("SALES", "INVENTORY", "PAYMENTS", "ANOMALY", "DEMAND");
+            case "CUSTOMER",
+                 "MERCHANT"          -> Set.of("SALES", "PAYMENTS");
+            // DISTRIBUTOR_ADMIN, SUPER_ADMIN, or anything unknown → full access
+            default                  -> Set.of("SALES", "INVENTORY", "PAYMENTS", "REPS",
+                                                "CUSTOMERS", "ANOMALY", "DELIVERIES",
+                                                "CREDIT", "DEMAND");
+        };
     }
 
     private String safe(java.util.function.Supplier<String> supplier) {

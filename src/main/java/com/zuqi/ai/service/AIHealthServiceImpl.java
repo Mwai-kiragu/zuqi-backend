@@ -3,6 +3,11 @@ package com.zuqi.ai.service;
 import com.zuqi.ai.dto.AIModelListResponse;
 import com.zuqi.ai.dto.AIModelPerformanceResponse;
 import com.zuqi.ai.dto.AISystemHealthResponse;
+import com.zuqi.ai.model.ModelRegistry;
+import com.zuqi.ai.synthetic.SyntheticDataConfig;
+import com.zuqi.ai.synthetic.SyntheticDataOrchestrator;
+import com.zuqi.ai.synthetic.SyntheticGenerationService;
+import com.zuqi.domain.ai.AISyntheticRun;
 import com.zuqi.domain.ai.AIModelPerformance;
 import com.zuqi.domain.ai.AIModelRegistry;
 import com.zuqi.domain.ai.MetricName;
@@ -42,6 +47,9 @@ public class AIHealthServiceImpl implements AIHealthService {
     private final AIModelPerformanceRepository modelPerformanceRepository;
     private final CacheManager cacheManager;
     private final RedisConnectionFactory redisConnectionFactory;
+    private final ModelRegistry modelRegistry;
+    private final SyntheticDataOrchestrator syntheticDataOrchestrator;
+    private final SyntheticGenerationService syntheticGenerationService;
 
     @Value("${langchain4j.ollama.base-url}")
     private String ollamaBaseUrl;
@@ -169,6 +177,34 @@ public class AIHealthServiceImpl implements AIHealthService {
                 .history(history)
                 .retrievedAt(LocalDateTime.now())
                 .build();
+    }
+
+    @Override
+    public void retireModel(String modelName) {
+        log.info("Retiring active model: {}", modelName);
+        AIModelRegistry active = modelRegistryRepository.findByModelNameAndStatus(modelName, ModelStatus.ACTIVE)
+                .orElseThrow(() -> new IllegalArgumentException("No active model: " + modelName));
+        modelRegistry.retireModel(active.getId());
+        log.info("Model {} (id={}) retired successfully", modelName, active.getId());
+    }
+
+    @Override
+    public void triggerRetrainAll() {
+        log.info("Retrain-all requested — launching async synthetic generation + model training");
+        SyntheticDataConfig config = SyntheticDataConfig.defaultConfig(null, 42L);
+        AISyntheticRun run = syntheticDataOrchestrator.createRunRecord(null, config, "retrain-all");
+        syntheticGenerationService.generateAsync(run.getId(), config);
+        log.info("Retrain-all: async run {} enqueued (merchants={}, months={}, seed={})",
+                run.getId(), config.merchantCount(), config.historyMonths(), config.randomSeed());
+    }
+
+    @Override
+    public void triggerRetrainModel(String modelName) {
+        log.info("Retrain requested for model '{}' — launching full pipeline (models are co-trained)", modelName);
+        SyntheticDataConfig config = SyntheticDataConfig.defaultConfig(null, 42L);
+        AISyntheticRun run = syntheticDataOrchestrator.createRunRecord(null, config, "retrain-model:" + modelName);
+        syntheticGenerationService.generateAsync(run.getId(), config);
+        log.info("Retrain-model '{}': async run {} enqueued", modelName, run.getId());
     }
 
     /**

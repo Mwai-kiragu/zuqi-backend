@@ -44,6 +44,9 @@ public record InventoryFeatures(
 
         // Pending quantities
         BigDecimal pendingReservedQty,                 // Quantity reserved for pending orders
-        BigDecimal expectedIncomingQty                 // Quantity expected from pending purchases
+        BigDecimal expectedIncomingQty,                // Quantity expected from pending purchases
+
+        // Demand forecast (output of demand forecasting model, next 7 days total)
+        BigDecimal predictedDemand7d                   // null if no forecast available — falls back to consumptionRate7d
 ) {
 }

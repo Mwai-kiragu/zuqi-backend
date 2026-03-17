@@ -25,6 +25,7 @@ public class InventoryHealthTool {
           "Parameter: distributorId (UUID string).")
     @Transactional(readOnly = true)
     public String getInventoryHealth(@P("The distributor UUID") String distributorId) {
+        log.info("[TOOL CALLED] getInventoryHealth distributorId={}", distributorId);
         try {
             UUID distId = UUID.fromString(distributorId.trim());
 

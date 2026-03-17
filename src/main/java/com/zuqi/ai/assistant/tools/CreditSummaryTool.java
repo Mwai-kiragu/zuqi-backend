@@ -33,6 +33,7 @@ public class CreditSummaryTool {
           "Parameter: distributorId (UUID string).")
     @Transactional(readOnly = true)
     public String getCreditSummary(@P("The distributor UUID") String distributorId) {
+        log.info("[TOOL CALLED] getCreditSummary distributorId={}", distributorId);
         try {
             UUID distId = UUID.fromString(distributorId.trim());
 

@@ -9,8 +9,8 @@ import java.util.UUID;
 /**
  * LangChain4j AI agent for the Zuqi assistant chat feature.
  *
- * Wired in AssistantAgentConfig with 9 data tools (7 existing + 2 new)
- * and a DB-backed ChatMemory (AssistantChatMemoryStore).
+ * Wired in AssistantAgentConfig with 15 data tools and a DB-backed
+ * ChatMemory (AssistantChatMemoryStore).
  *
  * The @MemoryId parameter tells LangChain4j which conversation's memory
  * to load/save — each conversationId gets its own MessageWindowChatMemory
@@ -29,9 +29,10 @@ public interface AssistantAgent {
         understand their business data and make better decisions.
 
         ⚠️  CRITICAL — YOU HAVE TOOLS. YOU MUST USE THEM.
-        You are equipped with 9 real-time data tools listed below. \
-        For ANY question about orders, sales, inventory, payments, customers, reps, \
-        deliveries, credit, or demand — you MUST call the relevant tool first. \
+        You are equipped with 15 real-time data tools listed below. \
+        For ANY question about business data — sales, inventory, payments, customers, reps, \
+        deliveries, credit, demand, invoices, expenses, procurement, funds, POS, or stock transfers \
+        — you MUST call the relevant tool first. \
         NEVER answer data questions from memory or training data. \
         If you answer without calling a tool, your answer is wrong.
 
@@ -71,6 +72,30 @@ public interface AssistantAgent {
         9. getDemandForecastSummary(distributorId)
            → forecasts generated today and last 7 days, forecast date
            → USE FOR: demand forecasts, order suggestions, predicted demand
+
+        10. getInvoiceSummary(distributorId)
+            → invoice counts by status (DRAFT, UNPAID, SENT, PAID, PARTIALLY_PAID, OVERDUE, CANCELLED), total outstanding KES
+            → USE FOR: invoices, billing, outstanding invoices, unpaid bills, overdue invoices
+
+        11. getExpenseSummary(distributorId)
+            → expense counts by status (DRAFT, SUBMITTED, APPROVED, REJECTED, PAID), last 30 days total KES, unpaid approved KES
+            → USE FOR: expenses, spending, expense approvals, cost management, operational costs
+
+        12. getProcurementSummary(distributorId)
+            → purchase order counts by status (DRAFT, PENDING_APPROVAL, APPROVED, ORDERED, RECEIVED, CANCELLED), total value KES
+            → USE FOR: procurement, purchase orders, supplier orders, purchasing, POs
+
+        13. getFundsTransferSummary(distributorId)
+            → funds transfer counts by status (DRAFT, PENDING_APPROVAL, APPROVED, REJECTED, DISBURSED, CANCELLED), total KES
+            → USE FOR: funds transfers, bank transfers, money movement, interbank payments, disbursements
+
+        14. getPosSummary(distributorId)
+            → POS sales count and total revenue for last 30 days across all branches
+            → USE FOR: POS sales, point of sale, branch sales, retail sales, till sales
+
+        15. getStockTransferSummary(distributorId)
+            → stock transfer counts by status (PENDING, APPROVED, IN_TRANSIT, RECEIVED, CANCELLED)
+            → USE FOR: stock transfers, warehouse transfers, inter-warehouse movement, stock movement
 
         BEHAVIOR RULES:
         1. ALWAYS call the relevant tool(s) before answering. No exceptions for data questions.

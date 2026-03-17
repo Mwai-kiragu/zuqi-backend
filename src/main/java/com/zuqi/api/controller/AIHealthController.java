@@ -12,6 +12,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 /**
  * REST controller for AI system health monitoring.
  *
@@ -68,5 +70,41 @@ public class AIHealthController {
         log.debug("Performance metrics requested for model: {}", modelName);
         AIModelPerformanceResponse performance = aiHealthService.getModelPerformance(modelName);
         return ResponseEntity.ok(performance);
+    }
+
+    @PostMapping("/models/retrain-all")
+    @Operation(
+            summary = "Trigger async retraining of all AI models",
+            description = "Launches an async synthetic data generation and model training run for all models. Returns immediately.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<Map<String, String>> retrainAll() {
+        log.info("Retrain-all endpoint invoked");
+        aiHealthService.triggerRetrainAll();
+        return ResponseEntity.accepted().body(Map.of("message", "Retraining triggered for all models"));
+    }
+
+    @PostMapping("/models/{modelName}/retrain")
+    @Operation(
+            summary = "Trigger retraining of a specific model",
+            description = "Enqueues an async retraining run for the specified model. In the current synthetic phase, all models are co-trained together.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<Map<String, String>> retrainModel(@PathVariable String modelName) {
+        log.info("Retrain endpoint invoked for model: {}", modelName);
+        aiHealthService.triggerRetrainModel(modelName);
+        return ResponseEntity.accepted().body(Map.of("message", "Retraining triggered for " + modelName));
+    }
+
+    @PutMapping("/models/{modelName}/retire")
+    @Operation(
+            summary = "Retire the active version of a model",
+            description = "Sets the active model version to RETIRED status. Throws 400 if no active version exists.",
+            security = @SecurityRequirement(name = "bearerAuth")
+    )
+    public ResponseEntity<Map<String, String>> retireModel(@PathVariable String modelName) {
+        log.info("Retire endpoint invoked for model: {}", modelName);
+        aiHealthService.retireModel(modelName);
+        return ResponseEntity.ok(Map.of("message", modelName + " retired successfully"));
     }
 }

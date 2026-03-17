@@ -3,6 +3,13 @@ package com.zuqi.ai.assistant;
 import com.zuqi.ai.agent.tools.*;
 import com.zuqi.ai.assistant.tools.CreditSummaryTool;
 import com.zuqi.ai.assistant.tools.DemandForecastSummaryTool;
+// New module tools
+import com.zuqi.ai.agent.tools.InvoiceTool;
+import com.zuqi.ai.agent.tools.ExpensesTool;
+import com.zuqi.ai.agent.tools.ProcurementTool;
+import com.zuqi.ai.agent.tools.FundsTransferTool;
+import com.zuqi.ai.agent.tools.PosSalesTool;
+import com.zuqi.ai.agent.tools.StockTransferTool;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.service.AiServices;
@@ -11,7 +18,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Wires AssistantAgent with 9 data tools and a DB-backed MessageWindowChatMemory.
+ * Wires AssistantAgent with 15 data tools and a DB-backed MessageWindowChatMemory.
  *
  * Memory design:
  * - chatMemoryProvider creates a per-conversation MessageWindowChatMemory(maxMessages=40)
@@ -40,7 +47,13 @@ public class AssistantAgentConfig {
             AnomalyAlertsTool anomalyAlertsTool,
             DeliveryMetricsTool deliveryMetricsTool,
             CreditSummaryTool creditSummaryTool,
-            DemandForecastSummaryTool demandForecastSummaryTool) {
+            DemandForecastSummaryTool demandForecastSummaryTool,
+            InvoiceTool invoiceTool,
+            ExpensesTool expensesTool,
+            ProcurementTool procurementTool,
+            FundsTransferTool fundsTransferTool,
+            PosSalesTool posSalesTool,
+            StockTransferTool stockTransferTool) {
 
         return AiServices.builder(AssistantAgent.class)
                 .chatLanguageModel(chatLanguageModel)
@@ -52,7 +65,9 @@ public class AssistantAgentConfig {
                                 .build())
                 .tools(salesTrendTool, inventoryHealthTool, paymentPerformanceTool,
                        repPerformanceTool, merchantMetricsTool, anomalyAlertsTool,
-                       deliveryMetricsTool, creditSummaryTool, demandForecastSummaryTool)
+                       deliveryMetricsTool, creditSummaryTool, demandForecastSummaryTool,
+                       invoiceTool, expensesTool, procurementTool,
+                       fundsTransferTool, posSalesTool, stockTransferTool)
                 .build();
     }
 }

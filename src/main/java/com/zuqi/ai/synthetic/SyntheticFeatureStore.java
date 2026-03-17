@@ -4,6 +4,7 @@ import com.zuqi.ai.synthetic.dto.*;
 
 import com.zuqi.ai.anomaly.AnomalyFeatureBuilder;
 import com.zuqi.ai.credit.CreditMlFeatureBuilder;
+import com.zuqi.ai.prediction.StockoutFeatureBuilder;
 import com.zuqi.ai.feature.DemandFeatures;
 import com.zuqi.ai.feature.InventoryFeatures;
 import com.zuqi.ai.feature.MerchantFeatures;
@@ -66,6 +67,7 @@ public class SyntheticFeatureStore {
     private final SyntheticOrderFeatureBuilder     orderFeatureBuilder;
     private final CreditMlFeatureBuilder           creditMlFeatureBuilder;
     private final AnomalyFeatureBuilder            anomalyFeatureBuilder;
+    private final StockoutFeatureBuilder           stockoutFeatureBuilder;
 
     // ── Credit classifier ──────────────────────────────────────────────────
 
@@ -259,14 +261,16 @@ public class SyntheticFeatureStore {
                 InventoryFeatures features = inventoryFeatureBuilder.computeFeatures(
                         pair.warehouseId(), pair.skuId(), bundle, asOfDate);
 
-                double currentStock = features.currentStock() != null
-                        ? features.currentStock().doubleValue() : 0.0;
+                double daysRemaining = stockoutFeatureBuilder.computeDaysOfStockRemaining(features);
+                double incoming = features.expectedIncomingQty() != null
+                        ? features.expectedIncomingQty().doubleValue() : 0.0;
                 double rate7d = features.consumptionRate7d() != null
-                        ? features.consumptionRate7d().doubleValue() : 0.0;
-                boolean stockout = currentStock < rate7d * 7;
+                        ? features.consumptionRate7d().doubleValue() : 1.0;
+                boolean stockout = daysRemaining < 3.0 && incoming < (rate7d / 7.0) * 5.0;
 
-                Label label = new Label(stockout ? "STOCKOUT" : "NO_STOCKOUT");
-                examples.add(new ArrayExample<>(label, buildStockoutFeatureVector(features)));
+                String label = stockout ? StockoutFeatureBuilder.LABEL_STOCKOUT
+                                        : StockoutFeatureBuilder.LABEL_NO_STOCKOUT;
+                examples.add(stockoutFeatureBuilder.buildLabelledExample(features, label));
             } catch (Exception ex) {
                 log.warn("[SyntheticFeatureStore] Skipping warehouse-sku ({},{}) for stockout: {}",
                         pair.warehouseId(), pair.skuId(), ex.getMessage());
@@ -483,22 +487,6 @@ public class SyntheticFeatureStore {
         list.add(new Feature("is_holiday",         Boolean.TRUE.equals(f.isHoliday())     ? 1.0 : 0.0));
         list.add(new Feature("is_payday_week",     Boolean.TRUE.equals(f.isPaydayWeek())  ? 1.0 : 0.0));
         list.add(new Feature("merchant_tenure_days", f.merchantTenureDays() != null ? f.merchantTenureDays().doubleValue() : 0.0));
-        return list;
-    }
-
-    /**
-     * Stockout predictor features: stock levels, consumption rates, discrepancy,
-     * and manual adjustment count.
-     */
-    private List<Feature> buildStockoutFeatureVector(InventoryFeatures f) {
-        List<Feature> list = new ArrayList<>();
-        list.add(new Feature("current_stock",       f.currentStock()       != null ? f.currentStock().doubleValue()       : 0.0));
-        list.add(new Feature("expected_stock",      f.expectedStock()      != null ? f.expectedStock().doubleValue()      : 0.0));
-        list.add(new Feature("discrepancy_pct",     f.discrepancyPct()     != null ? f.discrepancyPct()                  : 0.0));
-        list.add(new Feature("consumption_rate_7d", f.consumptionRate7d()  != null ? f.consumptionRate7d().doubleValue()  : 0.0));
-        list.add(new Feature("consumption_rate_30d",f.consumptionRate30d() != null ? f.consumptionRate30d().doubleValue() : 0.0));
-        list.add(new Feature("consumption_trend",   encodeTrendDirection(f.consumptionTrend())));
-        list.add(new Feature("manual_adj_count_7d", f.manualAdjustmentCount7d() != null ? f.manualAdjustmentCount7d().doubleValue() : 0.0));
         return list;
     }
 

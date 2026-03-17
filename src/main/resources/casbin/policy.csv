@@ -192,9 +192,13 @@ p, FINANCE, /v1/ai/anomaly/alerts/summary, GET
 
 # AI Predictions - DISTRIBUTOR_ADMIN, WAREHOUSE_MANAGER
 p, DISTRIBUTOR_ADMIN, /v1/ai/prediction/stockout/:id, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/prediction/stockout/train, POST
 p, DISTRIBUTOR_ADMIN, /v1/ai/prediction/rep-performance, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/prediction/rep-performance/:id, GET
 p, WAREHOUSE_MANAGER, /v1/ai/prediction/stockout/:id, GET
+p, MERCHANT_ADMIN, /v1/ai/prediction/stockout/:id, GET
+p, MERCHANT_ADMIN, /v1/ai/prediction/rep-performance, GET
+p, MERCHANT_ADMIN, /v1/ai/prediction/rep-performance/:id, GET
 
 # AI Route Optimization - DISTRIBUTOR_ADMIN, DRIVER
 p, DISTRIBUTOR_ADMIN, /v1/ai/routing/optimize, POST
@@ -217,11 +221,14 @@ p, DISTRIBUTOR_ADMIN, /v1/ai/reports/compliance/generate, POST
 p, DISTRIBUTOR_ADMIN, /v1/ai/reports/compliance/templates, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/reports/compliance/:id, GET
 
-# AI Assistant - Chat, report generation, and structured report data
+# AI Assistant - Chat available to all roles (content is scoped by role server-side)
 p, SUPER_ADMIN, /v1/ai/assistant/chat, POST
 p, DISTRIBUTOR_ADMIN, /v1/ai/assistant/chat, POST
 p, SALES_REP, /v1/ai/assistant/chat, POST
 p, FINANCE, /v1/ai/assistant/chat, POST
+p, WAREHOUSE_MANAGER, /v1/ai/assistant/chat, POST
+p, DRIVER, /v1/ai/assistant/chat, POST
+p, MERCHANT_ADMIN, /v1/ai/assistant/chat, POST
 
 p, SUPER_ADMIN, /v1/ai/assistant/report, POST
 p, DISTRIBUTOR_ADMIN, /v1/ai/assistant/report, POST
@@ -236,10 +243,17 @@ p, SUPER_ADMIN, /v1/ai/assistant/history/:id, GET|DELETE
 p, DISTRIBUTOR_ADMIN, /v1/ai/assistant/history/:id, GET|DELETE
 p, SALES_REP, /v1/ai/assistant/history/:id, GET|DELETE
 p, FINANCE, /v1/ai/assistant/history/:id, GET|DELETE
+p, WAREHOUSE_MANAGER, /v1/ai/assistant/history/:id, GET|DELETE
+p, DRIVER, /v1/ai/assistant/history/:id, GET|DELETE
+p, MERCHANT_ADMIN, /v1/ai/assistant/history/:id, GET|DELETE
 
 p, SUPER_ADMIN, /v1/ai/assistant/conversations/:id, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/assistant/conversations/:id, GET
 p, FINANCE, /v1/ai/assistant/conversations/:id, GET
+p, SALES_REP, /v1/ai/assistant/conversations/:id, GET
+p, WAREHOUSE_MANAGER, /v1/ai/assistant/conversations/:id, GET
+p, DRIVER, /v1/ai/assistant/conversations/:id, GET
+p, MERCHANT_ADMIN, /v1/ai/assistant/conversations/:id, GET
 
 # DRIVER - Delivery operations
 p, DRIVER, /v1/roles/name/:name, GET

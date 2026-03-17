@@ -3,5 +3,6 @@ package com.zuqi.domain.order;
 public enum OrderType {
     STANDARD,
     CREDIT,
-    PRE_ORDER
+    PRE_ORDER,
+    POS
 }

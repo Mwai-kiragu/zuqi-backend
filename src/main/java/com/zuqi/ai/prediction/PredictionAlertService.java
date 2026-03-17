@@ -33,7 +33,7 @@ public class PredictionAlertService {
      * Evaluate a stockout prediction and raise STOCKOUT_RISK alert if probability exceeds threshold.
      */
     public void evaluateStockoutAndAlert(StockoutPredictor.StockoutResult result, UUID distributorId) {
-        double prob = result.stockoutProbability();
+        double prob = result.riskScore();
 
         if (prob < stockoutAlertThreshold) {
             return;
@@ -44,8 +44,8 @@ public class PredictionAlertService {
         Map<String, Object> context = Map.of(
                 "warehouseId",         result.warehouseId().toString(),
                 "productId",           result.productId().toString(),
-                "stockoutProbability", prob,
-                "daysOfStockRemaining", result.daysOfStockRemaining(),
+                "riskScore",           prob,
+                "daysUntilStockout",   result.daysUntilStockout(),
                 "prediction",          result.prediction(),
                 "modelVersion",        result.modelVersion()
         );

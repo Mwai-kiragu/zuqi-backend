@@ -39,23 +39,37 @@ public class ModelEvaluator {
     public ClassifierEvaluationResult evaluateClassifier(
             Model<Label> model,
             Dataset<Label> testData) {
+        return evaluateClassifier(model, testData, null);
+    }
 
-        log.info("Evaluating credit classifier on {} test examples", testData.size());
+    public ClassifierEvaluationResult evaluateClassifier(
+            Model<Label> model,
+            Dataset<Label> testData,
+            String positiveClassName) {
+
+        log.info("Evaluating classifier on {} test examples (positiveClass={})",
+                testData.size(), positiveClassName != null ? positiveClassName : "macro");
 
         // 1. Run evaluation
         Evaluator<Label, LabelEvaluation> evaluator = new LabelEvaluator();
         LabelEvaluation evaluation = evaluator.evaluate(model, testData);
 
-        // 2. Extract metrics
+        // 2. Extract metrics — use named positive class when provided, else macro averages
         double accuracy = evaluation.accuracy();
-        Label defaultLabel = new Label("DEFAULT");
-        double precision = evaluation.precision(defaultLabel);
-        double recall = evaluation.recall(defaultLabel);
-        double f1 = evaluation.f1(defaultLabel);
+        double precision, recall, f1;
+        if (positiveClassName != null) {
+            Label positiveLabel = new Label(positiveClassName);
+            precision = evaluation.precision(positiveLabel);
+            recall    = evaluation.recall(positiveLabel);
+            f1        = evaluation.f1(positiveLabel);
+        } else {
+            precision = evaluation.macroAveragedPrecision();
+            recall    = evaluation.macroAveragedRecall();
+            f1        = evaluation.macroAveragedF1();
+        }
 
-        // Get confusion matrix for AUC approximation
-        // For binary classification: AUC ~= (1 + TPR - FPR) / 2
-        double aucROC = (precision + recall) / 2.0; // Approximation
+        // AUC approximation: (precision + recall) / 2
+        double aucROC = (precision + recall) / 2.0;
 
         log.info("Classifier metrics: Accuracy={:.3f}, Precision={:.3f}, Recall={:.3f}, F1={:.3f}, AUC-ROC={:.3f}",
                 accuracy, precision, recall, f1, aucROC);

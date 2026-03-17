@@ -28,6 +28,7 @@ public class DemandForecastSummaryTool {
           "Parameter: distributorId (UUID string).")
     @Transactional(readOnly = true)
     public String getDemandForecastSummary(@P("The distributor UUID") String distributorId) {
+        log.info("[TOOL CALLED] getDemandForecastSummary distributorId={}", distributorId);
         try {
             UUID distId = UUID.fromString(distributorId.trim());
 

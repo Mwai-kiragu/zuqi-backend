@@ -32,6 +32,7 @@ public class MerchantMetricsTool {
           "Parameter: distributorId (UUID string).")
     @Transactional(readOnly = true)
     public String getMerchantMetrics(@P("The distributor UUID") String distributorId) {
+        log.info("[TOOL CALLED] getMerchantMetrics distributorId={}", distributorId);
         try {
             UUID distId = UUID.fromString(distributorId.trim());
 

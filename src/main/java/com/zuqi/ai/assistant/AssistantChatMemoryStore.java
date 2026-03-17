@@ -16,8 +16,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -49,6 +51,15 @@ public class AssistantChatMemoryStore implements ChatMemoryStore {
     private final ChatMessageRepository chatMessageRepository;
     private final DistributorRepository distributorRepository;
 
+    /**
+     * Tracks the last-known LangChain4j list size per conversationId.
+     * This is used as the offset in updateMessages so we correctly diff
+     * the full LC4j messages list (which includes tool call/result messages)
+     * against what we've already processed — NOT against DB row count,
+     * which only has USER/ASSISTANT rows and would give a wrong offset.
+     */
+    private final Map<UUID, Integer> lastKnownListSize = new ConcurrentHashMap<>();
+
     // ── Read ──────────────────────────────────────────────────────────────────
 
     /**
@@ -69,6 +80,10 @@ public class AssistantChatMemoryStore implements ChatMemoryStore {
                     .map(this::toLC4jMessage)
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList());
+
+            // Reset the LC4j list-size tracker to match what we loaded from DB.
+            // This ensures the next updateMessages call uses the correct offset.
+            lastKnownListSize.put(conversationId, messages.size());
 
             log.debug("ChatMemoryStore.getMessages conversation={} rows={} lc4j={}",
                     conversationId, rows.size(), messages.size());
@@ -108,16 +123,22 @@ public class AssistantChatMemoryStore implements ChatMemoryStore {
         }
 
         try {
-            long dbCount = chatMessageRepository.countByConversationId(conversationId);
-            if (messages.size() <= dbCount) {
-                log.debug("ChatMemoryStore.updateMessages conversation={} — no new messages (db={}, list={})",
-                        conversationId, dbCount, messages.size());
+            // Use the LC4j list-size as offset (NOT dbCount) because the messages list
+            // includes tool call/result entries that are never persisted to DB.
+            // Using dbCount would skip those and cause wrong subList offsets.
+            int knownSize = lastKnownListSize.getOrDefault(conversationId, 0);
+            if (messages.size() <= knownSize) {
+                log.debug("ChatMemoryStore.updateMessages conversation={} — no new messages (known={}, list={})",
+                        conversationId, knownSize, messages.size());
                 return;
             }
 
-            // Only new messages not yet persisted
+            // Only new messages since the last updateMessages call
             List<dev.langchain4j.data.message.ChatMessage> newMessages =
-                    messages.subList((int) dbCount, messages.size());
+                    messages.subList(knownSize, messages.size());
+
+            // Advance the tracker immediately so re-entrant calls don't re-process
+            lastKnownListSize.put(conversationId, messages.size());
 
             Distributor distributor = distributorRepository.findById(ctx.distributorId())
                     .orElse(null);
@@ -153,6 +174,7 @@ public class AssistantChatMemoryStore implements ChatMemoryStore {
         UUID conversationId = toUuid(memoryId);
         if (conversationId == null) return;
         chatMessageRepository.deleteByConversationId(conversationId);
+        lastKnownListSize.remove(conversationId);
         log.debug("ChatMemoryStore.deleteMessages conversation={}", conversationId);
     }
 
