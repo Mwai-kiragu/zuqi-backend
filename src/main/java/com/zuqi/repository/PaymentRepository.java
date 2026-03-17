@@ -72,6 +72,12 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     @Query("SELECT COUNT(p) FROM Payment p WHERE p.distributor.id = :distributorId AND p.reconciled = false")
     long countUnreconciledPayments(@Param("distributorId") UUID distributorId);
 
+    @Query("SELECT COUNT(p) FROM Payment p WHERE p.distributor.id = :distributorId AND p.reconciled = false " +
+            "AND p.createdAt >= :startDate AND p.createdAt <= :endDate")
+    long countUnreconciledPaymentsInPeriod(@Param("distributorId") UUID distributorId,
+                                            @Param("startDate") LocalDateTime startDate,
+                                            @Param("endDate") LocalDateTime endDate);
+
     @Query(value = "SELECT COALESCE(MAX(CAST(SUBSTRING(payment_number, LENGTH(:prefix) + 1) AS INTEGER)), 0) " +
             "FROM payments WHERE payment_number LIKE :prefix%", nativeQuery = true)
     Integer findMaxPaymentNumberByPrefix(@Param("prefix") String prefix);

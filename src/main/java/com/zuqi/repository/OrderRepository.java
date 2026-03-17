@@ -115,6 +115,13 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
             "WHERE o.distributor.id = :distributorId AND o.paymentStatus != 'PAID'")
     java.math.BigDecimal sumOutstandingAmount(@Param("distributorId") UUID distributorId);
 
+    @Query("SELECT COALESCE(SUM(o.totalAmount - o.paidAmount), 0) FROM Order o " +
+            "WHERE o.distributor.id = :distributorId AND o.paymentStatus != 'PAID' " +
+            "AND o.createdAt >= :startDate AND o.createdAt <= :endDate")
+    java.math.BigDecimal sumOutstandingAmountInPeriod(@Param("distributorId") UUID distributorId,
+                                                       @Param("startDate") LocalDateTime startDate,
+                                                       @Param("endDate") LocalDateTime endDate);
+
     @Query("SELECT o FROM Order o WHERE o.distributor.id = :distributorId ORDER BY o.createdAt DESC")
     Page<Order> findRecentOrders(@Param("distributorId") UUID distributorId, Pageable pageable);
 
@@ -169,6 +176,15 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
             "AND o.warehouse.branch.id = :branchId")
     java.math.BigDecimal sumOutstandingAmountByBranch(@Param("distributorId") UUID distributorId,
                                                        @Param("branchId") UUID branchId);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount - o.paidAmount), 0) FROM Order o " +
+            "WHERE o.distributor.id = :distributorId AND o.paymentStatus != 'PAID' " +
+            "AND o.warehouse.branch.id = :branchId " +
+            "AND o.createdAt >= :startDate AND o.createdAt <= :endDate")
+    java.math.BigDecimal sumOutstandingAmountInPeriodByBranch(@Param("distributorId") UUID distributorId,
+                                                               @Param("branchId") UUID branchId,
+                                                               @Param("startDate") LocalDateTime startDate,
+                                                               @Param("endDate") LocalDateTime endDate);
 
     @Query("SELECT o FROM Order o WHERE o.distributor.id = :distributorId " +
             "AND o.warehouse.branch.id = :branchId ORDER BY o.createdAt DESC")

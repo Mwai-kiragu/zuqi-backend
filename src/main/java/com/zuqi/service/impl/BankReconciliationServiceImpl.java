@@ -73,6 +73,16 @@ public class BankReconciliationServiceImpl implements BankReconciliationService 
     }
 
     @Override
+    public BankReconciliationResponse uploadReceipt(UUID id, String receiptDataUri) {
+        BankReconciliation recon = findById(id);
+        recon.setReceiptImageUrl(receiptDataUri);
+        if (recon.getStatus() == BankReconciliationStatus.DRAFT) {
+            recon.setStatus(BankReconciliationStatus.IN_PROGRESS);
+        }
+        return BankReconciliationResponse.from(reconciliationRepository.save(recon));
+    }
+
+    @Override
     public BankReconciliationResponse reconcile(UUID id) {
         BankReconciliation recon = findById(id);
         recalculate(recon);

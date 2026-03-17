@@ -188,8 +188,11 @@ public class EmailServiceImpl implements EmailService {
                     StandardCharsets.UTF_8.name()
             );
 
+            Map<String, Object> enriched = new HashMap<>(contextVariables);
+            enriched.putIfAbsent("logoUrl", appConfig.getUrl() + "/zuqi-logo.png");
+
             Context context = new Context();
-            context.setVariables(contextVariables);
+            context.setVariables(enriched);
             String htmlContent = emailTemplateEngine.process(templateName, context);
 
             helper.setTo(to);

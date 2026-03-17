@@ -44,6 +44,7 @@ public class SecurityConfig {
             "/v1/payments/methods",
             "/v1/mpesa/callback",
             "/v1/kcb/callback",
+            "/uploads/**",
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/swagger-ui.html",

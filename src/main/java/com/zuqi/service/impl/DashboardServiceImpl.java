@@ -85,7 +85,9 @@ public class DashboardServiceImpl implements DashboardService {
             revenueToday     = orderRepository.sumRevenueFromDateAll(periodStart);
             totalOutstanding = orderRepository.sumOutstandingAmountAll();
         } else if (hasBranch) {
-            totalOrders      = orderRepository.countByDistributorIdAndBranch(effectiveDistributorId, branchId);
+            totalOrders      = hasPeriod
+                    ? orderRepository.countOrdersInPeriodByBranch(effectiveDistributorId, periodStart, periodEnd, branchId)
+                    : orderRepository.countByDistributorIdAndBranch(effectiveDistributorId, branchId);
             ordersToday      = orderRepository.countOrdersInPeriodByBranch(effectiveDistributorId, periodStart, periodEnd, branchId);
             pendingOrders    = hasPeriod
                     ? orderRepository.countOrdersInPeriodWithStatusByBranch(effectiveDistributorId, OrderStatus.PENDING, periodStart, periodEnd, branchId)
@@ -102,11 +104,17 @@ public class DashboardServiceImpl implements DashboardService {
             outForDelivery   = hasPeriod
                     ? orderRepository.countOrdersInPeriodWithStatusByBranch(effectiveDistributorId, OrderStatus.OUT_FOR_DELIVERY, periodStart, periodEnd, branchId)
                     : orderRepository.countByDistributorIdAndStatusAndBranch(effectiveDistributorId, OrderStatus.OUT_FOR_DELIVERY, branchId);
-            totalRevenue     = orderRepository.sumTotalRevenueByBranch(effectiveDistributorId, branchId);
+            totalRevenue     = hasPeriod
+                    ? orderRepository.sumRevenueInPeriodByBranch(effectiveDistributorId, periodStart, periodEnd, branchId)
+                    : orderRepository.sumTotalRevenueByBranch(effectiveDistributorId, branchId);
             revenueToday     = orderRepository.sumRevenueInPeriodByBranch(effectiveDistributorId, periodStart, periodEnd, branchId);
-            totalOutstanding = orderRepository.sumOutstandingAmountByBranch(effectiveDistributorId, branchId);
+            totalOutstanding = hasPeriod
+                    ? orderRepository.sumOutstandingAmountInPeriodByBranch(effectiveDistributorId, branchId, periodStart, periodEnd)
+                    : orderRepository.sumOutstandingAmountByBranch(effectiveDistributorId, branchId);
         } else {
-            totalOrders      = orderRepository.countByDistributorId(effectiveDistributorId);
+            totalOrders      = hasPeriod
+                    ? orderRepository.countOrdersInPeriod(effectiveDistributorId, periodStart, periodEnd)
+                    : orderRepository.countByDistributorId(effectiveDistributorId);
             ordersToday      = orderRepository.countOrdersInPeriod(effectiveDistributorId, periodStart, periodEnd);
             pendingOrders    = hasPeriod
                     ? orderRepository.countOrdersInPeriodWithStatus(effectiveDistributorId, OrderStatus.PENDING, periodStart, periodEnd)
@@ -123,9 +131,13 @@ public class DashboardServiceImpl implements DashboardService {
             outForDelivery   = hasPeriod
                     ? orderRepository.countOrdersInPeriodWithStatus(effectiveDistributorId, OrderStatus.OUT_FOR_DELIVERY, periodStart, periodEnd)
                     : orderRepository.countByDistributorIdAndStatus(effectiveDistributorId, OrderStatus.OUT_FOR_DELIVERY);
-            totalRevenue     = orderRepository.sumTotalRevenue(effectiveDistributorId);
+            totalRevenue     = hasPeriod
+                    ? orderRepository.sumRevenueInPeriod(effectiveDistributorId, periodStart, periodEnd)
+                    : orderRepository.sumTotalRevenue(effectiveDistributorId);
             revenueToday     = orderRepository.sumRevenueInPeriod(effectiveDistributorId, periodStart, periodEnd);
-            totalOutstanding = orderRepository.sumOutstandingAmount(effectiveDistributorId);
+            totalOutstanding = hasPeriod
+                    ? orderRepository.sumOutstandingAmountInPeriod(effectiveDistributorId, periodStart, periodEnd)
+                    : orderRepository.sumOutstandingAmount(effectiveDistributorId);
         }
 
         // Revenue this month (not period-filtered — it's always the calendar month)
@@ -142,7 +154,9 @@ public class DashboardServiceImpl implements DashboardService {
                 : customerRepository.countNewCustomersFromDate(effectiveDistributorId, startOfMonth);
         long unreconciledPayments = isGlobalView
                 ? paymentRepository.countAllUnreconciledPayments()
-                : paymentRepository.countUnreconciledPayments(effectiveDistributorId);
+                : hasPeriod
+                    ? paymentRepository.countUnreconciledPaymentsInPeriod(effectiveDistributorId, periodStart, periodEnd)
+                    : paymentRepository.countUnreconciledPayments(effectiveDistributorId);
         long lowStockProducts = isGlobalView
                 ? stockRepository.countAllLowStock()
                 : stockRepository.countLowStockByDistributorId(effectiveDistributorId);

@@ -11,6 +11,7 @@ public interface BankReconciliationService {
     BankReconciliationResponse create(UUID distributorId, BankReconciliationRequest request);
     BankReconciliationResponse update(UUID id, BankReconciliationRequest request);
     BankReconciliationResponse reconcile(UUID id);
+    BankReconciliationResponse uploadReceipt(UUID id, String receiptDataUri);
     BankReconciliationResponse getById(UUID id);
     Page<BankReconciliationResponse> getAll(UUID distributorId, Pageable pageable);
     void delete(UUID id);

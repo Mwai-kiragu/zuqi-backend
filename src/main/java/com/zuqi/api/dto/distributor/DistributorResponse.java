@@ -27,6 +27,8 @@ public class DistributorResponse {
     private String deactivationReason;
     private LocalDateTime deactivatedAt;
     private String deactivatedByName;
+    private UUID merchantId;
+    private String merchantName;
 
     public static DistributorResponse fromEntity(Distributor distributor) {
         return DistributorResponse.builder()
@@ -43,6 +45,8 @@ public class DistributorResponse {
                 .deactivationReason(distributor.getDeactivationReason())
                 .deactivatedAt(distributor.getDeactivatedAt())
                 .deactivatedByName(distributor.getDeactivatedBy() != null ? distributor.getDeactivatedBy().getFullName() : null)
+                .merchantId(distributor.getMerchant() != null ? distributor.getMerchant().getId() : null)
+                .merchantName(distributor.getMerchant() != null ? distributor.getMerchant().getName() : null)
                 .build();
     }
 }

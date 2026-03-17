@@ -26,7 +26,7 @@ public class FileUploadController {
     public ResponseEntity<ApiResponse<Map<String, String>>> uploadFile(
             @AuthenticationPrincipal User user,
             @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "type", defaultValue = "document") String type) {
+            @RequestParam(value = "type", defaultValue = "document") String type) throws java.io.IOException {
         String filePath = fileStorageService.storeFile(file, user.getId(), type);
         return ResponseEntity.ok(ApiResponse.success("File uploaded successfully",
                 Map.of("url", filePath, "filename", file.getOriginalFilename() != null ? file.getOriginalFilename() : "file")));

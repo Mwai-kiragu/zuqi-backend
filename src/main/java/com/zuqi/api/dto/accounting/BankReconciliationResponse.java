@@ -27,6 +27,7 @@ public class BankReconciliationResponse {
     private BigDecimal difference;
     private BankReconciliationStatus status;
     private String notes;
+    private String receiptImageUrl;
     private LocalDateTime reconciledAt;
     private LocalDateTime createdAt;
     private List<ReconciliationItemResponse> items;
@@ -45,6 +46,7 @@ public class BankReconciliationResponse {
                 .difference(r.getDifference())
                 .status(r.getStatus())
                 .notes(r.getNotes())
+                .receiptImageUrl(r.getReceiptImageUrl())
                 .reconciledAt(r.getReconciledAt())
                 .createdAt(r.getCreatedAt())
                 .items(r.getItems() != null

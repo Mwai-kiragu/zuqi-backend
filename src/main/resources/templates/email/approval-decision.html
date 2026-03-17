@@ -14,11 +14,11 @@
 
                     <!-- Header — green for approved, red for rejected -->
                     <tr>
-                        <td th:style="${status == 'APPROVED'} ? 'background: linear-gradient(135deg, #2e7d32 0%, #1b5e20 100%); padding: 30px 40px; border-radius: 8px 8px 0 0;' : 'background: linear-gradient(135deg, #c62828 0%, #b71c1c 100%); padding: 30px 40px; border-radius: 8px 8px 0 0;'">
-                            <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;"
-                                th:text="${companyName}">Company</h1>
-                            <p th:style="${status == 'APPROVED'} ? 'margin: 8px 0 0 0; color: #c8e6c9; font-size: 14px;' : 'margin: 8px 0 0 0; color: #ffcdd2; font-size: 14px;'"
-                               th:text="${status == 'APPROVED'} ? 'Your Request Has Been Approved ✓' : 'Your Request Has Been Rejected'">Status</p>
+                        <td style="background-color: #f4fafb; padding: 24px 40px; border-radius: 8px 8px 0 0; text-align: center;"
+                            th:style="${status == 'APPROVED'} ? 'background-color: #f4fafb; padding: 24px 40px; border-radius: 8px 8px 0 0; text-align: center; border-bottom: 4px solid #2e7d32;' : 'background-color: #f4fafb; padding: 24px 40px; border-radius: 8px 8px 0 0; text-align: center; border-bottom: 4px solid #c62828;'">
+                            <img th:src="${logoUrl}" src="" alt="Zuqi" style="height: 52px; max-width: 200px; display: block; margin: 0 auto;" />
+                            <p th:style="${status == 'APPROVED'} ? 'margin: 10px 0 0 0; color: #2e7d32; font-size: 13px; font-weight: 600; letter-spacing: 0.5px;' : 'margin: 10px 0 0 0; color: #c62828; font-size: 13px; font-weight: 600; letter-spacing: 0.5px;'"
+                               th:text="${status == 'APPROVED'} ? 'YOUR REQUEST HAS BEEN APPROVED ✓' : 'YOUR REQUEST HAS BEEN REJECTED'">Status</p>
                         </td>
                     </tr>
 

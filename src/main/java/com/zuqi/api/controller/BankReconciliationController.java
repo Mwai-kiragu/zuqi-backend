@@ -5,6 +5,7 @@ import com.zuqi.api.dto.accounting.BankReconciliationRequest;
 import com.zuqi.api.dto.accounting.BankReconciliationResponse;
 import com.zuqi.api.dto.common.PageResponse;
 import com.zuqi.service.BankReconciliationService;
+import com.zuqi.service.FileStorageService;
 import com.zuqi.util.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -15,6 +16,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.io.IOException;
 
 import java.util.UUID;
 
@@ -25,6 +29,7 @@ import java.util.UUID;
 public class BankReconciliationController {
 
     private final BankReconciliationService bankReconciliationService;
+    private final FileStorageService fileStorageService;
     private final SecurityUtils securityUtils;
 
     @PostMapping
@@ -64,6 +69,16 @@ public class BankReconciliationController {
     public ResponseEntity<ApiResponse<Page<BankReconciliationResponse>>> getAll(Pageable pageable) {
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
         return ResponseEntity.ok(ApiResponse.success(bankReconciliationService.getAll(distributorId, pageable)));
+    }
+
+    @PostMapping(value = "/{id}/upload-receipt", consumes = "multipart/form-data")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
+    @Operation(summary = "Upload a bank receipt photo for reconciliation")
+    public ResponseEntity<ApiResponse<BankReconciliationResponse>> uploadReceipt(
+            @PathVariable UUID id,
+            @RequestParam("file") MultipartFile file) throws IOException {
+        String fileUrl = fileStorageService.storeFile(file, "receipts");
+        return ResponseEntity.ok(ApiResponse.success(bankReconciliationService.uploadReceipt(id, fileUrl)));
     }
 
     @DeleteMapping("/{id}")

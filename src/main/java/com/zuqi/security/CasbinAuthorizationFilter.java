@@ -39,6 +39,8 @@ public class CasbinAuthorizationFilter extends OncePerRequestFilter {
             "/api/v1/mpesa/callback",
             "/v1/kcb/callback",
             "/api/v1/kcb/callback",
+            "/uploads",
+            "/api/uploads",
             "/v3/api-docs",
             "/api/v3/api-docs",
             "/swagger-ui",

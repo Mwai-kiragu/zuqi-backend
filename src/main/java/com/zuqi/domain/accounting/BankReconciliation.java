@@ -73,6 +73,9 @@ public class BankReconciliation {
     @Column(columnDefinition = "TEXT")
     private String notes;
 
+    @Column(name = "receipt_image_url", columnDefinition = "TEXT")
+    private String receiptImageUrl;
+
     @Column(name = "reconciled_by")
     private UUID reconciledBy;
 
