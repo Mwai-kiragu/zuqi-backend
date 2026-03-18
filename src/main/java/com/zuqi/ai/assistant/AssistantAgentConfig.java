@@ -10,6 +10,13 @@ import com.zuqi.ai.agent.tools.ProcurementTool;
 import com.zuqi.ai.agent.tools.FundsTransferTool;
 import com.zuqi.ai.agent.tools.PosSalesTool;
 import com.zuqi.ai.agent.tools.StockTransferTool;
+// Financial statement tools
+import com.zuqi.ai.agent.tools.BalanceSheetTool;
+import com.zuqi.ai.agent.tools.ProfitLossTool;
+import com.zuqi.ai.agent.tools.TrialBalanceTool;
+import com.zuqi.ai.agent.tools.CashFlowTool;
+import com.zuqi.ai.agent.tools.ArAgingTool;
+import com.zuqi.ai.agent.tools.ApAgingTool;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.service.AiServices;
@@ -18,7 +25,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Wires AssistantAgent with 15 data tools and a DB-backed MessageWindowChatMemory.
+ * Wires AssistantAgent with 21 data tools and a DB-backed MessageWindowChatMemory.
  *
  * Memory design:
  * - chatMemoryProvider creates a per-conversation MessageWindowChatMemory(maxMessages=40)
@@ -53,7 +60,13 @@ public class AssistantAgentConfig {
             ProcurementTool procurementTool,
             FundsTransferTool fundsTransferTool,
             PosSalesTool posSalesTool,
-            StockTransferTool stockTransferTool) {
+            StockTransferTool stockTransferTool,
+            BalanceSheetTool balanceSheetTool,
+            ProfitLossTool profitLossTool,
+            TrialBalanceTool trialBalanceTool,
+            CashFlowTool cashFlowTool,
+            ArAgingTool arAgingTool,
+            ApAgingTool apAgingTool) {
 
         return AiServices.builder(AssistantAgent.class)
                 .chatLanguageModel(chatLanguageModel)
@@ -67,7 +80,9 @@ public class AssistantAgentConfig {
                        repPerformanceTool, merchantMetricsTool, anomalyAlertsTool,
                        deliveryMetricsTool, creditSummaryTool, demandForecastSummaryTool,
                        invoiceTool, expensesTool, procurementTool,
-                       fundsTransferTool, posSalesTool, stockTransferTool)
+                       fundsTransferTool, posSalesTool, stockTransferTool,
+                       balanceSheetTool, profitLossTool, trialBalanceTool,
+                       cashFlowTool, arAgingTool, apAgingTool)
                 .build();
     }
 }
