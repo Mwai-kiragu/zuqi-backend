@@ -10,6 +10,9 @@ import org.tribuo.anomaly.libsvm.LibSVMAnomalyTrainer;
 import org.tribuo.anomaly.libsvm.SVMAnomalyType;
 import org.tribuo.classification.Label;
 import org.tribuo.classification.xgboost.XGBoostClassificationTrainer;
+import org.tribuo.clustering.ClusterID;
+import org.tribuo.clustering.kmeans.KMeansTrainer;
+import org.tribuo.math.distance.L2Distance;
 import org.tribuo.common.libsvm.KernelType;
 import org.tribuo.common.libsvm.SVMParameters;
 import org.tribuo.regression.Regressor;
@@ -40,6 +43,14 @@ public class TribuoConfig {
     @Value("${zuqi.ai.xgboost.regression.num-rounds:150}")
     private int regressionNumRounds;
 
+    // ── K-Means hyperparameters ───────────────────────────────────────────
+
+    @Value("${zuqi.ai.kmeans.clusters:5}")
+    private int kMeansClusters;
+
+    @Value("${zuqi.ai.kmeans.iterations:100}")
+    private int kMeansIterations;
+
     // ── LibSVM hyperparameters ────────────────────────────────────────────
 
     @Value("${zuqi.ai.libsvm.anomaly.nu:0.1}")
@@ -47,6 +58,19 @@ public class TribuoConfig {
 
     @Value("${zuqi.ai.libsvm.anomaly.gamma:0.5}")
     private double anomalyGamma;
+
+    // ── Clustering ───────────────────────────────────────────────────────
+
+    /**
+     * K-Means clustering trainer used for merchant segmentation (Phase 2 CRM AI).
+     *
+     * <p>EUCLIDEAN distance, single-threaded, fixed seed 42 for reproducibility.
+     */
+    @Bean("kMeansTrainer")
+    public Trainer<ClusterID> kMeansTrainer() {
+        log.info("Configuring KMeansTrainer: clusters={}, iterations={}", kMeansClusters, kMeansIterations);
+        return new KMeansTrainer(kMeansClusters, kMeansIterations, new L2Distance(), 1, 42L);
+    }
 
     // ── Classification ────────────────────────────────────────────────────
 

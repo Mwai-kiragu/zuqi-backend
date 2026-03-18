@@ -165,6 +165,58 @@ zuqi:
       reference-window-days: 90
       current-window-days: 14
 
+    # Phase 2: K-Means clustering
+    kmeans:
+      clusters: 5
+      iterations: 100
+
+    # Phase 2: Inventory AI
+    inventory:
+      reorder-enabled: true
+      reorder-cron: "0 0 5 * * *"        # Daily 5 AM
+      expiry-enabled: true
+      expiry-cron: "0 30 5 * * *"        # Daily 5:30 AM
+      auto-po-enabled: false             # Only in REAL data phase
+      auto-po-cron: "0 0 6 * * *"        # Daily 6 AM
+
+    # Phase 2: Financial AI
+    financial:
+      recon-enabled: true
+      recon-auto-match-threshold: 0.95   # Auto-match above this probability
+      recon-suggest-threshold: 0.50      # Suggest to user above this
+      cashflow-enabled: true
+      cashflow-cron: "0 0 4 * * *"       # Daily 4 AM
+      cashflow-horizons: [7, 30, 90]     # Forecast horizons in days
+
+    # Phase 2: CRM AI
+    crm:
+      segmentation-enabled: true
+      segmentation-cron: "0 0 3 ? * MON"  # Weekly Monday 3 AM
+      health-score-enabled: true
+      health-score-cron: "0 30 3 ? * MON"
+      clv-enabled: true
+      clv-cron: "0 0 2 1 * *"             # Monthly 1st 2 AM
+      churn-enabled: true
+      churn-cron: "0 0 4 ? * MON"         # Weekly Monday 4 AM
+      churn-alert-threshold: 0.65          # Alert if churn probability >= 65%
+      product-recommendations-enabled: true
+      product-recommendations-cron: "0 0 5 ? * MON"
+      visit-optimization-enabled: true
+      visit-cron: "0 30 5 ? * MON"
+
+    # Phase 2: Procurement AI
+    procurement:
+      supplier-risk-enabled: true
+      supplier-risk-cron: "0 0 2 1 * *"   # Monthly 1st 2 AM
+      price-trends-enabled: true
+      price-trends-cron: "0 30 2 1 * *"   # Monthly 1st 2:30 AM
+      order-qty-enabled: true
+
+    # Phase 2: Pricing AI
+    pricing:
+      enabled: true
+      pricing-cron: "0 0 6 ? * MON"       # Weekly Monday 6 AM
+
 # Timefold Solver Configuration
 timefold:
   solver:
