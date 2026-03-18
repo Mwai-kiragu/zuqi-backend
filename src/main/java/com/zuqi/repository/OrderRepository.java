@@ -103,11 +103,12 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
             "AND o.createdAt >= :startDate")
     long countOrdersToday(@Param("distributorId") UUID distributorId, @Param("startDate") LocalDateTime startDate);
 
-    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.distributor.id = :distributorId")
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.distributor.id = :distributorId " +
+            "AND o.status != 'CANCELLED'")
     java.math.BigDecimal sumTotalRevenue(@Param("distributorId") UUID distributorId);
 
     @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.distributor.id = :distributorId " +
-            "AND o.createdAt >= :startDate")
+            "AND o.status != 'CANCELLED' AND o.createdAt >= :startDate")
     java.math.BigDecimal sumRevenueFromDate(@Param("distributorId") UUID distributorId,
             @Param("startDate") LocalDateTime startDate);
 
@@ -133,6 +134,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
 
     @Query("SELECT CAST(o.createdAt AS LocalDate), COUNT(o), SUM(o.totalAmount) " +
             "FROM Order o WHERE o.distributor.id = :distributorId " +
+            "AND o.status != 'CANCELLED' " +
             "AND o.createdAt >= :startDate AND o.createdAt <= :endDate " +
             "GROUP BY CAST(o.createdAt AS LocalDate) ORDER BY CAST(o.createdAt AS LocalDate)")
     List<Object[]> findDailyRevenueData(@Param("distributorId") UUID distributorId,
@@ -159,11 +161,12 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
                                       @Param("branchId") UUID branchId);
 
     @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.distributor.id = :distributorId " +
-            "AND o.warehouse.branch.id = :branchId")
+            "AND o.status != 'CANCELLED' AND o.warehouse.branch.id = :branchId")
     java.math.BigDecimal sumTotalRevenueByBranch(@Param("distributorId") UUID distributorId,
                                                   @Param("branchId") UUID branchId);
 
     @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.distributor.id = :distributorId " +
+            "AND o.status != 'CANCELLED' " +
             "AND o.createdAt >= :startDate AND o.createdAt <= :endDate " +
             "AND o.warehouse.branch.id = :branchId")
     java.math.BigDecimal sumRevenueInPeriodByBranch(@Param("distributorId") UUID distributorId,
@@ -217,6 +220,7 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
                               @Param("endDate") LocalDateTime endDate);
 
     @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.distributor.id = :distributorId " +
+            "AND o.status != 'CANCELLED' " +
             "AND o.createdAt >= :startDate AND o.createdAt <= :endDate")
     java.math.BigDecimal sumRevenueInPeriod(@Param("distributorId") UUID distributorId,
                                              @Param("startDate") LocalDateTime startDate,
@@ -229,10 +233,11 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     @Query("SELECT COUNT(o) FROM Order o WHERE o.createdAt >= :startDate")
     long countOrdersTodayAll(@Param("startDate") LocalDateTime startDate);
 
-    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o")
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.status != 'CANCELLED'")
     java.math.BigDecimal sumTotalRevenueAll();
 
-    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.createdAt >= :startDate")
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.status != 'CANCELLED' " +
+            "AND o.createdAt >= :startDate")
     java.math.BigDecimal sumRevenueFromDateAll(@Param("startDate") LocalDateTime startDate);
 
     @Query("SELECT COALESCE(SUM(o.totalAmount - o.paidAmount), 0) FROM Order o WHERE o.paymentStatus != 'PAID'")
