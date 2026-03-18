@@ -43,7 +43,6 @@ public class AssistantService {
 
     private static final String HISTORY_CACHE = "chat-history";
 
-    private final AssistantAgent            assistantAgent;    // singleton — full access (SUPER_ADMIN default)
     private final AssistantAgentFactory     assistantAgentFactory;
     private final AssistantChatMemoryStore  chatMemoryStore;
     private final AssistantReportBuilder    reportBuilder;

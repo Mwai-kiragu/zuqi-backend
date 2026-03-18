@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.context.ActiveProfiles;
 
@@ -58,64 +58,64 @@ class EventPublishingTest {
     @Autowired
     private ApplicationEventPublisher eventPublisher;
 
-    @MockBean
+    @MockitoBean
     private PaymentAnomalyEventHandler paymentEventHandler;
 
-    @MockBean
+    @MockitoBean
     private InventoryShrinkageEventHandler inventoryEventHandler;
 
-    @MockBean
+    @MockitoBean
     private OrderDataQualityEventHandler orderEventHandler;
 
-    @MockBean
+    @MockitoBean
     private MerchantCreditEventHandler merchantEventHandler;
 
-    @MockBean
+    @MockitoBean
     private PaymentRepository paymentRepository;
 
-    @MockBean
+    @MockitoBean
     private OrderRepository orderRepository;
 
-    @MockBean
+    @MockitoBean
     private MerchantRepository merchantRepository;
 
-    @MockBean
+    @MockitoBean
     private CustomerRepository customerRepository;
 
-    @MockBean
+    @MockitoBean
     private StockRepository stockRepository;
 
-    @MockBean
+    @MockitoBean
     private PaymentMethodRepository paymentMethodRepository;
 
-    @MockBean
+    @MockitoBean
     private OrderItemRepository orderItemRepository;
 
-    @MockBean
+    @MockitoBean
     private OrderStatusHistoryRepository statusHistoryRepository;
 
-    @MockBean
+    @MockitoBean
     private ProductRepository productRepository;
 
-    @MockBean
+    @MockitoBean
     private DistributorRepository distributorRepository;
 
-    @MockBean
+    @MockitoBean
     private WarehouseRepository warehouseRepository;
 
-    @MockBean
+    @MockitoBean
     private UserRepository userRepository;
 
-    @MockBean
+    @MockitoBean
     private MerchantCategoryRepository categoryRepository;
 
-    @MockBean
+    @MockitoBean
     private StockMovementRepository stockMovementRepository;
 
-    @MockBean
+    @MockitoBean
     private InvoiceService invoiceService;
 
-    @MockBean
+    @MockitoBean
     private SecurityUtils securityUtils;
 
     @Autowired

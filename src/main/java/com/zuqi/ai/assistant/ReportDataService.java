@@ -5,6 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zuqi.ai.agent.tools.*;
 import com.zuqi.ai.assistant.tools.CreditSummaryTool;
 import com.zuqi.ai.assistant.tools.DemandForecastSummaryTool;
+import com.zuqi.ai.agent.tools.BalanceSheetTool;
+import com.zuqi.ai.agent.tools.ProfitLossTool;
+import com.zuqi.ai.agent.tools.TrialBalanceTool;
+import com.zuqi.ai.agent.tools.CashFlowTool;
+import com.zuqi.ai.agent.tools.ArAgingTool;
+import com.zuqi.ai.agent.tools.ApAgingTool;
 import com.zuqi.api.dto.assistant.ReportDataResponse;
 import com.zuqi.domain.ai.ReportType;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +36,12 @@ public class ReportDataService {
     private final DeliveryMetricsTool     deliveryMetricsTool;
     private final CreditSummaryTool       creditSummaryTool;
     private final DemandForecastSummaryTool demandForecastSummaryTool;
+    private final BalanceSheetTool          balanceSheetTool;
+    private final ProfitLossTool            profitLossTool;
+    private final TrialBalanceTool          trialBalanceTool;
+    private final CashFlowTool              cashFlowTool;
+    private final ArAgingTool               arAgingTool;
+    private final ApAgingTool               apAgingTool;
     private final ObjectMapper            objectMapper;
 
     public ReportDataResponse getReportData(UUID distributorId, ReportType type, int periodDays) {
@@ -75,6 +87,25 @@ public class ReportDataService {
                 data.put("anomalies", parse(anomalyAlertsTool.getAnomalyAlerts(distId, days)));
                 data.put("inventory", parse(inventoryHealthTool.getInventoryHealth(distId)));
                 data.put("payments",  parse(paymentPerformanceTool.getPaymentPerformance(distId)));
+            }
+            case BALANCE_SHEET -> {
+                data.put("balanceSheet", parse(balanceSheetTool.getBalanceSheet(distId)));
+            }
+            case PROFIT_LOSS -> {
+                data.put("profitLoss", parse(profitLossTool.getProfitLoss(distId, days)));
+            }
+            case TRIAL_BALANCE -> {
+                data.put("trialBalance", parse(trialBalanceTool.getTrialBalance(distId)));
+            }
+            case CASH_FLOW -> {
+                data.put("cashFlow", parse(cashFlowTool.getCashFlow(distId, days)));
+            }
+            case AR_AGING -> {
+                data.put("arAging",   parse(arAgingTool.getArAging(distId)));
+                data.put("payments",  parse(paymentPerformanceTool.getPaymentPerformance(distId)));
+            }
+            case AP_AGING -> {
+                data.put("apAging",   parse(apAgingTool.getApAging(distId)));
             }
         }
 

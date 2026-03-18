@@ -174,12 +174,10 @@ public class DemandForecastJob {
                         .build());
 
         entity.setPredictedQty(forecast.predictedQuantity().doubleValue());
+        entity.setConfidenceLower(forecast.lowerBound());
+        entity.setConfidenceUpper(forecast.upperBound());
         entity.setModelVersion(modelVersion);
         entity.setExpiresAt(expiresAt);
-
-        // TODO: Add confidence intervals when model supports them
-        // entity.setConfidenceLower(...);
-        // entity.setConfidenceUpper(...);
 
         demandForecastRepository.save(entity);
     }
