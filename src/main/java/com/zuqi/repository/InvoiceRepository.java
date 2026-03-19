@@ -157,4 +157,20 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
     /** Get the brand Merchant ID for an invoice (for public pay endpoint, avoids lazy-loading). */
     @Query("SELECT i.distributor.merchant.id FROM Invoice i WHERE i.invoiceNumber = :invoiceNumber")
     Optional<UUID> findMerchantIdByInvoiceNumber(@Param("invoiceNumber") String invoiceNumber);
+
+    // AI Phase 3 — cash flow feature queries
+
+    @Query("SELECT i FROM Invoice i WHERE i.distributor.id = :distributorId " +
+           "AND i.dueDate < :cutoffDate AND i.status NOT IN ('PAID', 'CANCELLED')")
+    List<Invoice> findByDistributorIdAndDueDateBeforeAndPaidFalse(
+            @Param("distributorId") UUID distributorId,
+            @Param("cutoffDate") LocalDate cutoffDate);
+
+    @Query("SELECT i FROM Invoice i WHERE i.distributor.id = :distributorId " +
+           "AND i.dueDate >= :fromDate AND i.dueDate <= :toDate " +
+           "AND i.status NOT IN ('PAID', 'CANCELLED')")
+    List<Invoice> findByDistributorIdAndDueDateBetweenAndPaidFalse(
+            @Param("distributorId") UUID distributorId,
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate);
 }

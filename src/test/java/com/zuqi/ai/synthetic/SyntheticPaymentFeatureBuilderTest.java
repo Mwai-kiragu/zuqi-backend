@@ -51,6 +51,7 @@ class SyntheticPaymentFeatureBuilderTest {
                 List.of(merchant), List.of(order), List.of(),
                 List.of(payment), List.of(), List.of(), List.of(),
                 List.of(),
+                List.of(), List.of(),
                 1L, config());
 
         PaymentFeatures f = builder.computePaymentFeatures(payment, bundle);
@@ -80,6 +81,7 @@ class SyntheticPaymentFeatureBuilderTest {
                 List.of(merchant), List.of(), List.of(),
                 List.of(payment), List.of(), List.of(), List.of(),
                 List.of(),
+                List.of(), List.of(),
                 1L, config());
 
         PaymentFeatures f = builder.computePaymentFeatures(payment, bundle);
@@ -108,6 +110,7 @@ class SyntheticPaymentFeatureBuilderTest {
                 List.of(merchant), List.of(order), List.of(),
                 List.of(payment), List.of(), List.of(), List.of(),
                 List.of(),
+                List.of(), List.of(),
                 1L, config());
 
         PaymentFeatures f = builder.computePaymentFeatures(payment, bundle);
@@ -139,6 +142,7 @@ class SyntheticPaymentFeatureBuilderTest {
                 List.of(merchant), List.of(), List.of(),
                 List.of(p1, p2, current), List.of(), List.of(), List.of(),
                 List.of(),
+                List.of(), List.of(),
                 1L, config());
 
         PaymentFeatures f = builder.computePaymentFeatures(current, bundle);
@@ -169,6 +173,7 @@ class SyntheticPaymentFeatureBuilderTest {
                 List.of(merchant), List.of(), List.of(),
                 List.of(p1, p2), List.of(), List.of(), List.of(),
                 List.of(),
+                List.of(), List.of(),
                 1L, config());
 
         PaymentFeatures f = builder.computePaymentFeatures(p2, bundle);
@@ -210,6 +215,7 @@ class SyntheticPaymentFeatureBuilderTest {
                 List.of(merchant), List.of(), List.of(),
                 List.of(p1, p2), List.of(), List.of(), List.of(),
                 List.of(),
+                List.of(), List.of(),
                 1L, config());
 
         MerchantPaymentTrendFeatures f =
@@ -233,6 +239,7 @@ class SyntheticPaymentFeatureBuilderTest {
                 List.of(merchant), List.of(lastOrder), List.of(),
                 List.of(), List.of(), List.of(), List.of(),
                 List.of(),
+                List.of(), List.of(),
                 1L, config());
 
         MerchantPaymentTrendFeatures f =
@@ -260,6 +267,7 @@ class SyntheticPaymentFeatureBuilderTest {
                 List.of(merchant), List.of(order), List.of(),
                 List.of(payment), List.of(), List.of(), List.of(),
                 List.of(),
+                List.of(), List.of(),
                 1L, config());
 
         MerchantPaymentTrendFeatures f =
@@ -282,6 +290,7 @@ class SyntheticPaymentFeatureBuilderTest {
                 List.of(merchant),
                 List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
                 List.of(),
+                List.of(), List.of(),
                 1L, config());
     }
 

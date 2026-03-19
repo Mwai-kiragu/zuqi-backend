@@ -284,4 +284,9 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     @Query("SELECT o FROM Order o WHERE o.merchant.id = :customerId AND o.distributor.id = :distributorId")
     List<Order> findByCustomerIdAndDistributorId(@Param("customerId") UUID customerId,
                                                  @Param("distributorId") UUID distributorId);
+
+    // AI Phase 3 — cash flow feature queries
+    @Query("SELECT o FROM Order o WHERE o.distributor.id = :distributorId " +
+           "AND o.status IN ('PENDING', 'CONFIRMED', 'PROCESSING')")
+    List<Order> findPendingOrdersByDistributorId(@Param("distributorId") UUID distributorId);
 }

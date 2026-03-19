@@ -258,6 +258,7 @@ class SyntheticDtosTest {
                 List.of(activity),
                 List.of(credit),
                 List.of(),
+                List.of(), List.of(),
                 99L, config);
 
         // Orders for merchant
@@ -292,6 +293,7 @@ class SyntheticDtosTest {
                 List.of(),
                 List.of(),
                 List.of(),
+                List.of(), List.of(),
                 0L, config);
 
         assertThat(bundle.getRecordCounts().get("merchants")).isEqualTo(2);
@@ -304,7 +306,8 @@ class SyntheticDtosTest {
 
         SyntheticDataBundle bundle = SyntheticDataBundle.create(
                 List.of(), List.of(), List.of(), List.of(),
-                List.of(), List.of(), List.of(), List.of(), 77L, config);
+                List.of(), List.of(), List.of(), List.of(),
+                List.of(), List.of(), 77L, config);
 
         assertThat(bundle.getGenerationSeed()).isEqualTo(77L);
         assertThat(bundle.getConfig()).isSameAs(config);

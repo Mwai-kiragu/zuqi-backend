@@ -1,6 +1,8 @@
 package com.zuqi.ai.synthetic;
 
 import com.zuqi.ai.synthetic.dto.*;
+import com.zuqi.ai.synthetic.generators.SyntheticBankStatementGenerator;
+import com.zuqi.ai.synthetic.generators.SyntheticCashFlowGenerator;
 import com.zuqi.ai.synthetic.generators.SyntheticExpiryBatchGenerator;
 import com.zuqi.ai.synthetic.generators.SyntheticExpiryBatchGenerator.SyntheticExpiryBatch;
 
@@ -56,6 +58,8 @@ public class SyntheticDataOrchestrator {
     private final SalesRepActivityGenerator      salesRepActivityGenerator;
     private final CreditHistoryGenerator         creditHistoryGenerator;
     private final SyntheticExpiryBatchGenerator  expiryBatchGenerator;
+    private final SyntheticBankStatementGenerator bankStatementGenerator;
+    private final SyntheticCashFlowGenerator     cashFlowGenerator;
     private final AISyntheticRunRepository       syntheticRunRepository;
     private final DistributorRepository          distributorRepository;
 
@@ -180,8 +184,22 @@ public class SyntheticDataOrchestrator {
         // Step 7: expiry batches (independent — no deps on other steps)
         t = System.currentTimeMillis();
         List<SyntheticExpiryBatch> expiryBatches = expiryBatchGenerator.generateBatches();
-        log.info("[Synthetic] 7/7 expiry batches ({}) — {} ms",
+        log.info("[Synthetic] 7/9 expiry batches ({}) — {} ms",
                 expiryBatches.size(), System.currentTimeMillis() - t);
+
+        // Step 8: bank statement lines (depends on payments)
+        t = System.currentTimeMillis();
+        List<SyntheticBankStatementLine> bankStatementLines =
+                bankStatementGenerator.generate(payments, config.randomSeed());
+        log.info("[Synthetic] 8/9 bank statement lines ({}) — {} ms",
+                bankStatementLines.size(), System.currentTimeMillis() - t);
+
+        // Step 9: cash flow snapshots (depends on orders + payments)
+        t = System.currentTimeMillis();
+        List<SyntheticCashFlowSnapshot> cashFlowSnapshots =
+                cashFlowGenerator.generate(orderResult.orders(), payments, config.randomSeed());
+        log.info("[Synthetic] 9/9 cash flow snapshots ({}) — {} ms",
+                cashFlowSnapshots.size(), System.currentTimeMillis() - t);
 
         SyntheticDataBundle bundle = SyntheticDataBundle.create(
                 merchants,
@@ -192,6 +210,8 @@ public class SyntheticDataOrchestrator {
                 activities,
                 evaluations,
                 expiryBatches,
+                bankStatementLines,
+                cashFlowSnapshots,
                 config.randomSeed(),
                 config);
 

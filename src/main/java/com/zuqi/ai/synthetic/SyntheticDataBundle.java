@@ -36,6 +36,8 @@ public final class SyntheticDataBundle {
     private final List<SyntheticRepActivity>         repActivities;
     private final List<SyntheticCreditEvaluation>    creditEvaluations;
     private final List<SyntheticExpiryBatch>         expiryBatches;
+    private final List<SyntheticBankStatementLine>   bankStatementLines;
+    private final List<SyntheticCashFlowSnapshot>    cashFlowSnapshots;
 
     // Cross-reference maps
     private final Map<UUID, List<SyntheticOrder>>            merchantOrders;
@@ -59,17 +61,21 @@ public final class SyntheticDataBundle {
             List<SyntheticRepActivity> repActivities,
             List<SyntheticCreditEvaluation> creditEvaluations,
             List<SyntheticExpiryBatch> expiryBatches,
+            List<SyntheticBankStatementLine> bankStatementLines,
+            List<SyntheticCashFlowSnapshot> cashFlowSnapshots,
             long generationSeed,
             SyntheticDataConfig config) {
 
-        this.merchants          = List.copyOf(merchants);
-        this.orders             = List.copyOf(orders);
-        this.orderItems         = List.copyOf(orderItems);
-        this.payments           = List.copyOf(payments);
-        this.inventoryMovements = List.copyOf(inventoryMovements);
-        this.repActivities      = List.copyOf(repActivities);
-        this.creditEvaluations  = List.copyOf(creditEvaluations);
-        this.expiryBatches      = List.copyOf(expiryBatches);
+        this.merchants           = List.copyOf(merchants);
+        this.orders              = List.copyOf(orders);
+        this.orderItems          = List.copyOf(orderItems);
+        this.payments            = List.copyOf(payments);
+        this.inventoryMovements  = List.copyOf(inventoryMovements);
+        this.repActivities       = List.copyOf(repActivities);
+        this.creditEvaluations   = List.copyOf(creditEvaluations);
+        this.expiryBatches       = List.copyOf(expiryBatches);
+        this.bankStatementLines  = List.copyOf(bankStatementLines);
+        this.cashFlowSnapshots   = List.copyOf(cashFlowSnapshots);
         this.generationSeed     = generationSeed;
         this.config             = config;
         this.generatedAt        = LocalDateTime.now();
@@ -118,27 +124,32 @@ public final class SyntheticDataBundle {
             List<SyntheticRepActivity> repActivities,
             List<SyntheticCreditEvaluation> creditEvaluations,
             List<SyntheticExpiryBatch> expiryBatches,
+            List<SyntheticBankStatementLine> bankStatementLines,
+            List<SyntheticCashFlowSnapshot> cashFlowSnapshots,
             long generationSeed,
             SyntheticDataConfig config) {
 
         return new SyntheticDataBundle(
                 merchants, orders, orderItems, payments,
                 inventoryMovements, repActivities, creditEvaluations,
-                expiryBatches, generationSeed, config);
+                expiryBatches, bankStatementLines, cashFlowSnapshots,
+                generationSeed, config);
     }
 
     // -------------------------------------------------------------------------
     // List accessors
     // -------------------------------------------------------------------------
 
-    public List<SyntheticMerchant>          getMerchants()          { return merchants; }
-    public List<SyntheticOrder>             getOrders()             { return orders; }
-    public List<SyntheticOrderItem>         getOrderItems()         { return orderItems; }
-    public List<SyntheticPayment>           getPayments()           { return payments; }
-    public List<SyntheticInventoryMovement> getInventoryMovements() { return inventoryMovements; }
-    public List<SyntheticRepActivity>       getRepActivities()      { return repActivities; }
-    public List<SyntheticCreditEvaluation>  getCreditEvaluations()  { return creditEvaluations; }
-    public List<SyntheticExpiryBatch>       getExpiryBatches()      { return expiryBatches; }
+    public List<SyntheticMerchant>          getMerchants()           { return merchants; }
+    public List<SyntheticOrder>             getOrders()              { return orders; }
+    public List<SyntheticOrderItem>         getOrderItems()          { return orderItems; }
+    public List<SyntheticPayment>           getPayments()            { return payments; }
+    public List<SyntheticInventoryMovement> getInventoryMovements()  { return inventoryMovements; }
+    public List<SyntheticRepActivity>       getRepActivities()       { return repActivities; }
+    public List<SyntheticCreditEvaluation>  getCreditEvaluations()   { return creditEvaluations; }
+    public List<SyntheticExpiryBatch>       getExpiryBatches()       { return expiryBatches; }
+    public List<SyntheticBankStatementLine> getBankStatementLines()  { return bankStatementLines; }
+    public List<SyntheticCashFlowSnapshot>  getCashFlowSnapshots()   { return cashFlowSnapshots; }
 
     // -------------------------------------------------------------------------
     // Cross-reference accessors — return empty list when no data found
@@ -178,15 +189,18 @@ public final class SyntheticDataBundle {
 
     /** Summary counts for logging and audit. */
     public Map<String, Integer> getRecordCounts() {
-        return Map.of(
-                "merchants",          merchants.size(),
-                "orders",             orders.size(),
-                "orderItems",         orderItems.size(),
-                "payments",           payments.size(),
-                "inventoryMovements", inventoryMovements.size(),
-                "repActivities",      repActivities.size(),
-                "creditEvaluations",  creditEvaluations.size(),
-                "expiryBatches",      expiryBatches.size()
+        // Map.of is limited to 10 pairs; use Map.ofEntries for more
+        return Map.ofEntries(
+                Map.entry("merchants",          merchants.size()),
+                Map.entry("orders",             orders.size()),
+                Map.entry("orderItems",         orderItems.size()),
+                Map.entry("payments",           payments.size()),
+                Map.entry("inventoryMovements", inventoryMovements.size()),
+                Map.entry("repActivities",      repActivities.size()),
+                Map.entry("creditEvaluations",  creditEvaluations.size()),
+                Map.entry("expiryBatches",      expiryBatches.size()),
+                Map.entry("bankStatementLines", bankStatementLines.size()),
+                Map.entry("cashFlowSnapshots",  cashFlowSnapshots.size())
         );
     }
 }

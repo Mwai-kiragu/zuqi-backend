@@ -198,6 +198,7 @@ class SyntheticInventoryFeatureBuilderTest {
         return SyntheticDataBundle.create(
                 List.of(), List.of(), List.of(), List.of(),
                 movements, List.of(), List.of(), List.of(),
+                List.of(), List.of(),
                 1L, SyntheticDataConfig.defaultConfig(UUID.randomUUID(), 42L));
     }
 }

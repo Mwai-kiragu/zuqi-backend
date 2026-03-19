@@ -21,6 +21,9 @@ import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.service.AiServices;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.aop.framework.Advised;
+import org.springframework.aop.support.AopUtils;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -37,6 +40,7 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration
 @RequiredArgsConstructor
+@Slf4j
 public class AssistantAgentConfig {
 
     private static final int MAX_MESSAGES_IN_WINDOW = 40; // 20 full turns
@@ -69,6 +73,20 @@ public class AssistantAgentConfig {
             ApAgingTool apAgingTool,
             HelpTool helpTool) {
 
+        // LangChain4j uses getDeclaredMethods() to find @Tool annotations.
+        // Spring CGLIB proxies override methods without copying annotations,
+        // so we must unwrap to the real target instance before registering tools.
+        Object[] tools = java.util.Arrays.stream(new Object[]{
+                salesTrendTool, inventoryHealthTool, paymentPerformanceTool,
+                repPerformanceTool, merchantMetricsTool, anomalyAlertsTool,
+                deliveryMetricsTool, creditSummaryTool, demandForecastSummaryTool,
+                invoiceTool, expensesTool, procurementTool,
+                fundsTransferTool, posSalesTool, stockTransferTool,
+                balanceSheetTool, profitLossTool, trialBalanceTool,
+                cashFlowTool, arAgingTool, apAgingTool, helpTool})
+                .map(this::unwrapProxy)
+                .toArray();
+
         return AiServices.builder(AssistantAgent.class)
                 .chatLanguageModel(chatLanguageModel)
                 .chatMemoryProvider(memoryId ->
@@ -77,13 +95,19 @@ public class AssistantAgentConfig {
                                 .maxMessages(MAX_MESSAGES_IN_WINDOW)
                                 .chatMemoryStore(chatMemoryStore)
                                 .build())
-                .tools(salesTrendTool, inventoryHealthTool, paymentPerformanceTool,
-                       repPerformanceTool, merchantMetricsTool, anomalyAlertsTool,
-                       deliveryMetricsTool, creditSummaryTool, demandForecastSummaryTool,
-                       invoiceTool, expensesTool, procurementTool,
-                       fundsTransferTool, posSalesTool, stockTransferTool,
-                       balanceSheetTool, profitLossTool, trialBalanceTool,
-                       cashFlowTool, arAgingTool, apAgingTool, helpTool)
+                .tools(tools)
                 .build();
+    }
+
+    private Object unwrapProxy(Object bean) {
+        if (AopUtils.isAopProxy(bean) && bean instanceof Advised advised) {
+            try {
+                return advised.getTargetSource().getTarget();
+            } catch (Exception e) {
+                log.warn("[AssistantAgentConfig] Could not unwrap proxy for {}: {}",
+                        bean.getClass().getSimpleName(), e.getMessage());
+            }
+        }
+        return bean;
     }
 }

@@ -37,4 +37,9 @@ public interface CashFlowForecastRepository extends JpaRepository<CashFlowForeca
     Optional<CashFlowForecast> findByDistributorIdAndForecastDate(
             UUID distributorId,
             LocalDate forecastDate);
+
+    /**
+     * Delete existing forecast for a distributor on a specific date before upsert.
+     */
+    void deleteByDistributorIdAndForecastDate(UUID distributorId, LocalDate forecastDate);
 }

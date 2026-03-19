@@ -1,6 +1,8 @@
 package com.zuqi.ai.pipeline;
 
+import com.zuqi.ai.cashflow.CashFlowTrainingPipeline;
 import com.zuqi.ai.model.ModelRegistry;
+import com.zuqi.ai.recon.ReconTrainingPipeline;
 import com.zuqi.ai.synthetic.DataMixer;
 import com.zuqi.ai.synthetic.DataPhaseTracker;
 import com.zuqi.ai.synthetic.SyntheticDataBundle;
@@ -53,6 +55,8 @@ import java.util.stream.Collectors;
  *   <li>{@code payment_distress_classifier}  — XGBoost classification</li>
  *   <li>{@code rep_performance_predictor}    — XGBoost classification</li>
  *   <li>{@code data_quality_detector}        — XGBoost classification</li>
+ *   <li>{@code bank_recon_matcher}          — XGBoost classification (Model #11)</li>
+ *   <li>{@code cash_flow_predictor}         — XGBoost regression (Model #12)</li>
  * </ul>
  *
  * <h3>Pipeline per model</h3>
@@ -83,6 +87,8 @@ public class ModelTrainingService {
     private final Trainer<Label>        classificationTrainer;
     private final Trainer<Regressor>    regressionTrainer;
     private final Trainer<Event>        anomalyTrainer;
+    private final ReconTrainingPipeline     reconTrainingPipeline;
+    private final CashFlowTrainingPipeline  cashFlowTrainingPipeline;
 
     @Autowired
     public ModelTrainingService(
@@ -92,14 +98,18 @@ public class ModelTrainingService {
             DataPhaseTracker phaseTracker,
             @Qualifier("xgBoostClassificationTrainer") Trainer<Label> classificationTrainer,
             @Qualifier("xgBoostRegressionTrainer")    Trainer<Regressor> regressionTrainer,
-            @Qualifier("xgBoostAnomalyTrainer")       Trainer<Event> anomalyTrainer) {
-        this.featureStore           = featureStore;
-        this.dataMixer              = dataMixer;
-        this.modelRegistry          = modelRegistry;
-        this.phaseTracker           = phaseTracker;
-        this.classificationTrainer  = classificationTrainer;
-        this.regressionTrainer      = regressionTrainer;
-        this.anomalyTrainer         = anomalyTrainer;
+            @Qualifier("xgBoostAnomalyTrainer")       Trainer<Event> anomalyTrainer,
+            ReconTrainingPipeline reconTrainingPipeline,
+            CashFlowTrainingPipeline cashFlowTrainingPipeline) {
+        this.featureStore               = featureStore;
+        this.dataMixer                  = dataMixer;
+        this.modelRegistry              = modelRegistry;
+        this.phaseTracker               = phaseTracker;
+        this.classificationTrainer      = classificationTrainer;
+        this.regressionTrainer          = regressionTrainer;
+        this.anomalyTrainer             = anomalyTrainer;
+        this.reconTrainingPipeline      = reconTrainingPipeline;
+        this.cashFlowTrainingPipeline   = cashFlowTrainingPipeline;
     }
 
     // ── Public API ───────────────────────────────────────────────────────────
@@ -395,6 +405,40 @@ public class ModelTrainingService {
             log.error("[ModelTrainingService] {} failed: {}",
                     DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR, e.getMessage(), e);
             errors.add(DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR + ": " + e.getMessage());
+        }
+
+        // ── bank_recon_matcher (Model #11) ────────────────────────────────
+        try {
+            ReconTrainingPipeline.TrainingResult reconResult = reconTrainingPipeline.runPipeline();
+            if (reconResult.success()) {
+                modelIds.put(ReconTrainingPipeline.MODEL_NAME, reconResult.modelId());
+                counts.put(ReconTrainingPipeline.MODEL_NAME, 0);
+            } else {
+                log.warn("[ModelTrainingService] {} — {}", ReconTrainingPipeline.MODEL_NAME,
+                        reconResult.errorMessage());
+                errors.add(ReconTrainingPipeline.MODEL_NAME + ": " + reconResult.errorMessage());
+            }
+        } catch (Exception e) {
+            log.error("[ModelTrainingService] {} failed: {}", ReconTrainingPipeline.MODEL_NAME,
+                    e.getMessage(), e);
+            errors.add(ReconTrainingPipeline.MODEL_NAME + ": " + e.getMessage());
+        }
+
+        // ── cash_flow_predictor (Model #12) ───────────────────────────────
+        try {
+            CashFlowTrainingPipeline.TrainingResult cfResult = cashFlowTrainingPipeline.runPipeline();
+            if (cfResult.success()) {
+                modelIds.put(CashFlowTrainingPipeline.MODEL_NAME, cfResult.modelId());
+                counts.put(CashFlowTrainingPipeline.MODEL_NAME, 0);
+            } else {
+                log.warn("[ModelTrainingService] {} — {}", CashFlowTrainingPipeline.MODEL_NAME,
+                        cfResult.errorMessage());
+                errors.add(CashFlowTrainingPipeline.MODEL_NAME + ": " + cfResult.errorMessage());
+            }
+        } catch (Exception e) {
+            log.error("[ModelTrainingService] {} failed: {}", CashFlowTrainingPipeline.MODEL_NAME,
+                    e.getMessage(), e);
+            errors.add(CashFlowTrainingPipeline.MODEL_NAME + ": " + e.getMessage());
         }
 
         long durationMs = System.currentTimeMillis() - startMs;

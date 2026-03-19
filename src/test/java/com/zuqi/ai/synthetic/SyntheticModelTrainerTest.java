@@ -1,10 +1,9 @@
 package com.zuqi.ai.synthetic;
 
-import com.zuqi.ai.synthetic.dto.*;
-
+import com.zuqi.ai.cashflow.CashFlowTrainingPipeline;
 import com.zuqi.ai.pipeline.ModelTrainingService;
-
 import com.zuqi.ai.model.ModelRegistry;
+import com.zuqi.ai.recon.ReconTrainingPipeline;
 import com.zuqi.domain.ai.AIModelRegistry;
 import com.zuqi.domain.ai.DataPhase;
 import com.zuqi.domain.ai.ModelStatus;
@@ -46,6 +45,8 @@ class SyntheticModelTrainerTest {
     @Mock DataMixer              dataMixer;
     @Mock ModelRegistry          modelRegistry;
     @Mock DataPhaseTracker       phaseTracker;
+    @Mock ReconTrainingPipeline      reconTrainingPipeline;
+    @Mock CashFlowTrainingPipeline   cashFlowTrainingPipeline;
 
     @SuppressWarnings("unchecked")
     @Mock Trainer<Label>    classificationTrainer;
@@ -62,7 +63,14 @@ class SyntheticModelTrainerTest {
     void setUp() {
         trainer = new ModelTrainingService(
                 featureStore, dataMixer, modelRegistry, phaseTracker,
-                classificationTrainer, regressionTrainer, anomalyTrainer);
+                classificationTrainer, regressionTrainer, anomalyTrainer,
+                reconTrainingPipeline, cashFlowTrainingPipeline);
+
+        // Default: both dedicated pipelines succeed (avoids NPE from null TrainingResult)
+        lenient().when(reconTrainingPipeline.runPipeline()).thenReturn(
+                new ReconTrainingPipeline.TrainingResult(true, 0.92, UUID.randomUUID(), null));
+        lenient().when(cashFlowTrainingPipeline.runPipeline()).thenReturn(
+                new CashFlowTrainingPipeline.TrainingResult(true, 5000.0, 0.82, UUID.randomUUID(), null));
     }
 
     // ── Registry interactions ────────────────────────────────────────────────
@@ -254,8 +262,8 @@ class SyntheticModelTrainerTest {
 
         assertThat(result.trainedModelIds())
                 .doesNotContainKey(DataPhaseTracker.MODEL_SHRINKAGE_DETECTOR);
-        // 8 others still trained
-        assertThat(result.trainedModelIds()).hasSize(8);
+        // 8 core models + 2 dedicated pipeline models = 10
+        assertThat(result.trainedModelIds()).hasSize(10);
     }
 
     // ── Error isolation ──────────────────────────────────────────────────────
@@ -289,8 +297,8 @@ class SyntheticModelTrainerTest {
         assertThat(result.success()).isFalse();
         assertThat(result.errors()).hasSize(1);
         assertThat(result.errors().get(0)).contains(DataPhaseTracker.MODEL_CREDIT_CLASSIFIER);
-        // The other 8 models still trained
-        assertThat(result.trainedModelIds()).hasSize(8);
+        // The other 8 core models + 2 pipeline models = 10
+        assertThat(result.trainedModelIds()).hasSize(10);
     }
 
     @Test
@@ -313,7 +321,8 @@ class SyntheticModelTrainerTest {
         assertThat(result.success()).isFalse();
         assertThat(result.errors()).hasSize(1);
         assertThat(result.errors().get(0)).contains(DataPhaseTracker.MODEL_SHRINKAGE_DETECTOR);
-        assertThat(result.trainedModelIds()).hasSize(8);
+        // 8 core (shrinkage skipped) + 2 pipeline = 10
+        assertThat(result.trainedModelIds()).hasSize(10);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -553,7 +562,7 @@ class SyntheticModelTrainerTest {
     private SyntheticDataBundle emptyBundle() {
         return SyntheticDataBundle.create(
                 List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
-                List.of(),
+                List.of(), List.of(), List.of(),
                 1L, SyntheticDataConfig.defaultConfig(UUID.randomUUID(), 42L));
     }
 }
