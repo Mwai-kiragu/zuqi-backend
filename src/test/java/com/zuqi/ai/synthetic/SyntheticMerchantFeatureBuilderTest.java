@@ -85,6 +85,7 @@ class SyntheticMerchantFeatureBuilderTest {
                 List.of(o1, o2),
                 List.of(item1, item2),
                 List.of(), List.of(), List.of(), List.of(),
+                List.of(),
                 42L, config());
 
         MerchantFeatures f = builder.computeFeatures(merchant, bundle, AS_OF);
@@ -108,6 +109,7 @@ class SyntheticMerchantFeatureBuilderTest {
         SyntheticDataBundle bundle = SyntheticDataBundle.create(
                 List.of(merchant), List.of(o1, o2),
                 List.of(), List.of(), List.of(), List.of(), List.of(),
+                List.of(),
                 1L, config());
 
         MerchantFeatures f = builder.computeFeatures(merchant, bundle, AS_OF);
@@ -146,6 +148,7 @@ class SyntheticMerchantFeatureBuilderTest {
         SyntheticDataBundle bundle = SyntheticDataBundle.create(
                 List.of(merchant), List.of(), List.of(),
                 List.of(p1, p2), List.of(), List.of(), List.of(),
+                List.of(),
                 1L, config());
 
         MerchantFeatures f = builder.computeFeatures(merchant, bundle, AS_OF);
@@ -167,6 +170,7 @@ class SyntheticMerchantFeatureBuilderTest {
         SyntheticDataBundle bundle = SyntheticDataBundle.create(
                 List.of(merchant), List.of(), List.of(),
                 List.of(p1, p2), List.of(), List.of(), List.of(),
+                List.of(),
                 1L, config());
 
         MerchantFeatures f = builder.computeFeatures(merchant, bundle, AS_OF);
@@ -205,7 +209,7 @@ class SyntheticMerchantFeatureBuilderTest {
 
         SyntheticDataBundle bundle = SyntheticDataBundle.create(
                 List.of(merchant), List.of(), List.of(), List.of(), List.of(), List.of(),
-                List.of(eval1, eval2), 1L, config());
+                List.of(eval1, eval2), List.of(), 1L, config());
 
         MerchantFeatures f = builder.computeFeatures(merchant, bundle, AS_OF);
 
@@ -259,6 +263,7 @@ class SyntheticMerchantFeatureBuilderTest {
         return SyntheticDataBundle.create(
                 List.of(merchant),
                 List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+                List.of(),
                 1L, config());
     }
 

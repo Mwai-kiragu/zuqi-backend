@@ -9,6 +9,7 @@ import com.zuqi.ai.synthetic.generators.MerchantProfileGenerator;
 import com.zuqi.ai.synthetic.generators.OrderHistoryGenerator;
 import com.zuqi.ai.synthetic.generators.PaymentBehaviorGenerator;
 import com.zuqi.ai.synthetic.generators.SalesRepActivityGenerator;
+import com.zuqi.ai.synthetic.generators.SyntheticExpiryBatchGenerator;
 import com.zuqi.domain.ai.AISyntheticRun;
 import com.zuqi.domain.ai.SyntheticRunStatus;
 import com.zuqi.domain.ai.SyntheticRunType;
@@ -105,15 +106,16 @@ class SyntheticDataOrchestratorTest {
                 .thenReturn(Optional.empty());
 
         MerchantProfileGenerator   merchantGen  = new MerchantProfileGenerator(nameGenerator);
-        OrderHistoryGenerator      orderGen     = new OrderHistoryGenerator();
-        PaymentBehaviorGenerator   paymentGen   = new PaymentBehaviorGenerator();
-        InventoryMovementGenerator inventoryGen = new InventoryMovementGenerator();
-        SalesRepActivityGenerator  repGen       = new SalesRepActivityGenerator();
-        CreditHistoryGenerator     creditGen    = new CreditHistoryGenerator();
+        OrderHistoryGenerator        orderGen     = new OrderHistoryGenerator();
+        PaymentBehaviorGenerator     paymentGen   = new PaymentBehaviorGenerator();
+        InventoryMovementGenerator   inventoryGen = new InventoryMovementGenerator();
+        SalesRepActivityGenerator    repGen       = new SalesRepActivityGenerator();
+        CreditHistoryGenerator       creditGen    = new CreditHistoryGenerator();
+        SyntheticExpiryBatchGenerator expiryGen   = new SyntheticExpiryBatchGenerator();
 
         orchestrator = new SyntheticDataOrchestrator(
                 merchantGen, orderGen, paymentGen, inventoryGen, repGen, creditGen,
-                runRepository, distributorRepository);
+                expiryGen, runRepository, distributorRepository);
     }
 
     // ──────────────────────────────────────────────────────────────────────

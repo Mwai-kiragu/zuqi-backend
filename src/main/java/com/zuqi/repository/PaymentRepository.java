@@ -106,4 +106,12 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     List<Payment> findByMerchantIdAndCreatedAtBefore(
             @Param("merchantId") UUID merchantId,
             @Param("asOfDate") LocalDateTime asOfDate);
+
+    // AI feature queries (Phase 2 plan — Section 1.4)
+    @Query("SELECT p FROM Payment p WHERE p.distributor.id = :distributorId " +
+           "AND p.paymentDate >= :startDate AND p.paymentDate <= :endDate")
+    List<Payment> findByDistributorIdAndPaymentDateBetween(
+            @Param("distributorId") UUID distributorId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate);
 }

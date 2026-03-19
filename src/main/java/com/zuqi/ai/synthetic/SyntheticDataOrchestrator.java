@@ -1,6 +1,8 @@
 package com.zuqi.ai.synthetic;
 
 import com.zuqi.ai.synthetic.dto.*;
+import com.zuqi.ai.synthetic.generators.SyntheticExpiryBatchGenerator;
+import com.zuqi.ai.synthetic.generators.SyntheticExpiryBatchGenerator.SyntheticExpiryBatch;
 
 import com.zuqi.ai.synthetic.generators.*;
 import com.zuqi.ai.synthetic.generators.OrderHistoryGenerator.OrderHistoryResult;
@@ -47,14 +49,15 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class SyntheticDataOrchestrator {
 
-    private final MerchantProfileGenerator   merchantProfileGenerator;
-    private final OrderHistoryGenerator      orderHistoryGenerator;
-    private final PaymentBehaviorGenerator   paymentBehaviorGenerator;
-    private final InventoryMovementGenerator inventoryMovementGenerator;
-    private final SalesRepActivityGenerator  salesRepActivityGenerator;
-    private final CreditHistoryGenerator     creditHistoryGenerator;
-    private final AISyntheticRunRepository   syntheticRunRepository;
-    private final DistributorRepository      distributorRepository;
+    private final MerchantProfileGenerator       merchantProfileGenerator;
+    private final OrderHistoryGenerator          orderHistoryGenerator;
+    private final PaymentBehaviorGenerator       paymentBehaviorGenerator;
+    private final InventoryMovementGenerator     inventoryMovementGenerator;
+    private final SalesRepActivityGenerator      salesRepActivityGenerator;
+    private final CreditHistoryGenerator         creditHistoryGenerator;
+    private final SyntheticExpiryBatchGenerator  expiryBatchGenerator;
+    private final AISyntheticRunRepository       syntheticRunRepository;
+    private final DistributorRepository          distributorRepository;
 
     // -------------------------------------------------------------------------
     // Run record management
@@ -174,6 +177,12 @@ public class SyntheticDataOrchestrator {
         log.info("[Synthetic] 6/6 credit evaluations ({}) — {} ms",
                 evaluations.size(), System.currentTimeMillis() - t);
 
+        // Step 7: expiry batches (independent — no deps on other steps)
+        t = System.currentTimeMillis();
+        List<SyntheticExpiryBatch> expiryBatches = expiryBatchGenerator.generateBatches();
+        log.info("[Synthetic] 7/7 expiry batches ({}) — {} ms",
+                expiryBatches.size(), System.currentTimeMillis() - t);
+
         SyntheticDataBundle bundle = SyntheticDataBundle.create(
                 merchants,
                 orderResult.orders(),
@@ -182,6 +191,7 @@ public class SyntheticDataOrchestrator {
                 movements,
                 activities,
                 evaluations,
+                expiryBatches,
                 config.randomSeed(),
                 config);
 

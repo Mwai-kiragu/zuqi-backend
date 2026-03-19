@@ -66,7 +66,8 @@ public class AssistantAgentConfig {
             TrialBalanceTool trialBalanceTool,
             CashFlowTool cashFlowTool,
             ArAgingTool arAgingTool,
-            ApAgingTool apAgingTool) {
+            ApAgingTool apAgingTool,
+            HelpTool helpTool) {
 
         return AiServices.builder(AssistantAgent.class)
                 .chatLanguageModel(chatLanguageModel)
@@ -82,7 +83,7 @@ public class AssistantAgentConfig {
                        invoiceTool, expensesTool, procurementTool,
                        fundsTransferTool, posSalesTool, stockTransferTool,
                        balanceSheetTool, profitLossTool, trialBalanceTool,
-                       cashFlowTool, arAgingTool, apAgingTool)
+                       cashFlowTool, arAgingTool, apAgingTool, helpTool)
                 .build();
     }
 }

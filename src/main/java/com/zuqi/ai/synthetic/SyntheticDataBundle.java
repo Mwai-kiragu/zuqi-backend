@@ -1,6 +1,7 @@
 package com.zuqi.ai.synthetic;
 
 import com.zuqi.ai.synthetic.dto.*;
+import com.zuqi.ai.synthetic.generators.SyntheticExpiryBatchGenerator.SyntheticExpiryBatch;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -34,6 +35,7 @@ public final class SyntheticDataBundle {
     private final List<SyntheticInventoryMovement>   inventoryMovements;
     private final List<SyntheticRepActivity>         repActivities;
     private final List<SyntheticCreditEvaluation>    creditEvaluations;
+    private final List<SyntheticExpiryBatch>         expiryBatches;
 
     // Cross-reference maps
     private final Map<UUID, List<SyntheticOrder>>            merchantOrders;
@@ -56,6 +58,7 @@ public final class SyntheticDataBundle {
             List<SyntheticInventoryMovement> inventoryMovements,
             List<SyntheticRepActivity> repActivities,
             List<SyntheticCreditEvaluation> creditEvaluations,
+            List<SyntheticExpiryBatch> expiryBatches,
             long generationSeed,
             SyntheticDataConfig config) {
 
@@ -66,6 +69,7 @@ public final class SyntheticDataBundle {
         this.inventoryMovements = List.copyOf(inventoryMovements);
         this.repActivities      = List.copyOf(repActivities);
         this.creditEvaluations  = List.copyOf(creditEvaluations);
+        this.expiryBatches      = List.copyOf(expiryBatches);
         this.generationSeed     = generationSeed;
         this.config             = config;
         this.generatedAt        = LocalDateTime.now();
@@ -113,13 +117,14 @@ public final class SyntheticDataBundle {
             List<SyntheticInventoryMovement> inventoryMovements,
             List<SyntheticRepActivity> repActivities,
             List<SyntheticCreditEvaluation> creditEvaluations,
+            List<SyntheticExpiryBatch> expiryBatches,
             long generationSeed,
             SyntheticDataConfig config) {
 
         return new SyntheticDataBundle(
                 merchants, orders, orderItems, payments,
                 inventoryMovements, repActivities, creditEvaluations,
-                generationSeed, config);
+                expiryBatches, generationSeed, config);
     }
 
     // -------------------------------------------------------------------------
@@ -133,6 +138,7 @@ public final class SyntheticDataBundle {
     public List<SyntheticInventoryMovement> getInventoryMovements() { return inventoryMovements; }
     public List<SyntheticRepActivity>       getRepActivities()      { return repActivities; }
     public List<SyntheticCreditEvaluation>  getCreditEvaluations()  { return creditEvaluations; }
+    public List<SyntheticExpiryBatch>       getExpiryBatches()      { return expiryBatches; }
 
     // -------------------------------------------------------------------------
     // Cross-reference accessors — return empty list when no data found
@@ -179,7 +185,8 @@ public final class SyntheticDataBundle {
                 "payments",           payments.size(),
                 "inventoryMovements", inventoryMovements.size(),
                 "repActivities",      repActivities.size(),
-                "creditEvaluations",  creditEvaluations.size()
+                "creditEvaluations",  creditEvaluations.size(),
+                "expiryBatches",      expiryBatches.size()
         );
     }
 }

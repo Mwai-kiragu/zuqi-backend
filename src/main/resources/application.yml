@@ -51,6 +51,14 @@ spring:
     redis:
       time-to-live: 3600000
       cache-null-values: false
+    cache-names:
+      - reorderFeatures
+      - expiryFeatures
+      - reconFeatures
+      - cashFlowFeatures
+      - customerAnalyticsFeatures
+      - supplierFeatures
+      - pricingFeatures
 
   # Jackson Configuration
   jackson:

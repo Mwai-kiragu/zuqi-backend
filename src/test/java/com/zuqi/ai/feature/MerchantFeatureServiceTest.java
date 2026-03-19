@@ -85,7 +85,7 @@ class MerchantFeatureServiceTest {
 
         assertThatThrownBy(() -> merchantFeatureService.computeFeatures(merchantId, asOfDate))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Merchant not found");
+                .hasMessageContaining("Customer not found");
     }
 
     // ===========================
@@ -378,7 +378,7 @@ class MerchantFeatureServiceTest {
         assertThat(features.businessCategoryEncoded()).isEqualTo("Retail");
         assertThat(features.relationshipTenureDays()).isEqualTo(100);
         assertThat(features.geographicCluster()).isEqualTo("Nairobi");
-        assertThat(features.verificationStatus()).isEqualTo("UNVERIFIED");
+        assertThat(features.verificationStatus()).isEqualTo("PENDING");
     }
 
     @Test

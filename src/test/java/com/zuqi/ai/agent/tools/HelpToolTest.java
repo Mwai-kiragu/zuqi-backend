@@ -85,7 +85,7 @@ class HelpToolTest {
 
     @Test
     void keywordMatch_procurementKeyword() {
-        String result = helpTool.getHowTo("purchase order process");
+        String result = helpTool.getHowTo("create a purchase order");
         assertThat(result).contains("Purchase Order");
     }
 

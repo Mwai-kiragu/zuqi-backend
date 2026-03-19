@@ -275,4 +275,13 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
                                         @Param("startDate") LocalDateTime startDate,
                                         @Param("endDate") LocalDateTime endDate,
                                         Pageable pageable);
+
+    // AI feature queries (Phase 2 plan — Section 1.4)
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.merchant.id = :merchantId AND o.createdAt > :after")
+    long countByMerchantIdAndCreatedAtAfter(@Param("merchantId") UUID merchantId,
+                                            @Param("after") LocalDateTime after);
+
+    @Query("SELECT o FROM Order o WHERE o.merchant.id = :customerId AND o.distributor.id = :distributorId")
+    List<Order> findByCustomerIdAndDistributorId(@Param("customerId") UUID customerId,
+                                                 @Param("distributorId") UUID distributorId);
 }
