@@ -53,6 +53,9 @@ public class ProductRecommendationService {
     private final ProductRepository productRepository;
     private final ProductRecommendationRepository recommendationRepository;
     private final DistributorRepository distributorRepository;
+    private final ProductRecommendationReasoningService reasoningService;
+    private final CustomerSegmentationService segmentationService;
+    private final com.zuqi.ai.demand.DemandForecaster demandForecaster;
 
     /**
      * Generate and save product recommendations for all active customers in the distributor.
@@ -161,24 +164,101 @@ public class ProductRecommendationService {
         recommendationRepository.deleteByDistributorIdAndCustomerId(
                 distributor.getId(), customer.getId());
 
+        // Load product names for context (top 3 already purchased)
+        List<String> purchasedProductNames = purchased.stream()
+                .limit(3)
+                .map(pid -> productRepository.findById(pid)
+                        .map(p -> p.getName() != null ? p.getName() : "Unknown")
+                        .orElse("Unknown"))
+                .toList();
+
         int saved = 0;
         for (Map.Entry<UUID, Integer> entry : sorted) {
             Product product = productRepository.findById(entry.getKey()).orElse(null);
             if (product == null) continue;
 
             double score = (double) entry.getValue() / maxScore;
+            double pctSimilarMerchants = Math.round(score * 100.0);
+
+            // Build LLM context
+            String context = buildReasoningContext(customer, product, purchasedProductNames,
+                    pctSimilarMerchants, entry.getValue());
+
+            // Call LLM for sales-ready reason; fall back to template on failure
+            String reason;
+            try {
+                reason = reasoningService.generateReason(context);
+                if (reason == null || reason.isBlank()) {
+                    reason = fallbackReason(product.getName(), pctSimilarMerchants);
+                }
+            } catch (Exception e) {
+                log.debug("[ProductRec] LLM reason failed for product={}: {}", product.getId(), e.getMessage());
+                reason = fallbackReason(product.getName(), pctSimilarMerchants);
+            }
+
             ProductRecommendation rec = ProductRecommendation.builder()
                     .distributor(distributor)
                     .customer(customer)
                     .product(product)
                     .recommendationScore(score)
-                    .reason("Frequently purchased together with your existing orders")
-                    .source("collaborative_filtering")
+                    .reason(reason)
+                    .source("HYBRID_ASSOCIATION_LLM")
                     .dataPhase("REAL")
                     .build();
             recommendationRepository.save(rec);
             saved++;
         }
         return saved;
+    }
+
+    private String buildReasoningContext(Customer customer, Product product,
+                                          List<String> purchasedProductNames,
+                                          double pctSimilarMerchants,
+                                          int coPurchaseCount) {
+        String category = product.getCategory() != null ? product.getCategory().getName() : "FMCG";
+        String customerCategory = customer.getCategory() != null && customer.getCategory().getName() != null
+                ? customer.getCategory().getName() : "retail";
+        String location = customer.getCounty() != null ? customer.getCounty() : "Kenya";
+        String productName = product.getName() != null ? product.getName() : "this product";
+        double unitPrice = product.getUnitPrice() != null ? product.getUnitPrice().doubleValue() : 0.0;
+
+        // Segment label — optional LLM context only, does not affect scoring
+        String segment = segmentationService.getSegment(customer.getId(), customer.getDistributor().getId());
+
+        // Demand forecast — optional, skipped if unavailable
+        String demandLine = "";
+        try {
+            com.zuqi.ai.demand.DemandForecaster.DemandForecast forecast =
+                    demandForecaster.forecastDemand(customer.getId(), product.getId());
+            if (forecast != null && forecast.predictedQuantity() != null
+                    && forecast.predictedQuantity().doubleValue() > 0) {
+                demandLine = String.format("\nPredicted demand (7d): %.0f units",
+                        forecast.predictedQuantity().doubleValue());
+            }
+        } catch (Exception e) {
+            log.debug("[ProductRec] No demand forecast for product={}: {}", product.getId(), e.getMessage());
+        }
+
+        return String.format("""
+                Merchant: %s
+                Location: %s
+                Business type: %s
+                Segment: %s
+                Products they currently buy: %s
+                Recommended product: %s (category: %s, price: KES %.0f)
+                Co-purchase signal: %d other merchants who buy similar products also buy this
+                Percentage of similar merchants stocking this: %.0f%%%s
+                """,
+                customer.getBusinessName(), location, customerCategory, segment,
+                String.join(", ", purchasedProductNames),
+                productName, category, unitPrice,
+                coPurchaseCount, pctSimilarMerchants, demandLine);
+    }
+
+    private String fallbackReason(String productName, double pctSimilarMerchants) {
+        return String.format(
+                "%.0f%% of similar merchants in your area stock %s — a strong indicator " +
+                "of consistent demand. Adding it could boost your basket value.",
+                pctSimilarMerchants, productName != null ? productName : "this product");
     }
 }

@@ -147,4 +147,15 @@ public class CustomerSegmentationService {
 
         customerSegmentRepository.save(segment);
     }
+
+    /**
+     * Returns the segment label for a single customer, or "UNKNOWN" if not yet segmented.
+     * Used as LLM context in product recommendation reasoning.
+     */
+    public String getSegment(UUID customerId, UUID distributorId) {
+        return customerSegmentRepository
+                .findByDistributorIdAndCustomerId(distributorId, customerId)
+                .map(s -> s.getSegmentLabel() != null ? s.getSegmentLabel() : "UNKNOWN")
+                .orElse("UNKNOWN");
+    }
 }

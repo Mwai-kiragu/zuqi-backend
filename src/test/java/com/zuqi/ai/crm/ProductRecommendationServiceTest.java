@@ -33,6 +33,9 @@ class ProductRecommendationServiceTest {
     @Mock private ProductRepository productRepository;
     @Mock private ProductRecommendationRepository recommendationRepository;
     @Mock private DistributorRepository distributorRepository;
+    @Mock private ProductRecommendationReasoningService reasoningService;
+    @Mock private CustomerSegmentationService segmentationService;
+    @Mock private com.zuqi.ai.demand.DemandForecaster demandForecaster;
 
     private ProductRecommendationService service;
     private UUID distributorId;
@@ -41,7 +44,8 @@ class ProductRecommendationServiceTest {
     void setUp() {
         service = new ProductRecommendationService(
                 customerRepository, orderRepository, orderItemRepository,
-                productRepository, recommendationRepository, distributorRepository);
+                productRepository, recommendationRepository, distributorRepository,
+                reasoningService, segmentationService, demandForecaster);
         distributorId = UUID.randomUUID();
     }
 
