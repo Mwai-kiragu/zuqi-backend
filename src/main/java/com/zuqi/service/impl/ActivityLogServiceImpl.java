@@ -4,10 +4,14 @@ import com.zuqi.api.dto.audit.ActivityLogResponse;
 import com.zuqi.api.dto.common.PageResponse;
 import com.zuqi.domain.audit.ActivityAction;
 import com.zuqi.domain.audit.ActivityLog;
+import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.repository.ActivityLogRepository;
 import com.zuqi.repository.ActivityLogSpecification;
+import com.zuqi.repository.DistributorRepository;
+import com.zuqi.repository.UserRepository;
 import com.zuqi.service.ActivityLogService;
+import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -19,8 +23,11 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +35,9 @@ import java.util.UUID;
 public class ActivityLogServiceImpl implements ActivityLogService {
 
     private final ActivityLogRepository activityLogRepository;
+    private final DistributorRepository distributorRepository;
+    private final UserRepository userRepository;
+    private final SecurityUtils securityUtils;
 
     @Override
     @Async
@@ -104,13 +114,46 @@ public class ActivityLogServiceImpl implements ActivityLogService {
     public PageResponse<ActivityLogResponse> getAll(UUID userId, ActivityAction action,
                                                      String entityType, String module,
                                                      LocalDateTime from, LocalDateTime to,
-                                                     Boolean success,
-                                                     int page, int size) {
+                                                     Boolean success, int page, int size) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+
+        // Resolve the set of userIds this caller is allowed to see
+        Set<UUID> allowedUserIds = resolveAllowedUserIds();
+
         Page<ActivityLog> result = activityLogRepository.findAll(
-                ActivityLogSpecification.withFilters(userId, action, entityType, module, from, to, success),
+                ActivityLogSpecification.withFilters(userId, action, entityType, module, from, to, success, allowedUserIds),
                 pageable);
         return toPageResponse(result);
+    }
+
+    /**
+     * Returns the set of user IDs visible to the current caller:
+     * - SUPER_ADMIN: null (no restriction — see everything)
+     * - MERCHANT_ADMIN: users in all distributors under their merchant
+     * - DISTRIBUTOR_ADMIN / others: users in their own distributor only
+     */
+    private Set<UUID> resolveAllowedUserIds() {
+        if (securityUtils.isSuperAdmin()) {
+            return null;
+        }
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId != null) {
+            // MERCHANT_ADMIN — scope to all distributors under this merchant
+            List<UUID> distIds = distributorRepository.findByMerchantIdAndActiveTrue(merchantId)
+                    .stream().map(Distributor::getId).collect(Collectors.toList());
+            if (distIds.isEmpty()) return Set.of();
+            return userRepository.findByDistributorIdIn(distIds).stream()
+                    .map(com.zuqi.domain.user.User::getId)
+                    .collect(Collectors.toSet());
+        }
+        UUID distributorId = securityUtils.getCurrentUserDistributorId();
+        if (distributorId != null) {
+            return userRepository.findByDistributorId(distributorId).stream()
+                    .map(com.zuqi.domain.user.User::getId)
+                    .collect(Collectors.toSet());
+        }
+        // Fallback: show nothing
+        return Set.of();
     }
 
     @Override

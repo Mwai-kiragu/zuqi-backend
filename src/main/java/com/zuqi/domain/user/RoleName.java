@@ -8,5 +8,8 @@ public enum RoleName {
     CUSTOMER,
     MERCHANT_ADMIN,
     FINANCE,
-    DRIVER
+    DRIVER,
+    INITIATOR,
+    VERIFIER,
+    AUTHORIZER
 }

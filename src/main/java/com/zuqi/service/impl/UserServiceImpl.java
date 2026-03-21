@@ -533,7 +533,10 @@ public class UserServiceImpl implements UserService {
                 RoleName.SALES_REP.name(),
                 RoleName.WAREHOUSE_MANAGER.name(),
                 RoleName.FINANCE.name(),
-                RoleName.DRIVER.name()
+                RoleName.DRIVER.name(),
+                RoleName.INITIATOR.name(),
+                RoleName.VERIFIER.name(),
+                RoleName.AUTHORIZER.name()
         );
     }
 
