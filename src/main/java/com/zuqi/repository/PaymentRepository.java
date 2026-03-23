@@ -114,4 +114,12 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
             @Param("distributorId") UUID distributorId,
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate);
+
+    /** Cash-flow forecast: completed payments since a given date for baseline calculation. */
+    @Query("SELECT p FROM Payment p WHERE p.distributor.id = :distributorId " +
+           "AND p.status = com.zuqi.domain.payment.PaymentStatus.COMPLETED " +
+           "AND p.createdAt >= :since")
+    List<Payment> findCompletedSince(
+            @Param("distributorId") UUID distributorId,
+            @Param("since") LocalDateTime since);
 }

@@ -2,6 +2,7 @@ package com.zuqi.ai.crm;
 
 import com.zuqi.ai.model.ModelRegistry;
 import com.zuqi.ai.pipeline.ModelEvaluator;
+import com.zuqi.ai.pipeline.XGBoostHyperparameterTuner;
 import com.zuqi.ai.synthetic.SyntheticDataBundle;
 import com.zuqi.ai.synthetic.SyntheticDataConfig;
 import com.zuqi.ai.synthetic.SyntheticDataOrchestrator;
@@ -15,7 +16,6 @@ import org.tribuo.Dataset;
 import org.tribuo.Model;
 import org.tribuo.Trainer;
 import org.tribuo.regression.Regressor;
-
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectOutputStream;
 import java.time.LocalDateTime;
@@ -49,6 +49,7 @@ public class VisitTrainingPipeline {
     private final ModelEvaluator modelEvaluator;
     private final ModelRegistry modelRegistry;
     private final Trainer<Regressor> xgBoostRegressionTrainer;
+    private final XGBoostHyperparameterTuner hyperparameterTuner;
 
     @Transactional
     public TrainingResult runPipeline() {
@@ -99,8 +100,12 @@ public class VisitTrainingPipeline {
             Dataset<Regressor> trainDataset = visitFeatureBuilder.buildDataset(trainExamples);
             Dataset<Regressor> testDataset = visitFeatureBuilder.buildDataset(testExamples);
 
-            Model<Regressor> model = xgBoostRegressionTrainer.train(trainDataset);
-            log.info("Visit model training complete on {} examples", trainSize);
+            XGBoostHyperparameterTuner.TunedModel<Regressor> tunedModel =
+                    hyperparameterTuner.tuneAndTrainRegressor(trainDataset);
+            Model<Regressor> model = tunedModel.model();
+            XGBoostHyperparameterTuner.TuningResult tuning = tunedModel.tuning();
+            log.info("Visit model training complete on {} examples (rounds={} eta={} maxDepth={})",
+                    trainSize, tuning.bestNumRounds(), tuning.bestEta(), tuning.bestMaxDepth());
 
             ModelEvaluator.RegressorEvaluationResult eval =
                     modelEvaluator.evaluateRegressor(model, testDataset);
@@ -113,7 +118,7 @@ public class VisitTrainingPipeline {
                 return new TrainingResult(false, eval.rmse(), null, "Failed RMSE gate");
             }
 
-            UUID modelId = promoteModel(model, eval, trainSize);
+            UUID modelId = promoteModel(model, eval, trainSize, tuning);
             long duration = System.currentTimeMillis() - start;
             log.info("=== Visit pipeline complete in {}ms, modelId={} ===", duration, modelId);
             return new TrainingResult(true, eval.rmse(), modelId, null);
@@ -126,7 +131,8 @@ public class VisitTrainingPipeline {
 
     private UUID promoteModel(Model<Regressor> model,
                                ModelEvaluator.RegressorEvaluationResult eval,
-                               int trainSize) throws Exception {
+                               int trainSize,
+                               XGBoostHyperparameterTuner.TuningResult tuning) throws Exception {
         byte[] modelBytes;
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              ObjectOutputStream oos = new ObjectOutputStream(baos)) {
@@ -137,6 +143,10 @@ public class VisitTrainingPipeline {
         Map<String, Object> hyperparameters = new HashMap<>();
         hyperparameters.put("algorithm", "xgboost_regression");
         hyperparameters.put("target", "order_conversion");
+        hyperparameters.put("tuned_num_rounds", tuning.bestNumRounds());
+        hyperparameters.put("tuned_eta", tuning.bestEta());
+        hyperparameters.put("tuned_max_depth", tuning.bestMaxDepth());
+        hyperparameters.put("tuning_cv_rmse", tuning.bestScore());
 
         com.zuqi.domain.ai.AIModelRegistry registry = modelRegistry.registerModel(
                 MODEL_NAME, "xgboost_regression", hyperparameters, "training_pipeline");

@@ -2,6 +2,7 @@ package com.zuqi.ai.crm;
 
 import com.zuqi.ai.model.ModelRegistry;
 import com.zuqi.ai.pipeline.ModelEvaluator;
+import com.zuqi.ai.pipeline.XGBoostHyperparameterTuner;
 import com.zuqi.ai.synthetic.SyntheticDataBundle;
 import com.zuqi.ai.synthetic.SyntheticDataConfig;
 import com.zuqi.ai.synthetic.SyntheticDataOrchestrator;
@@ -16,6 +17,7 @@ import org.tribuo.Trainer;
 import org.tribuo.regression.Regressor;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,14 +36,18 @@ class ClvTrainingPipelineTest {
     @Mock private ModelEvaluator modelEvaluator;
     @Mock private ModelRegistry modelRegistry;
     @Mock private Trainer<Regressor> xgBoostRegressionTrainer;
+    @Mock private XGBoostHyperparameterTuner hyperparameterTuner;
 
     private ClvTrainingPipeline pipeline;
+
+    private static final XGBoostHyperparameterTuner.TuningResult FIXED_TUNING =
+            new XGBoostHyperparameterTuner.TuningResult(50, 0.2, 6, 20_000.0, "rmse", Map.of("eta", 0.2, "max_depth", 6));
 
     @BeforeEach
     void setUp() {
         pipeline = new ClvTrainingPipeline(
                 orchestrator, featureBuilder, clvFeatureBuilder,
-                modelEvaluator, modelRegistry, xgBoostRegressionTrainer);
+                modelEvaluator, modelRegistry, xgBoostRegressionTrainer, hyperparameterTuner);
     }
 
     @Test
@@ -55,7 +61,8 @@ class ClvTrainingPipelineTest {
                         "test", new org.tribuo.regression.RegressionFactory()),
                 new org.tribuo.regression.RegressionFactory());
         when(clvFeatureBuilder.buildDataset(any())).thenReturn(emptyDataset);
-        when(xgBoostRegressionTrainer.train(any())).thenThrow(new RuntimeException("Train failed"));
+        when(hyperparameterTuner.tuneAndTrainRegressor(any()))
+                .thenThrow(new RuntimeException("Train failed"));
 
         ClvTrainingPipeline.TrainingResult result = pipeline.runPipeline();
 
@@ -88,7 +95,8 @@ class ClvTrainingPipelineTest {
 
         @SuppressWarnings("unchecked")
         Model<Regressor> mockModel = mock(Model.class);
-        when(xgBoostRegressionTrainer.train(any())).thenReturn(mockModel);
+        when(hyperparameterTuner.tuneAndTrainRegressor(any()))
+                .thenReturn(new XGBoostHyperparameterTuner.TunedModel<>(mockModel, FIXED_TUNING));
 
         // RMSE = 100000 > gate of 50000
         ModelEvaluator.RegressorEvaluationResult eval = ModelEvaluator.RegressorEvaluationResult.builder()
@@ -117,7 +125,8 @@ class ClvTrainingPipelineTest {
 
         @SuppressWarnings("unchecked")
         Model<Regressor> mockModel = mock(Model.class);
-        when(xgBoostRegressionTrainer.train(any())).thenReturn(mockModel);
+        when(hyperparameterTuner.tuneAndTrainRegressor(any()))
+                .thenReturn(new XGBoostHyperparameterTuner.TunedModel<>(mockModel, FIXED_TUNING));
 
         ModelEvaluator.RegressorEvaluationResult eval = ModelEvaluator.RegressorEvaluationResult.builder()
                 .rmse(20_000.0).mae(10_000.0).r2(0.85).explainedVariance(0.85).passedQualityGate(true)

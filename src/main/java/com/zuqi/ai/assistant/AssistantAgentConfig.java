@@ -17,6 +17,14 @@ import com.zuqi.ai.agent.tools.TrialBalanceTool;
 import com.zuqi.ai.agent.tools.CashFlowTool;
 import com.zuqi.ai.agent.tools.ArAgingTool;
 import com.zuqi.ai.agent.tools.ApAgingTool;
+// Phase 7 analytics tools
+import com.zuqi.ai.agent.tools.ExpiryRiskTool;
+import com.zuqi.ai.agent.tools.ReorderSuggestionTool;
+import com.zuqi.ai.agent.tools.CustomerSegmentTool;
+import com.zuqi.ai.agent.tools.CustomerHealthTool;
+import com.zuqi.ai.agent.tools.ChurnRiskTool;
+import com.zuqi.ai.agent.tools.SupplierRiskTool;
+import com.zuqi.ai.agent.tools.PriceTrendTool;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.service.AiServices;
@@ -28,7 +36,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Wires AssistantAgent with 21 data tools and a DB-backed MessageWindowChatMemory.
+ * Wires AssistantAgent with 28 data tools and a DB-backed MessageWindowChatMemory.
  *
  * Memory design:
  * - chatMemoryProvider creates a per-conversation MessageWindowChatMemory(maxMessages=40)
@@ -71,6 +79,14 @@ public class AssistantAgentConfig {
             CashFlowTool cashFlowTool,
             ArAgingTool arAgingTool,
             ApAgingTool apAgingTool,
+            // Phase 7 analytics tools
+            ExpiryRiskTool expiryRiskTool,
+            ReorderSuggestionTool reorderSuggestionTool,
+            CustomerSegmentTool customerSegmentTool,
+            CustomerHealthTool customerHealthTool,
+            ChurnRiskTool churnRiskTool,
+            SupplierRiskTool supplierRiskTool,
+            PriceTrendTool priceTrendTool,
             HelpTool helpTool) {
 
         // LangChain4j uses getDeclaredMethods() to find @Tool annotations.
@@ -83,7 +99,12 @@ public class AssistantAgentConfig {
                 invoiceTool, expensesTool, procurementTool,
                 fundsTransferTool, posSalesTool, stockTransferTool,
                 balanceSheetTool, profitLossTool, trialBalanceTool,
-                cashFlowTool, arAgingTool, apAgingTool, helpTool})
+                cashFlowTool, arAgingTool, apAgingTool,
+                // Phase 7
+                expiryRiskTool, reorderSuggestionTool,
+                customerSegmentTool, customerHealthTool, churnRiskTool,
+                supplierRiskTool, priceTrendTool,
+                helpTool})
                 .map(this::unwrapProxy)
                 .toArray();
 

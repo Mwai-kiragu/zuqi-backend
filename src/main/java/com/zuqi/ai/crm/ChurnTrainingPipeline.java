@@ -2,6 +2,7 @@ package com.zuqi.ai.crm;
 
 import com.zuqi.ai.model.ModelRegistry;
 import com.zuqi.ai.pipeline.ModelEvaluator;
+import com.zuqi.ai.pipeline.XGBoostHyperparameterTuner;
 import com.zuqi.ai.synthetic.SyntheticDataBundle;
 import com.zuqi.ai.synthetic.SyntheticDataConfig;
 import com.zuqi.ai.synthetic.SyntheticDataOrchestrator;
@@ -14,7 +15,6 @@ import org.tribuo.Dataset;
 import org.tribuo.Model;
 import org.tribuo.Trainer;
 import org.tribuo.classification.Label;
-
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectOutputStream;
 import java.time.LocalDateTime;
@@ -45,6 +45,7 @@ public class ChurnTrainingPipeline {
     private final ModelEvaluator modelEvaluator;
     private final ModelRegistry modelRegistry;
     private final Trainer<Label> xgBoostClassificationTrainer;
+    private final XGBoostHyperparameterTuner hyperparameterTuner;
 
     @Transactional
     public TrainingResult runPipeline() {
@@ -73,8 +74,12 @@ public class ChurnTrainingPipeline {
             Dataset<Label> trainDataset = churnFeatureBuilder.buildDataset(trainExamples);
             Dataset<Label> testDataset = churnFeatureBuilder.buildDataset(testExamples);
 
-            Model<Label> model = xgBoostClassificationTrainer.train(trainDataset);
-            log.info("Churn model training complete on {} examples", trainSize);
+            XGBoostHyperparameterTuner.TunedModel<Label> tunedModel =
+                    hyperparameterTuner.tuneAndTrainClassifier(trainDataset, ChurnFeatureBuilder.LABEL_CHURNED);
+            Model<Label> model = tunedModel.model();
+            XGBoostHyperparameterTuner.TuningResult tuning = tunedModel.tuning();
+            log.info("Churn model training complete on {} examples (rounds={} eta={} maxDepth={})",
+                    trainSize, tuning.bestNumRounds(), tuning.bestEta(), tuning.bestMaxDepth());
 
             ModelEvaluator.ClassifierEvaluationResult eval =
                     modelEvaluator.evaluateClassifier(model, testDataset, ChurnFeatureBuilder.LABEL_CHURNED);
@@ -87,7 +92,7 @@ public class ChurnTrainingPipeline {
                 return new TrainingResult(false, eval.aucRoc(), null, "Failed AUC gate");
             }
 
-            UUID modelId = promoteModel(model, eval, trainSize);
+            UUID modelId = promoteModel(model, eval, trainSize, tuning);
             long duration = System.currentTimeMillis() - start;
             log.info("=== Churn pipeline complete in {}ms, modelId={} ===", duration, modelId);
             return new TrainingResult(true, eval.aucRoc(), modelId, null);
@@ -100,7 +105,8 @@ public class ChurnTrainingPipeline {
 
     private UUID promoteModel(Model<Label> model,
                                ModelEvaluator.ClassifierEvaluationResult eval,
-                               int trainSize) throws Exception {
+                               int trainSize,
+                               XGBoostHyperparameterTuner.TuningResult tuning) throws Exception {
         byte[] modelBytes;
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              ObjectOutputStream oos = new ObjectOutputStream(baos)) {
@@ -111,6 +117,10 @@ public class ChurnTrainingPipeline {
         Map<String, Object> hyperparameters = new HashMap<>();
         hyperparameters.put("algorithm", "xgboost_classification");
         hyperparameters.put("churn_threshold_days", CHURN_THRESHOLD_DAYS);
+        hyperparameters.put("tuned_num_rounds", tuning.bestNumRounds());
+        hyperparameters.put("tuned_eta", tuning.bestEta());
+        hyperparameters.put("tuned_max_depth", tuning.bestMaxDepth());
+        hyperparameters.put("tuning_cv_auc", tuning.bestScore());
 
         com.zuqi.domain.ai.AIModelRegistry registry = modelRegistry.registerModel(
                 MODEL_NAME, "xgboost_classification", hyperparameters, "training_pipeline");

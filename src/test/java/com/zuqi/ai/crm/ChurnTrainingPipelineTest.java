@@ -2,6 +2,7 @@ package com.zuqi.ai.crm;
 
 import com.zuqi.ai.model.ModelRegistry;
 import com.zuqi.ai.pipeline.ModelEvaluator;
+import com.zuqi.ai.pipeline.XGBoostHyperparameterTuner;
 import com.zuqi.ai.synthetic.SyntheticDataBundle;
 import com.zuqi.ai.synthetic.SyntheticDataConfig;
 import com.zuqi.ai.synthetic.SyntheticDataOrchestrator;
@@ -16,6 +17,7 @@ import org.tribuo.Trainer;
 import org.tribuo.classification.Label;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,14 +36,18 @@ class ChurnTrainingPipelineTest {
     @Mock private ModelEvaluator modelEvaluator;
     @Mock private ModelRegistry modelRegistry;
     @Mock private Trainer<Label> xgBoostClassificationTrainer;
+    @Mock private XGBoostHyperparameterTuner hyperparameterTuner;
 
     private ChurnTrainingPipeline pipeline;
+
+    private static final XGBoostHyperparameterTuner.TuningResult FIXED_TUNING =
+            new XGBoostHyperparameterTuner.TuningResult(50, 0.2, 6, 0.15, "auc", Map.of("eta", 0.2, "max_depth", 6));
 
     @BeforeEach
     void setUp() {
         pipeline = new ChurnTrainingPipeline(
                 orchestrator, featureBuilder, churnFeatureBuilder,
-                modelEvaluator, modelRegistry, xgBoostClassificationTrainer);
+                modelEvaluator, modelRegistry, xgBoostClassificationTrainer, hyperparameterTuner);
     }
 
     @Test
@@ -66,7 +72,8 @@ class ChurnTrainingPipelineTest {
                         "test", new org.tribuo.classification.LabelFactory()),
                 new org.tribuo.classification.LabelFactory());
         when(churnFeatureBuilder.buildDataset(any())).thenReturn(emptyDataset);
-        when(xgBoostClassificationTrainer.train(any())).thenThrow(new RuntimeException("Train failed"));
+        when(hyperparameterTuner.tuneAndTrainClassifier(any(), anyString()))
+                .thenThrow(new RuntimeException("Train failed"));
 
         ChurnTrainingPipeline.TrainingResult result = pipeline.runPipeline();
 
@@ -87,7 +94,8 @@ class ChurnTrainingPipelineTest {
 
         @SuppressWarnings("unchecked")
         Model<Label> mockModel = mock(Model.class);
-        when(xgBoostClassificationTrainer.train(any())).thenReturn(mockModel);
+        when(hyperparameterTuner.tuneAndTrainClassifier(any(), anyString()))
+                .thenReturn(new XGBoostHyperparameterTuner.TunedModel<>(mockModel, FIXED_TUNING));
 
         // AUC = 0.55 < gate of 0.70
         ModelEvaluator.ClassifierEvaluationResult eval =
@@ -118,7 +126,8 @@ class ChurnTrainingPipelineTest {
 
         @SuppressWarnings("unchecked")
         Model<Label> mockModel = mock(Model.class);
-        when(xgBoostClassificationTrainer.train(any())).thenReturn(mockModel);
+        when(hyperparameterTuner.tuneAndTrainClassifier(any(), anyString()))
+                .thenReturn(new XGBoostHyperparameterTuner.TunedModel<>(mockModel, FIXED_TUNING));
 
         ModelEvaluator.ClassifierEvaluationResult eval =
                 ModelEvaluator.ClassifierEvaluationResult.builder()

@@ -2,6 +2,7 @@ package com.zuqi.ai.crm;
 
 import com.zuqi.ai.model.ModelRegistry;
 import com.zuqi.ai.pipeline.ModelEvaluator;
+import com.zuqi.ai.pipeline.XGBoostHyperparameterTuner;
 import com.zuqi.ai.synthetic.SyntheticDataBundle;
 import com.zuqi.ai.synthetic.SyntheticDataConfig;
 import com.zuqi.ai.synthetic.SyntheticDataOrchestrator;
@@ -14,7 +15,6 @@ import org.tribuo.Dataset;
 import org.tribuo.Model;
 import org.tribuo.Trainer;
 import org.tribuo.regression.Regressor;
-
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectOutputStream;
 import java.time.LocalDateTime;
@@ -47,6 +47,7 @@ public class ClvTrainingPipeline {
     private final ModelEvaluator modelEvaluator;
     private final ModelRegistry modelRegistry;
     private final Trainer<Regressor> xgBoostRegressionTrainer;
+    private final XGBoostHyperparameterTuner hyperparameterTuner;
 
     @Transactional
     public TrainingResult runPipeline() {
@@ -76,8 +77,12 @@ public class ClvTrainingPipeline {
             Dataset<Regressor> trainDataset = clvFeatureBuilder.buildDataset(trainExamples);
             Dataset<Regressor> testDataset = clvFeatureBuilder.buildDataset(testExamples);
 
-            Model<Regressor> model = xgBoostRegressionTrainer.train(trainDataset);
-            log.info("CLV training complete on {} examples", trainSize);
+            XGBoostHyperparameterTuner.TunedModel<Regressor> tunedModel =
+                    hyperparameterTuner.tuneAndTrainRegressor(trainDataset);
+            Model<Regressor> model = tunedModel.model();
+            XGBoostHyperparameterTuner.TuningResult tuning = tunedModel.tuning();
+            log.info("CLV training complete on {} examples (rounds={} eta={} maxDepth={})",
+                    trainSize, tuning.bestNumRounds(), tuning.bestEta(), tuning.bestMaxDepth());
 
             ModelEvaluator.RegressorEvaluationResult eval =
                     modelEvaluator.evaluateRegressor(model, testDataset);
@@ -90,7 +95,7 @@ public class ClvTrainingPipeline {
                 return new TrainingResult(false, eval.rmse(), null, "Failed RMSE gate");
             }
 
-            UUID modelId = promoteModel(model, eval, trainSize);
+            UUID modelId = promoteModel(model, eval, trainSize, tuning);
             long duration = System.currentTimeMillis() - start;
             log.info("=== CLV pipeline complete in {}ms, modelId={} ===", duration, modelId);
             return new TrainingResult(true, eval.rmse(), modelId, null);
@@ -103,7 +108,8 @@ public class ClvTrainingPipeline {
 
     private UUID promoteModel(Model<Regressor> model,
                                ModelEvaluator.RegressorEvaluationResult eval,
-                               int trainSize) throws Exception {
+                               int trainSize,
+                               XGBoostHyperparameterTuner.TuningResult tuning) throws Exception {
         byte[] modelBytes;
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              ObjectOutputStream oos = new ObjectOutputStream(baos)) {
@@ -114,6 +120,10 @@ public class ClvTrainingPipeline {
         Map<String, Object> hyperparameters = new HashMap<>();
         hyperparameters.put("algorithm", "xgboost_regression");
         hyperparameters.put("target", "revenue_12m");
+        hyperparameters.put("tuned_num_rounds", tuning.bestNumRounds());
+        hyperparameters.put("tuned_eta", tuning.bestEta());
+        hyperparameters.put("tuned_max_depth", tuning.bestMaxDepth());
+        hyperparameters.put("tuning_cv_rmse", tuning.bestScore());
 
         com.zuqi.domain.ai.AIModelRegistry registry = modelRegistry.registerModel(
                 MODEL_NAME, "xgboost_regression", hyperparameters, "training_pipeline");

@@ -2,6 +2,7 @@ package com.zuqi.ai.pricing;
 
 import com.zuqi.ai.model.ModelRegistry;
 import com.zuqi.ai.pipeline.ModelEvaluator;
+import com.zuqi.ai.pipeline.XGBoostHyperparameterTuner;
 import com.zuqi.ai.synthetic.SyntheticDataBundle;
 import com.zuqi.ai.synthetic.SyntheticDataConfig;
 import com.zuqi.ai.synthetic.SyntheticDataOrchestrator;
@@ -15,7 +16,6 @@ import org.tribuo.Model;
 import org.tribuo.MutableDataset;
 import org.tribuo.Trainer;
 import org.tribuo.regression.Regressor;
-
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectOutputStream;
 import java.util.HashMap;
@@ -43,6 +43,7 @@ public class PricingTrainingPipeline {
     private final ModelEvaluator modelEvaluator;
     private final ModelRegistry modelRegistry;
     private final Trainer<Regressor> xgBoostRegressionTrainer;
+    private final XGBoostHyperparameterTuner hyperparameterTuner;
 
     public static final String MODEL_NAME = "smart_pricing_recommender";
     private static final double RMSE_GATE = 50.0; // units/week
@@ -73,9 +74,13 @@ public class PricingTrainingPipeline {
             Dataset<Regressor> trainDataset = splitDataset(fullDataset, 0, trainSize);
             Dataset<Regressor> testDataset  = splitDataset(fullDataset, trainSize, fullDataset.size());
 
-            // Step 4: Train
-            Model<Regressor> model = xgBoostRegressionTrainer.train(trainDataset);
-            log.info("Training complete on {} examples", trainSize);
+            // Step 4: Hyperparameter tuning + Train
+            XGBoostHyperparameterTuner.TunedModel<Regressor> tunedModel =
+                    hyperparameterTuner.tuneAndTrainRegressor(trainDataset);
+            Model<Regressor> model = tunedModel.model();
+            XGBoostHyperparameterTuner.TuningResult tuning = tunedModel.tuning();
+            log.info("Training complete on {} examples (rounds={} eta={} maxDepth={})",
+                    trainSize, tuning.bestNumRounds(), tuning.bestEta(), tuning.bestMaxDepth());
 
             // Step 5: Evaluate
             ModelEvaluator.RegressorEvaluationResult eval =
@@ -90,7 +95,7 @@ public class PricingTrainingPipeline {
             }
 
             // Step 6: Promote
-            UUID modelId = promoteModel(model, eval, trainSize);
+            UUID modelId = promoteModel(model, eval, trainSize, tuning);
 
             long duration = System.currentTimeMillis() - start;
             log.info("=== Smart Pricing Pipeline complete in {}ms, modelId={} ===", duration, modelId);
@@ -116,7 +121,8 @@ public class PricingTrainingPipeline {
 
     private UUID promoteModel(Model<Regressor> model,
                                ModelEvaluator.RegressorEvaluationResult eval,
-                               int trainingSize) throws Exception {
+                               int trainingSize,
+                               XGBoostHyperparameterTuner.TuningResult tuning) throws Exception {
         byte[] modelBytes;
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              ObjectOutputStream oos = new ObjectOutputStream(baos)) {
@@ -126,8 +132,11 @@ public class PricingTrainingPipeline {
 
         Map<String, Object> hyperparameters = new HashMap<>();
         hyperparameters.put("algorithm", "xgboost_regression");
-        hyperparameters.put("num_rounds", 50);
         hyperparameters.put("rmse_gate", RMSE_GATE);
+        hyperparameters.put("tuned_num_rounds", tuning.bestNumRounds());
+        hyperparameters.put("tuned_eta", tuning.bestEta());
+        hyperparameters.put("tuned_max_depth", tuning.bestMaxDepth());
+        hyperparameters.put("tuning_cv_rmse", tuning.bestScore());
 
         com.zuqi.domain.ai.AIModelRegistry registry = modelRegistry.registerModel(
                 MODEL_NAME, "xgboost_regression", hyperparameters, "training_pipeline");

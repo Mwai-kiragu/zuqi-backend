@@ -9,6 +9,13 @@ import com.zuqi.ai.agent.tools.TrialBalanceTool;
 import com.zuqi.ai.agent.tools.CashFlowTool;
 import com.zuqi.ai.agent.tools.ArAgingTool;
 import com.zuqi.ai.agent.tools.ApAgingTool;
+import com.zuqi.ai.agent.tools.ExpiryRiskTool;
+import com.zuqi.ai.agent.tools.ReorderSuggestionTool;
+import com.zuqi.ai.agent.tools.CustomerSegmentTool;
+import com.zuqi.ai.agent.tools.CustomerHealthTool;
+import com.zuqi.ai.agent.tools.ChurnRiskTool;
+import com.zuqi.ai.agent.tools.SupplierRiskTool;
+import com.zuqi.ai.agent.tools.PriceTrendTool;
 import com.zuqi.domain.ai.ReportType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,6 +54,14 @@ public class AssistantReportBuilder {
     private final CashFlowTool              cashFlowTool;
     private final ArAgingTool               arAgingTool;
     private final ApAgingTool               apAgingTool;
+    // Phase 7 tools
+    private final ExpiryRiskTool            expiryRiskTool;
+    private final ReorderSuggestionTool     reorderSuggestionTool;
+    private final CustomerSegmentTool       customerSegmentTool;
+    private final CustomerHealthTool        customerHealthTool;
+    private final ChurnRiskTool             churnRiskTool;
+    private final SupplierRiskTool          supplierRiskTool;
+    private final PriceTrendTool            priceTrendTool;
 
     /**
      * Gather data for the given reportType, then generate the report section by section.
@@ -73,8 +88,14 @@ public class AssistantReportBuilder {
             case PROFIT_LOSS      -> profitLossTool.getProfitLoss(distIdStr, periodDays);
             case TRIAL_BALANCE    -> trialBalanceTool.getTrialBalance(distIdStr);
             case CASH_FLOW        -> cashFlowTool.getCashFlow(distIdStr, periodDays);
-            case AR_AGING         -> arAgingTool.getArAging(distIdStr);
-            case AP_AGING         -> apAgingTool.getApAging(distIdStr);
+            case AR_AGING              -> arAgingTool.getArAging(distIdStr);
+            case AP_AGING              -> apAgingTool.getApAging(distIdStr);
+            case EXPIRY_RISK           -> expiryRiskTool.getExpiryRisks(distIdStr);
+            case REORDER_SUGGESTIONS   -> reorderSuggestionTool.getReorderSuggestions(distIdStr);
+            case CHURN_RISK            -> churnRiskTool.getChurnRisk(distIdStr);
+            case CUSTOMER_HEALTH       -> customerHealthTool.getCustomerHealth(distIdStr);
+            case SUPPLIER_RISK         -> supplierRiskTool.getSupplierRisk(distIdStr);
+            case PRICE_TRENDS          -> priceTrendTool.getPriceTrends(distIdStr);
         };
 
         String header = buildHeader(reportType, distributorId, periodDays, today);
@@ -92,8 +113,14 @@ public class AssistantReportBuilder {
             case PROFIT_LOSS      -> buildProfitLossSections(data, periodDays);
             case TRIAL_BALANCE    -> buildTrialBalanceSections(data);
             case CASH_FLOW        -> buildCashFlowSections(data, periodDays);
-            case AR_AGING         -> buildArAgingSections(data);
-            case AP_AGING         -> buildApAgingSections(data);
+            case AR_AGING              -> buildArAgingSections(data);
+            case AP_AGING              -> buildApAgingSections(data);
+            case EXPIRY_RISK           -> buildExpiryRiskSections(data);
+            case REORDER_SUGGESTIONS   -> buildReorderSuggestionsSections(data);
+            case CHURN_RISK            -> buildChurnRiskSections(data);
+            case CUSTOMER_HEALTH       -> buildCustomerHealthSections(data);
+            case SUPPLIER_RISK         -> buildSupplierRiskSections(data);
+            case PRICE_TRENDS          -> buildPriceTrendsSections(data);
         };
 
         log.info("Completed {} report (4 sections) for distributor={}", reportType, distIdStr);
@@ -1153,6 +1180,439 @@ public class AssistantReportBuilder {
                 Focus on: immediately escalating 90+ day accounts for legal action or write-off review, \
                 calling 61-90 day customers to arrange payment plans, reviewing credit terms for repeat offenders, \
                 incentivising early payment, and improving invoice-to-collection cycle time.
+                """.formatted(data));
+
+        return new String[]{s1, s2, s3, s4};
+    }
+
+    // ── EXPIRY RISK ───────────────────────────────────────────────────────────
+
+    private String[] buildExpiryRiskSections(String data) {
+        String s1 = reportAiService.generateSection("""
+                You are writing the Executive Summary for an Inventory Expiry Risk Report for a Kenyan FMCG distributor.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Executive Summary section (2-3 sentences).
+                Focus on: total batches at risk, counts of CRITICAL and HIGH risk batches, \
+                total value (KES) at risk of expiry, and the urgency of action required. \
+                Flag if critical-tier batches require immediate clearance. Be direct.
+                """.formatted(data));
+
+        String s2 = reportAiService.generateSection("""
+                You are writing the Key Metrics table for an Inventory Expiry Risk Report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Key Metrics section.
+                Produce a markdown table: Metric | Value | Status
+                Include:
+                - Total Batches at Risk
+                - CRITICAL Risk Batches (expires ≤7 days)
+                - HIGH Risk Batches (expires ≤14 days)
+                - MODERATE Risk Batches
+                - Total Value at Risk (KES)
+                - Most Urgent Product (name + days to expiry)
+                Status = 🔴 Critical / 🟠 High / 🟡 Moderate.
+                """.formatted(data));
+
+        String s3 = reportAiService.generateSection("""
+                You are writing the Analysis section for an Inventory Expiry Risk Report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Analysis section with these sub-sections:
+                ### Critical Expiry Exposure
+                Which products/batches will expire within 7 days? What is the financial value at risk? \
+                What is the consequence of failing to clear these items?
+
+                ### Near-Term Risk (8–30 days)
+                Which items are in the HIGH and MODERATE risk tiers? Are there patterns by product \
+                category or warehouse?
+
+                ### Root Causes
+                Are the at-risk batches due to overstocking, demand shortfalls, or seasonality? \
+                What does this indicate about procurement or forecasting gaps?
+
+                Name specific products and warehouses from the data.
+                """.formatted(data));
+
+        String s4 = reportAiService.generateSection("""
+                You are writing the Recommendations section for an Inventory Expiry Risk Report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Recommendations section.
+                Provide exactly 5 numbered recommendations. Each must:
+                - Start with a **bold action phrase**
+                - Address a specific product, warehouse, or process
+                Focus on: immediate clearance promotions for CRITICAL items, transferring near-expiry \
+                stock to high-velocity outlets, adjusting reorder quantities to prevent future over-stocking, \
+                improving demand-driven procurement, and setting automated expiry alerts.
+                """.formatted(data));
+
+        return new String[]{s1, s2, s3, s4};
+    }
+
+    // ── REORDER SUGGESTIONS ───────────────────────────────────────────────────
+
+    private String[] buildReorderSuggestionsSections(String data) {
+        String s1 = reportAiService.generateSection("""
+                You are writing the Executive Summary for a Reorder Suggestions Report for a Kenyan FMCG distributor.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Executive Summary section (2-3 sentences).
+                Focus on: number of pending reorder suggestions, total estimated order value (KES), \
+                number of high-priority items (days of supply ≤7), and the overall procurement urgency. \
+                Flag if critical stockouts are imminent. Be direct.
+                """.formatted(data));
+
+        String s2 = reportAiService.generateSection("""
+                You are writing the Key Metrics table for a Reorder Suggestions Report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Key Metrics section.
+                Produce a markdown table: Metric | Value | Status
+                Include:
+                - Pending Reorder Suggestions
+                - Critical Items (≤7 days supply remaining)
+                - Urgent Items (8–14 days supply remaining)
+                - Average Confidence Score (%%)
+                - Total EOQ Units (if available)
+                - Most Urgent Product (name + days of supply)
+                Status = 🔴 Critical / ⚠ Urgent / ✅ Planned.
+                """.formatted(data));
+
+        String s3 = reportAiService.generateSection("""
+                You are writing the Analysis section for a Reorder Suggestions Report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Analysis section with these sub-sections:
+                ### Immediate Procurement Needs
+                Which products have ≤7 days of supply? What is the stockout risk if orders are not placed today?
+
+                ### Planned Replenishment
+                What are the EOQ and safety stock levels suggesting for medium-term procurement? \
+                Are lead times adequate to prevent gaps?
+
+                ### AI Confidence Assessment
+                What do the confidence scores indicate? Are suggestions based on strong demand signals \
+                or sparse data? Flag low-confidence suggestions that need human review.
+
+                Name specific products and warehouses from the data.
+                """.formatted(data));
+
+        String s4 = reportAiService.generateSection("""
+                You are writing the Recommendations section for a Reorder Suggestions Report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Recommendations section.
+                Provide exactly 5 numbered recommendations. Each must:
+                - Start with a **bold action phrase**
+                - Address a specific product or procurement action
+                Focus on: immediately approving and placing orders for critical items, \
+                reviewing and approving high-confidence suggestions in batch, \
+                manually reviewing low-confidence suggestions before ordering, \
+                negotiating shorter lead times with suppliers for critical SKUs, \
+                and aligning purchase order cycles with AI reorder signals.
+                """.formatted(data));
+
+        return new String[]{s1, s2, s3, s4};
+    }
+
+    // ── CHURN RISK ────────────────────────────────────────────────────────────
+
+    private String[] buildChurnRiskSections(String data) {
+        String s1 = reportAiService.generateSection("""
+                You are writing the Executive Summary for a Customer Churn Risk Report for a Kenyan FMCG distributor.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Executive Summary section (2-3 sentences).
+                Focus on: total customers at churn risk (probability ≥0.6), CRITICAL and HIGH tier counts, \
+                the business impact of losing these customers (estimated revenue at risk), \
+                and the urgency of retention action. Be direct and flag if intervention is overdue.
+                """.formatted(data));
+
+        String s2 = reportAiService.generateSection("""
+                You are writing the Key Metrics table for a Customer Churn Risk Report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Key Metrics section.
+                Produce a markdown table: Metric | Value | Status
+                Include:
+                - Total At-Risk Customers (≥60%% churn probability)
+                - CRITICAL Risk Customers
+                - HIGH Risk Customers
+                - Average Days Since Last Order (at-risk group)
+                - Top Churn Factor
+                - Most Recommended Retention Action
+                Status = 🔴 Critical / 🟠 High / ✅ Manageable.
+                Then list the top 10 at-risk customers: Name | Churn Probability | Days Inactive | Action
+                """.formatted(data));
+
+        String s3 = reportAiService.generateSection("""
+                You are writing the Analysis section for a Customer Churn Risk Report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Analysis section with these sub-sections:
+                ### Churn Drivers
+                What are the primary churn factors for at-risk customers? (e.g. inactivity, \
+                payment failures, credit issues, competitor activity). Are these one-off or systemic?
+
+                ### Revenue at Risk
+                Estimate the revenue impact of losing the CRITICAL and HIGH tier customers. \
+                Which individual customers represent the highest revenue risk?
+
+                ### Retention Window
+                How many days have elapsed since at-risk customers last ordered? \
+                Is the window for successful re-engagement still open, or are some customers already lost?
+
+                Name specific customers from the data. Be direct about urgency.
+                """.formatted(data));
+
+        String s4 = reportAiService.generateSection("""
+                You are writing the Recommendations section for a Customer Churn Risk Report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Recommendations section.
+                Provide exactly 5 numbered recommendations. Each must:
+                - Start with a **bold action phrase**
+                - Target a specific customer tier or churn driver
+                Focus on: immediately contacting CRITICAL-tier customers with personalised offers, \
+                assigning sales reps to re-engage HIGH-risk accounts, addressing the top churn factor \
+                (e.g. payment flexibility for payment-related churn), running win-back promotions for \
+                long-inactive customers, and improving visit frequency for at-risk accounts.
+                """.formatted(data));
+
+        return new String[]{s1, s2, s3, s4};
+    }
+
+    // ── CUSTOMER HEALTH ───────────────────────────────────────────────────────
+
+    private String[] buildCustomerHealthSections(String data) {
+        String s1 = reportAiService.generateSection("""
+                You are writing the Executive Summary for a Customer Health Report for a Kenyan FMCG distributor.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Executive Summary section (2-3 sentences).
+                Focus on: distribution of customers across health tiers, number of CRITICAL and AT_RISK \
+                customers requiring immediate attention, and the overall health of the customer portfolio. \
+                Flag if AT_RISK + CRITICAL customers exceed 20%% of the base.
+                """.formatted(data));
+
+        String s2 = reportAiService.generateSection("""
+                You are writing the Key Metrics table for a Customer Health Report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Key Metrics section.
+                Produce a markdown table: Health Tier | Customer Count | Status
+                Rows: THRIVING | HEALTHY | NEEDS_ATTENTION | AT_RISK | CRITICAL
+                Status = ✅ Good / ⚠ Watch / 🔴 Critical.
+                Then list the top 10 priority customers: Customer | Health Tier | Health Score
+                """.formatted(data));
+
+        String s3 = reportAiService.generateSection("""
+                You are writing the Analysis section for a Customer Health Report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Analysis section with these sub-sections:
+                ### Portfolio Health Distribution
+                What does the tier distribution say about the overall customer portfolio? \
+                Is the base primarily healthy, or are problematic tiers disproportionately large?
+
+                ### At-Risk & Critical Customer Profile
+                Who are the priority customers (AT_RISK + CRITICAL)? What low health scores indicate \
+                about their order frequency, payment behaviour, and engagement levels?
+
+                ### Opportunities in Thriving Segment
+                Can THRIVING and HEALTHY customers be further developed for higher revenue? \
+                What does success look like in this distributor's customer base?
+
+                Reference specific customers and scores from the data.
+                """.formatted(data));
+
+        String s4 = reportAiService.generateSection("""
+                You are writing the Recommendations section for a Customer Health Report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Recommendations section.
+                Provide exactly 5 numbered recommendations. Each must:
+                - Start with a **bold action phrase**
+                - Target a specific health tier or customer segment
+                Focus on: immediate intervention for CRITICAL customers, structured outreach for \
+                AT_RISK accounts, up-selling to THRIVING customers, identifying what HEALTHY customers \
+                need to become THRIVING, and improving NEEDS_ATTENTION customers' order frequency.
+                """.formatted(data));
+
+        return new String[]{s1, s2, s3, s4};
+    }
+
+    // ── SUPPLIER RISK ─────────────────────────────────────────────────────────
+
+    private String[] buildSupplierRiskSections(String data) {
+        String s1 = reportAiService.generateSection("""
+                You are writing the Executive Summary for a Supplier Risk Report for a Kenyan FMCG distributor.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Executive Summary section (2-3 sentences).
+                Focus on: total suppliers assessed, number in AT_RISK and CRITICAL tiers, \
+                the main risk drivers (delivery, quality, price consistency, responsiveness), \
+                and the procurement risk level the distributor currently carries. \
+                Flag if CRITICAL suppliers are relied upon for key product categories.
+                """.formatted(data));
+
+        String s2 = reportAiService.generateSection("""
+                You are writing the Key Metrics table for a Supplier Risk Report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Key Metrics section.
+                Produce a table: Risk Tier | Count | Status
+                Rows: PREFERRED | RELIABLE | ACCEPTABLE | AT_RISK | CRITICAL
+                Status = ✅ Preferred / ⚠ Watch / 🔴 Critical.
+                Then produce a second table of the top 10 highest-risk suppliers:
+                Supplier | Tier | Score | Delivery | Quality | Price | Responsiveness
+                """.formatted(data));
+
+        String s3 = reportAiService.generateSection("""
+                You are writing the Analysis section for a Supplier Risk Report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Analysis section with these sub-sections:
+                ### Critical & At-Risk Suppliers
+                Which suppliers are in the CRITICAL and AT_RISK tiers? What specific sub-scores \
+                (delivery, quality, price consistency, responsiveness) are dragging them down?
+
+                ### Procurement Dependency Risk
+                Are CRITICAL-tier suppliers sole sources for any key product categories? \
+                What is the supply chain disruption risk?
+
+                ### Preferred Supplier Opportunities
+                Are PREFERRED-tier suppliers being fully utilised? Could more volume be shifted \
+                to low-risk suppliers to reduce overall portfolio risk?
+
+                Name specific suppliers and cite their scores.
+                """.formatted(data));
+
+        String s4 = reportAiService.generateSection("""
+                You are writing the Recommendations section for a Supplier Risk Report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Recommendations section.
+                Provide exactly 5 numbered recommendations. Each must:
+                - Start with a **bold action phrase**
+                - Target a specific supplier or risk category
+                Focus on: placing CRITICAL suppliers on a performance improvement plan, \
+                qualifying alternative suppliers for AT_RISK categories, shifting volume to PREFERRED \
+                suppliers, negotiating SLAs on delivery and quality with AT_RISK suppliers, \
+                and setting up automated supplier risk reviews.
+                """.formatted(data));
+
+        return new String[]{s1, s2, s3, s4};
+    }
+
+    // ── PRICE TRENDS ──────────────────────────────────────────────────────────
+
+    private String[] buildPriceTrendsSections(String data) {
+        String s1 = reportAiService.generateSection("""
+                You are writing the Executive Summary for a Price Trends Report for a Kenyan FMCG distributor.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Executive Summary section (2-3 sentences).
+                Focus on: number of supplier-product combinations tracked, breakdown by trend direction \
+                (INCREASING/DECREASING/STABLE), the most significant price changes, and the overall \
+                procurement timing recommendation. Flag if rising prices require immediate forward buying. \
+                Be direct.
+                """.formatted(data));
+
+        String s2 = reportAiService.generateSection("""
+                You are writing the Key Metrics table for a Price Trends Report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Key Metrics section.
+                Produce a summary table: Trend Direction | Count | Status
+                Rows: INCREASING | DECREASING | STABLE | Total
+                Status = ⚠ Buy Now (INCREASING) / ✅ Wait (DECREASING) / ✅ Stable.
+                Then produce a table of the top 10 most significant price movers:
+                Supplier | Product | Direction | 3M Change (%%) | Current Price | Market Avg | Volatility
+                """.formatted(data));
+
+        String s3 = reportAiService.generateSection("""
+                You are writing the Analysis section for a Price Trends Report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Analysis section with these sub-sections:
+                ### Increasing Price Trends
+                Which supplier-product combinations are seeing the steepest price increases? \
+                What is the likely cause (supply constraints, seasonal demand, exchange rate)? \
+                What is the procurement timing implication?
+
+                ### Decreasing Price Trends
+                Which products are declining in price? Is this an opportunity to defer purchases \
+                or is it a signal of demand weakness?
+
+                ### Price Volatility
+                Which products have the highest volatility scores? \
+                Does high volatility require safety stock adjustments or fixed-price contracts?
+
+                Cite specific products, suppliers, and percentage changes from the data.
+                """.formatted(data));
+
+        String s4 = reportAiService.generateSection("""
+                You are writing the Recommendations section for a Price Trends Report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Recommendations section.
+                Provide exactly 5 numbered recommendations. Each must:
+                - Start with a **bold action phrase**
+                - Target a specific product category or procurement timing decision
+                Focus on: forward-buying products with sharply rising prices, deferring purchases \
+                of products with declining trends, negotiating fixed-price contracts for highly volatile \
+                items, rebalancing supplier mix toward competitive pricing, and adjusting safety stock \
+                for high-volatility SKUs.
                 """.formatted(data));
 
         return new String[]{s1, s2, s3, s4};

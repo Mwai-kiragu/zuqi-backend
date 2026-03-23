@@ -2,26 +2,22 @@ package com.zuqi.ai.crm;
 
 import com.zuqi.ai.model.ModelRegistry;
 import com.zuqi.ai.pipeline.ModelEvaluator;
+import com.zuqi.ai.pipeline.XGBoostHyperparameterTuner;
 import com.zuqi.ai.synthetic.SyntheticDataBundle;
 import com.zuqi.ai.synthetic.SyntheticDataConfig;
 import com.zuqi.ai.synthetic.SyntheticDataOrchestrator;
-import com.zuqi.domain.ai.AIModelRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.tribuo.Model;
 import org.tribuo.Trainer;
 import org.tribuo.regression.Regressor;
 
 import java.util.List;
-import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyMap;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -34,6 +30,7 @@ class VisitTrainingPipelineTest {
     @Mock private ModelEvaluator modelEvaluator;
     @Mock private ModelRegistry modelRegistry;
     @Mock private Trainer<Regressor> xgBoostRegressionTrainer;
+    @Mock private XGBoostHyperparameterTuner hyperparameterTuner;
 
     private VisitTrainingPipeline pipeline;
 
@@ -41,7 +38,7 @@ class VisitTrainingPipelineTest {
     void setUp() {
         pipeline = new VisitTrainingPipeline(
                 orchestrator, featureBuilder, visitFeatureBuilder,
-                modelEvaluator, modelRegistry, xgBoostRegressionTrainer);
+                modelEvaluator, modelRegistry, xgBoostRegressionTrainer, hyperparameterTuner);
     }
 
     @Test

@@ -2,6 +2,7 @@ package com.zuqi.ai.recon;
 
 import com.zuqi.ai.model.ModelRegistry;
 import com.zuqi.ai.pipeline.ModelEvaluator;
+import com.zuqi.ai.pipeline.XGBoostHyperparameterTuner;
 import com.zuqi.ai.synthetic.SyntheticReconFeatureBuilder;
 import com.zuqi.ai.synthetic.SyntheticReconFeatureBuilder.LabelledReconExample;
 import com.zuqi.ai.synthetic.generators.SyntheticBankStatementGenerator;
@@ -15,7 +16,6 @@ import org.tribuo.Dataset;
 import org.tribuo.Model;
 import org.tribuo.Trainer;
 import org.tribuo.classification.Label;
-
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectOutputStream;
 import java.math.BigDecimal;
@@ -53,6 +53,7 @@ public class ReconTrainingPipeline {
     private final ModelEvaluator modelEvaluator;
     private final ModelRegistry modelRegistry;
     private final Trainer<Label> xgBoostClassificationTrainer;
+    private final XGBoostHyperparameterTuner hyperparameterTuner;
 
     @Transactional
     public TrainingResult runPipeline() {
@@ -79,10 +80,14 @@ public class ReconTrainingPipeline {
             List<LabelledReconExample> trainExamples = examples.subList(0, trainSize);
             List<LabelledReconExample> testExamples = examples.subList(trainSize, examples.size());
 
-            // Step 4: Train
+            // Step 4: Hyperparameter tuning + Train
             Dataset<Label> trainDataset = featureBuilder.buildDataset(trainExamples);
-            Model<Label> model = xgBoostClassificationTrainer.train(trainDataset);
-            log.info("Training complete on {} examples", trainSize);
+            XGBoostHyperparameterTuner.TunedModel<Label> tunedModel =
+                    hyperparameterTuner.tuneAndTrainClassifier(trainDataset, ReconFeatureBuilder.LABEL_MATCH);
+            Model<Label> model = tunedModel.model();
+            XGBoostHyperparameterTuner.TuningResult tuning = tunedModel.tuning();
+            log.info("Training complete on {} examples (rounds={} eta={} maxDepth={})",
+                    trainSize, tuning.bestNumRounds(), tuning.bestEta(), tuning.bestMaxDepth());
 
             // Step 5: Evaluate
             Dataset<Label> testDataset = featureBuilder.buildDataset(testExamples);
@@ -99,7 +104,7 @@ public class ReconTrainingPipeline {
             }
 
             // Step 6: Promote
-            UUID modelId = promoteModel(model, eval, trainSize);
+            UUID modelId = promoteModel(model, eval, trainSize, tuning);
 
             long duration = System.currentTimeMillis() - start;
             log.info("=== Bank Recon Pipeline complete in {}ms, modelId={} ===", duration, modelId);
@@ -145,7 +150,8 @@ public class ReconTrainingPipeline {
 
     private UUID promoteModel(Model<Label> model,
                                ModelEvaluator.ClassifierEvaluationResult eval,
-                               int trainSize) throws Exception {
+                               int trainSize,
+                               XGBoostHyperparameterTuner.TuningResult tuning) throws Exception {
         byte[] modelBytes;
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              ObjectOutputStream oos = new ObjectOutputStream(baos)) {
@@ -155,6 +161,10 @@ public class ReconTrainingPipeline {
 
         Map<String, Object> hyperparams = new HashMap<>();
         hyperparams.put("algorithm", "xgboost_classification");
+        hyperparams.put("tuned_num_rounds", tuning.bestNumRounds());
+        hyperparams.put("tuned_eta", tuning.bestEta());
+        hyperparams.put("tuned_max_depth", tuning.bestMaxDepth());
+        hyperparams.put("tuning_cv_auc", tuning.bestScore());
 
         com.zuqi.domain.ai.AIModelRegistry registry = modelRegistry.registerModel(
                 MODEL_NAME, "xgboost_classification", hyperparams, "training_pipeline");

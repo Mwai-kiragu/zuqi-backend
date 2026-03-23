@@ -2,6 +2,7 @@ package com.zuqi.ai.cashflow;
 
 import com.zuqi.ai.model.ModelRegistry;
 import com.zuqi.ai.pipeline.ModelEvaluator;
+import com.zuqi.ai.pipeline.XGBoostHyperparameterTuner;
 import com.zuqi.ai.synthetic.SyntheticCashFlowFeatureBuilder;
 import com.zuqi.ai.synthetic.generators.SyntheticCashFlowGenerator;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.tribuo.Trainer;
 import org.tribuo.regression.Regressor;
 
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,8 +26,12 @@ class CashFlowTrainingPipelineTest {
     @Mock private ModelEvaluator modelEvaluator;
     @Mock private ModelRegistry modelRegistry;
     @Mock private Trainer<Regressor> xgBoostRegressionTrainer;
+    @Mock private XGBoostHyperparameterTuner hyperparameterTuner;
 
     private CashFlowTrainingPipeline pipeline;
+
+    private static final XGBoostHyperparameterTuner.TuningResult FIXED_TUNING =
+            new XGBoostHyperparameterTuner.TuningResult(50, 0.2, 6, 8500.0, "rmse", Map.of("eta", 0.2, "max_depth", 6));
 
     @BeforeEach
     void setUp() {
@@ -35,12 +41,13 @@ class CashFlowTrainingPipelineTest {
                 new CashFlowFeatureBuilder(),
                 modelEvaluator,
                 modelRegistry,
-                xgBoostRegressionTrainer);
+                xgBoostRegressionTrainer,
+                hyperparameterTuner);
     }
 
     @Test
     void runPipeline_whenTrainerThrows_returnsFailedResult() {
-        when(xgBoostRegressionTrainer.train(any()))
+        when(hyperparameterTuner.tuneAndTrainRegressor(any()))
                 .thenThrow(new RuntimeException("XGBoost init failed"));
 
         CashFlowTrainingPipeline.TrainingResult result = pipeline.runPipeline();
@@ -56,7 +63,8 @@ class CashFlowTrainingPipelineTest {
     void runPipeline_whenR2BelowGate_returnsFailedResult_neverPromotes() throws Exception {
         @SuppressWarnings("unchecked")
         org.tribuo.Model<Regressor> mockModel = mock(org.tribuo.Model.class);
-        when(xgBoostRegressionTrainer.train(any())).thenReturn(mockModel);
+        when(hyperparameterTuner.tuneAndTrainRegressor(any()))
+                .thenReturn(new XGBoostHyperparameterTuner.TunedModel<>(mockModel, FIXED_TUNING));
 
         ModelEvaluator.RegressorEvaluationResult badEval =
                 ModelEvaluator.RegressorEvaluationResult.builder()

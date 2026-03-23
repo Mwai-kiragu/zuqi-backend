@@ -2,6 +2,7 @@ package com.zuqi.ai.demand;
 
 import com.zuqi.ai.model.ModelRegistry;
 import com.zuqi.ai.pipeline.ModelEvaluator;
+import com.zuqi.ai.pipeline.XGBoostHyperparameterTuner;
 import com.zuqi.ai.synthetic.generators.SyntheticExpiryBatchGenerator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.tribuo.Trainer;
 import org.tribuo.regression.Regressor;
 
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -23,10 +25,14 @@ class ExpiryRiskTrainingPipelineTest {
     @Mock private ModelEvaluator modelEvaluator;
     @Mock private ModelRegistry modelRegistry;
     @Mock private Trainer<Regressor> xgBoostRegressionTrainer;
+    @Mock private XGBoostHyperparameterTuner hyperparameterTuner;
 
     private SyntheticExpiryBatchGenerator realBatchGenerator;
     private ExpiryRiskFeatureBuilder realFeatureBuilder;
     private ExpiryRiskTrainingPipeline pipeline;
+
+    private static final XGBoostHyperparameterTuner.TuningResult FIXED_TUNING =
+            new XGBoostHyperparameterTuner.TuningResult(50, 0.2, 6, 0.15, "rmse", Map.of("eta", 0.2, "max_depth", 6));
 
     @BeforeEach
     void setUp() {
@@ -34,12 +40,12 @@ class ExpiryRiskTrainingPipelineTest {
         realFeatureBuilder = new ExpiryRiskFeatureBuilder();
         pipeline = new ExpiryRiskTrainingPipeline(
                 realBatchGenerator, realFeatureBuilder,
-                modelEvaluator, modelRegistry, xgBoostRegressionTrainer);
+                modelEvaluator, modelRegistry, xgBoostRegressionTrainer, hyperparameterTuner);
     }
 
     @Test
-    void runPipeline_whenExceptionFromTrainer_returnsFailedResult() {
-        when(xgBoostRegressionTrainer.train(any()))
+    void runPipeline_whenTunerThrows_returnsFailedResult() {
+        when(hyperparameterTuner.tuneAndTrainRegressor(any()))
                 .thenThrow(new RuntimeException("training failed"));
 
         ExpiryRiskTrainingPipeline.TrainingResult result = pipeline.runPipeline();
@@ -54,7 +60,8 @@ class ExpiryRiskTrainingPipelineTest {
     void runPipeline_whenRmseAboveGate_returnsFailed_andNeverPromotes() throws Exception {
         @SuppressWarnings("unchecked")
         org.tribuo.Model<Regressor> mockModel = mock(org.tribuo.Model.class);
-        when(xgBoostRegressionTrainer.train(any())).thenReturn(mockModel);
+        when(hyperparameterTuner.tuneAndTrainRegressor(any()))
+                .thenReturn(new XGBoostHyperparameterTuner.TunedModel<>(mockModel, FIXED_TUNING));
 
         ModelEvaluator.RegressorEvaluationResult badEval =
                 ModelEvaluator.RegressorEvaluationResult.builder()

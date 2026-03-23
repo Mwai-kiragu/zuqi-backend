@@ -2,6 +2,7 @@ package com.zuqi.ai.recon;
 
 import com.zuqi.ai.model.ModelRegistry;
 import com.zuqi.ai.pipeline.ModelEvaluator;
+import com.zuqi.ai.pipeline.XGBoostHyperparameterTuner;
 import com.zuqi.ai.synthetic.SyntheticReconFeatureBuilder;
 import com.zuqi.ai.synthetic.generators.SyntheticBankStatementGenerator;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.tribuo.Trainer;
 import org.tribuo.classification.Label;
 
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,8 +26,12 @@ class ReconTrainingPipelineTest {
     @Mock private ModelEvaluator modelEvaluator;
     @Mock private ModelRegistry modelRegistry;
     @Mock private Trainer<Label> xgBoostClassificationTrainer;
+    @Mock private XGBoostHyperparameterTuner hyperparameterTuner;
 
     private ReconTrainingPipeline pipeline;
+
+    private static final XGBoostHyperparameterTuner.TuningResult FIXED_TUNING =
+            new XGBoostHyperparameterTuner.TuningResult(50, 0.2, 6, 0.15, "auc", Map.of("eta", 0.2, "max_depth", 6));
 
     @BeforeEach
     void setUp() {
@@ -35,12 +41,13 @@ class ReconTrainingPipelineTest {
                 new ReconFeatureBuilder(),
                 modelEvaluator,
                 modelRegistry,
-                xgBoostClassificationTrainer);
+                xgBoostClassificationTrainer,
+                hyperparameterTuner);
     }
 
     @Test
     void runPipeline_whenTrainerThrows_returnsFailedResult() {
-        when(xgBoostClassificationTrainer.train(any()))
+        when(hyperparameterTuner.tuneAndTrainClassifier(any(), anyString()))
                 .thenThrow(new RuntimeException("XGBoost training failure"));
 
         ReconTrainingPipeline.TrainingResult result = pipeline.runPipeline();
@@ -55,7 +62,8 @@ class ReconTrainingPipelineTest {
     void runPipeline_whenAucBelowGate_returnsFailedResult_neverPromotes() throws Exception {
         @SuppressWarnings("unchecked")
         org.tribuo.Model<Label> mockModel = mock(org.tribuo.Model.class);
-        when(xgBoostClassificationTrainer.train(any())).thenReturn(mockModel);
+        when(hyperparameterTuner.tuneAndTrainClassifier(any(), anyString()))
+                .thenReturn(new XGBoostHyperparameterTuner.TunedModel<>(mockModel, FIXED_TUNING));
 
         ModelEvaluator.ClassifierEvaluationResult badEval =
                 ModelEvaluator.ClassifierEvaluationResult.builder()

@@ -1,7 +1,13 @@
 package com.zuqi.ai.pipeline;
 
 import com.zuqi.ai.cashflow.CashFlowTrainingPipeline;
+import com.zuqi.ai.crm.ChurnTrainingPipeline;
+import com.zuqi.ai.crm.ClvTrainingPipeline;
+import com.zuqi.ai.crm.SegmentationTrainingPipeline;
+import com.zuqi.ai.crm.VisitTrainingPipeline;
+import com.zuqi.ai.demand.ExpiryRiskTrainingPipeline;
 import com.zuqi.ai.model.ModelRegistry;
+import com.zuqi.ai.pricing.PricingTrainingPipeline;
 import com.zuqi.ai.recon.ReconTrainingPipeline;
 import com.zuqi.ai.synthetic.DataMixer;
 import com.zuqi.ai.synthetic.DataPhaseTracker;
@@ -87,8 +93,14 @@ public class ModelTrainingService {
     private final Trainer<Label>        classificationTrainer;
     private final Trainer<Regressor>    regressionTrainer;
     private final Trainer<Event>        anomalyTrainer;
-    private final ReconTrainingPipeline     reconTrainingPipeline;
-    private final CashFlowTrainingPipeline  cashFlowTrainingPipeline;
+    private final ReconTrainingPipeline         reconTrainingPipeline;
+    private final CashFlowTrainingPipeline      cashFlowTrainingPipeline;
+    private final ExpiryRiskTrainingPipeline    expiryRiskTrainingPipeline;
+    private final SegmentationTrainingPipeline  segmentationTrainingPipeline;
+    private final ClvTrainingPipeline           clvTrainingPipeline;
+    private final ChurnTrainingPipeline         churnTrainingPipeline;
+    private final VisitTrainingPipeline         visitTrainingPipeline;
+    private final PricingTrainingPipeline       pricingTrainingPipeline;
 
     @Autowired
     public ModelTrainingService(
@@ -100,16 +112,28 @@ public class ModelTrainingService {
             @Qualifier("xgBoostRegressionTrainer")    Trainer<Regressor> regressionTrainer,
             @Qualifier("xgBoostAnomalyTrainer")       Trainer<Event> anomalyTrainer,
             ReconTrainingPipeline reconTrainingPipeline,
-            CashFlowTrainingPipeline cashFlowTrainingPipeline) {
-        this.featureStore               = featureStore;
-        this.dataMixer                  = dataMixer;
-        this.modelRegistry              = modelRegistry;
-        this.phaseTracker               = phaseTracker;
-        this.classificationTrainer      = classificationTrainer;
-        this.regressionTrainer          = regressionTrainer;
-        this.anomalyTrainer             = anomalyTrainer;
-        this.reconTrainingPipeline      = reconTrainingPipeline;
-        this.cashFlowTrainingPipeline   = cashFlowTrainingPipeline;
+            CashFlowTrainingPipeline cashFlowTrainingPipeline,
+            ExpiryRiskTrainingPipeline expiryRiskTrainingPipeline,
+            SegmentationTrainingPipeline segmentationTrainingPipeline,
+            ClvTrainingPipeline clvTrainingPipeline,
+            ChurnTrainingPipeline churnTrainingPipeline,
+            VisitTrainingPipeline visitTrainingPipeline,
+            PricingTrainingPipeline pricingTrainingPipeline) {
+        this.featureStore                   = featureStore;
+        this.dataMixer                      = dataMixer;
+        this.modelRegistry                  = modelRegistry;
+        this.phaseTracker                   = phaseTracker;
+        this.classificationTrainer          = classificationTrainer;
+        this.regressionTrainer              = regressionTrainer;
+        this.anomalyTrainer                 = anomalyTrainer;
+        this.reconTrainingPipeline          = reconTrainingPipeline;
+        this.cashFlowTrainingPipeline       = cashFlowTrainingPipeline;
+        this.expiryRiskTrainingPipeline     = expiryRiskTrainingPipeline;
+        this.segmentationTrainingPipeline   = segmentationTrainingPipeline;
+        this.clvTrainingPipeline            = clvTrainingPipeline;
+        this.churnTrainingPipeline          = churnTrainingPipeline;
+        this.visitTrainingPipeline          = visitTrainingPipeline;
+        this.pricingTrainingPipeline        = pricingTrainingPipeline;
     }
 
     // ── Public API ───────────────────────────────────────────────────────────
@@ -405,6 +429,108 @@ public class ModelTrainingService {
             log.error("[ModelTrainingService] {} failed: {}",
                     DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR, e.getMessage(), e);
             errors.add(DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR + ": " + e.getMessage());
+        }
+
+        // ── expiry_risk_predictor (Model #10) ─────────────────────────────
+        try {
+            ExpiryRiskTrainingPipeline.TrainingResult expiryResult = expiryRiskTrainingPipeline.runPipeline();
+            if (expiryResult.success()) {
+                modelIds.put(ExpiryRiskTrainingPipeline.MODEL_NAME, expiryResult.modelId());
+                counts.put(ExpiryRiskTrainingPipeline.MODEL_NAME, 0);
+            } else {
+                log.warn("[ModelTrainingService] {} — {}", ExpiryRiskTrainingPipeline.MODEL_NAME,
+                        expiryResult.errorMessage());
+                errors.add(ExpiryRiskTrainingPipeline.MODEL_NAME + ": " + expiryResult.errorMessage());
+            }
+        } catch (Exception e) {
+            log.error("[ModelTrainingService] {} failed: {}", ExpiryRiskTrainingPipeline.MODEL_NAME,
+                    e.getMessage(), e);
+            errors.add(ExpiryRiskTrainingPipeline.MODEL_NAME + ": " + e.getMessage());
+        }
+
+        // ── customer_segmenter (K-Means) ──────────────────────────────────
+        try {
+            SegmentationTrainingPipeline.TrainingResult segResult = segmentationTrainingPipeline.runPipeline();
+            if (segResult.success()) {
+                modelIds.put(SegmentationTrainingPipeline.MODEL_NAME, segResult.modelId());
+                counts.put(SegmentationTrainingPipeline.MODEL_NAME, 0);
+            } else {
+                log.warn("[ModelTrainingService] {} — {}", SegmentationTrainingPipeline.MODEL_NAME,
+                        segResult.errorMessage());
+                errors.add(SegmentationTrainingPipeline.MODEL_NAME + ": " + segResult.errorMessage());
+            }
+        } catch (Exception e) {
+            log.error("[ModelTrainingService] {} failed: {}", SegmentationTrainingPipeline.MODEL_NAME,
+                    e.getMessage(), e);
+            errors.add(SegmentationTrainingPipeline.MODEL_NAME + ": " + e.getMessage());
+        }
+
+        // ── customer_clv_predictor ────────────────────────────────────────
+        try {
+            ClvTrainingPipeline.TrainingResult clvResult = clvTrainingPipeline.runPipeline();
+            if (clvResult.success()) {
+                modelIds.put(ClvTrainingPipeline.MODEL_NAME, clvResult.modelId());
+                counts.put(ClvTrainingPipeline.MODEL_NAME, 0);
+            } else {
+                log.warn("[ModelTrainingService] {} — {}", ClvTrainingPipeline.MODEL_NAME,
+                        clvResult.errorMessage());
+                errors.add(ClvTrainingPipeline.MODEL_NAME + ": " + clvResult.errorMessage());
+            }
+        } catch (Exception e) {
+            log.error("[ModelTrainingService] {} failed: {}", ClvTrainingPipeline.MODEL_NAME,
+                    e.getMessage(), e);
+            errors.add(ClvTrainingPipeline.MODEL_NAME + ": " + e.getMessage());
+        }
+
+        // ── churn_predictor ───────────────────────────────────────────────
+        try {
+            ChurnTrainingPipeline.TrainingResult churnResult = churnTrainingPipeline.runPipeline();
+            if (churnResult.success()) {
+                modelIds.put(ChurnTrainingPipeline.MODEL_NAME, churnResult.modelId());
+                counts.put(ChurnTrainingPipeline.MODEL_NAME, 0);
+            } else {
+                log.warn("[ModelTrainingService] {} — {}", ChurnTrainingPipeline.MODEL_NAME,
+                        churnResult.errorMessage());
+                errors.add(ChurnTrainingPipeline.MODEL_NAME + ": " + churnResult.errorMessage());
+            }
+        } catch (Exception e) {
+            log.error("[ModelTrainingService] {} failed: {}", ChurnTrainingPipeline.MODEL_NAME,
+                    e.getMessage(), e);
+            errors.add(ChurnTrainingPipeline.MODEL_NAME + ": " + e.getMessage());
+        }
+
+        // ── visit_optimizer ───────────────────────────────────────────────
+        try {
+            VisitTrainingPipeline.TrainingResult visitResult = visitTrainingPipeline.runPipeline();
+            if (visitResult.success()) {
+                modelIds.put(VisitTrainingPipeline.MODEL_NAME, visitResult.modelId());
+                counts.put(VisitTrainingPipeline.MODEL_NAME, 0);
+            } else {
+                log.warn("[ModelTrainingService] {} — {}", VisitTrainingPipeline.MODEL_NAME,
+                        visitResult.errorMessage());
+                errors.add(VisitTrainingPipeline.MODEL_NAME + ": " + visitResult.errorMessage());
+            }
+        } catch (Exception e) {
+            log.error("[ModelTrainingService] {} failed: {}", VisitTrainingPipeline.MODEL_NAME,
+                    e.getMessage(), e);
+            errors.add(VisitTrainingPipeline.MODEL_NAME + ": " + e.getMessage());
+        }
+
+        // ── smart_pricing_recommender ─────────────────────────────────────
+        try {
+            PricingTrainingPipeline.TrainingResult pricingResult = pricingTrainingPipeline.runPipeline();
+            if (pricingResult.success()) {
+                modelIds.put(PricingTrainingPipeline.MODEL_NAME, pricingResult.modelId());
+                counts.put(PricingTrainingPipeline.MODEL_NAME, 0);
+            } else {
+                log.warn("[ModelTrainingService] {} — {}", PricingTrainingPipeline.MODEL_NAME,
+                        pricingResult.errorMessage());
+                errors.add(PricingTrainingPipeline.MODEL_NAME + ": " + pricingResult.errorMessage());
+            }
+        } catch (Exception e) {
+            log.error("[ModelTrainingService] {} failed: {}", PricingTrainingPipeline.MODEL_NAME,
+                    e.getMessage(), e);
+            errors.add(PricingTrainingPipeline.MODEL_NAME + ": " + e.getMessage());
         }
 
         // ── bank_recon_matcher (Model #11) ────────────────────────────────

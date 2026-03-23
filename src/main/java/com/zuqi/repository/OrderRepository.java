@@ -39,6 +39,12 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
             @Param("status") OrderStatus status,
             Pageable pageable);
 
+    /** Cash-flow forecast: pending receivables (confirmed but not yet fully paid). */
+    @Query("SELECT o FROM Order o WHERE o.distributor.id = :distributorId " +
+           "AND o.status IN ('CONFIRMED', 'PROCESSING', 'READY_FOR_DELIVERY', 'OUT_FOR_DELIVERY') " +
+           "AND (o.paidAmount IS NULL OR o.totalAmount > o.paidAmount)")
+    List<Order> findPendingReceivablesByDistributor(@Param("distributorId") UUID distributorId);
+
     @Query("SELECT o FROM Order o WHERE o.distributor.id = :distributorId AND o.merchant.id = :merchantId")
     Page<Order> findByDistributorIdAndMerchantId(
             @Param("distributorId") UUID distributorId,

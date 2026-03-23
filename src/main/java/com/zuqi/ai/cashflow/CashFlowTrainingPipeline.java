@@ -2,6 +2,7 @@ package com.zuqi.ai.cashflow;
 
 import com.zuqi.ai.model.ModelRegistry;
 import com.zuqi.ai.pipeline.ModelEvaluator;
+import com.zuqi.ai.pipeline.XGBoostHyperparameterTuner;
 import com.zuqi.ai.synthetic.SyntheticCashFlowFeatureBuilder;
 import com.zuqi.ai.synthetic.SyntheticCashFlowFeatureBuilder.LabelledCashFlowExample;
 import com.zuqi.ai.synthetic.generators.SyntheticCashFlowGenerator;
@@ -14,7 +15,6 @@ import org.tribuo.Dataset;
 import org.tribuo.Model;
 import org.tribuo.Trainer;
 import org.tribuo.regression.Regressor;
-
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
@@ -47,6 +47,7 @@ public class CashFlowTrainingPipeline {
     private final ModelEvaluator modelEvaluator;
     private final ModelRegistry modelRegistry;
     private final Trainer<Regressor> xgBoostRegressionTrainer;
+    private final XGBoostHyperparameterTuner hyperparameterTuner;
 
     @Transactional
     public TrainingResult runPipeline() {
@@ -77,10 +78,14 @@ public class CashFlowTrainingPipeline {
             List<LabelledCashFlowExample> trainExamples = examples.subList(0, trainSize);
             List<LabelledCashFlowExample> testExamples = examples.subList(trainSize, examples.size());
 
-            // Step 4: Train
+            // Step 4: Hyperparameter tuning + Train
             Dataset<Regressor> trainDataset = featureBuilder.buildDataset(trainExamples);
-            Model<Regressor> model = xgBoostRegressionTrainer.train(trainDataset);
-            log.info("Training complete on {} examples", trainSize);
+            XGBoostHyperparameterTuner.TunedModel<Regressor> tunedModel =
+                    hyperparameterTuner.tuneAndTrainRegressor(trainDataset);
+            Model<Regressor> model = tunedModel.model();
+            XGBoostHyperparameterTuner.TuningResult tuning = tunedModel.tuning();
+            log.info("Training complete on {} examples (rounds={} eta={} maxDepth={})",
+                    trainSize, tuning.bestNumRounds(), tuning.bestEta(), tuning.bestMaxDepth());
 
             // Step 5: Evaluate
             Dataset<Regressor> testDataset = featureBuilder.buildDataset(testExamples);
@@ -101,7 +106,7 @@ public class CashFlowTrainingPipeline {
             double[] residuals = computeResidualPercentiles(model, testExamples);
 
             // Step 7: Promote
-            UUID modelId = promoteModel(model, eval, trainSize, residuals);
+            UUID modelId = promoteModel(model, eval, trainSize, residuals, tuning);
 
             long duration = System.currentTimeMillis() - start;
             log.info("=== Cash Flow Pipeline complete in {}ms, modelId={} ===", duration, modelId);
@@ -134,7 +139,8 @@ public class CashFlowTrainingPipeline {
     private UUID promoteModel(Model<Regressor> model,
                                ModelEvaluator.RegressorEvaluationResult eval,
                                int trainSize,
-                               double[] residuals) throws Exception {
+                               double[] residuals,
+                               XGBoostHyperparameterTuner.TuningResult tuning) throws Exception {
         byte[] modelBytes;
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              ObjectOutputStream oos = new ObjectOutputStream(baos)) {
@@ -144,6 +150,10 @@ public class CashFlowTrainingPipeline {
 
         Map<String, Object> hyperparams = new HashMap<>();
         hyperparams.put("algorithm", "xgboost_regression");
+        hyperparams.put("tuned_num_rounds", tuning.bestNumRounds());
+        hyperparams.put("tuned_eta", tuning.bestEta());
+        hyperparams.put("tuned_max_depth", tuning.bestMaxDepth());
+        hyperparams.put("tuning_cv_rmse", tuning.bestScore());
 
         com.zuqi.domain.ai.AIModelRegistry registry = modelRegistry.registerModel(
                 MODEL_NAME, "xgboost_regression", hyperparams, "training_pipeline");
