@@ -1,0 +1,129 @@
+package com.zuqi.service.impl;
+
+import com.zuqi.api.dto.pricing.CreatePromotionRequest;
+import com.zuqi.api.dto.pricing.PromotionResponse;
+import com.zuqi.domain.distributor.Distributor;
+import com.zuqi.domain.pricing.Promotion;
+import com.zuqi.domain.product.Product;
+import com.zuqi.exception.ResourceNotFoundException;
+import com.zuqi.exception.ValidationException;
+import com.zuqi.repository.DistributorRepository;
+import com.zuqi.repository.ProductRepository;
+import com.zuqi.repository.PromotionRepository;
+import com.zuqi.service.PromotionService;
+import com.zuqi.util.SecurityUtils;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.UUID;
+
+@Service
+@RequiredArgsConstructor
+public class PromotionServiceImpl implements PromotionService {
+
+    private final PromotionRepository   promotionRepository;
+    private final ProductRepository     productRepository;
+    private final DistributorRepository distributorRepository;
+    private final SecurityUtils         securityUtils;
+
+    @Override
+    @Transactional
+    public PromotionResponse create(CreatePromotionRequest request) {
+        Distributor distributor = resolveDistributor();
+        Product product = request.getProductId() != null
+                ? productRepository.findById(request.getProductId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Product", "id", request.getProductId()))
+                : null;
+
+        Promotion promotion = Promotion.builder()
+                .distributor(distributor)
+                .name(request.getName())
+                .promotionType(request.getPromotionType())
+                .discountValue(request.getDiscountValue())
+                .minOrderAmount(request.getMinOrderAmount())
+                .product(product)
+                .categoryId(request.getCategoryId())
+                .validFrom(request.getValidFrom())
+                .validTo(request.getValidTo())
+                .active(true)
+                .build();
+
+        return toResponse(promotionRepository.save(promotion));
+    }
+
+    @Override
+    @Transactional
+    public PromotionResponse update(UUID id, CreatePromotionRequest request) {
+        Promotion p = findOrThrow(id);
+        p.setName(request.getName());
+        p.setPromotionType(request.getPromotionType());
+        p.setDiscountValue(request.getDiscountValue());
+        p.setMinOrderAmount(request.getMinOrderAmount());
+        p.setCategoryId(request.getCategoryId());
+        p.setValidFrom(request.getValidFrom());
+        p.setValidTo(request.getValidTo());
+        if (request.getProductId() != null) {
+            p.setProduct(productRepository.findById(request.getProductId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Product", "id", request.getProductId())));
+        }
+        return toResponse(promotionRepository.save(p));
+    }
+
+    @Override
+    public PromotionResponse getById(UUID id) {
+        return toResponse(findOrThrow(id));
+    }
+
+    @Override
+    public Page<PromotionResponse> getAll(Pageable pageable) {
+        UUID distId = securityUtils.getDistributorIdForFiltering();
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (distId != null) {
+            return promotionRepository.findByDistributorId(distId, pageable).map(this::toResponse);
+        } else if (merchantId != null) {
+            return promotionRepository.findByDistributorMerchantId(merchantId, pageable).map(this::toResponse);
+        }
+        return promotionRepository.findAll(pageable).map(this::toResponse);
+    }
+
+    @Override
+    @Transactional
+    public void delete(UUID id) {
+        promotionRepository.delete(findOrThrow(id));
+    }
+
+    private Distributor resolveDistributor() {
+        UUID distId = securityUtils.getDistributorIdForFiltering();
+        if (distId != null) {
+            return distributorRepository.findById(distId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Distributor", "id", distId));
+        }
+        throw new ValidationException("Cannot determine distributor");
+    }
+
+    private Promotion findOrThrow(UUID id) {
+        return promotionRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Promotion", "id", id));
+    }
+
+    private PromotionResponse toResponse(Promotion p) {
+        return PromotionResponse.builder()
+                .id(p.getId())
+                .distributorId(p.getDistributor().getId())
+                .name(p.getName())
+                .promotionType(p.getPromotionType())
+                .discountValue(p.getDiscountValue())
+                .minOrderAmount(p.getMinOrderAmount())
+                .productId(p.getProduct() != null ? p.getProduct().getId() : null)
+                .productName(p.getProduct() != null ? p.getProduct().getName() : null)
+                .categoryId(p.getCategoryId())
+                .validFrom(p.getValidFrom())
+                .validTo(p.getValidTo())
+                .active(p.isActive())
+                .createdAt(p.getCreatedAt())
+                .build();
+    }
+}

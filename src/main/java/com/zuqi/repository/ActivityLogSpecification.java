@@ -21,10 +21,16 @@ public class ActivityLogSpecification {
             String module,
             LocalDateTime from,
             LocalDateTime to,
-            Boolean success) {
+            Boolean success,
+            java.util.Set<UUID> allowedUserIds) {
 
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
+
+            // Scope to a set of allowed user IDs (for MERCHANT_ADMIN / DISTRIBUTOR_ADMIN isolation)
+            if (allowedUserIds != null && !allowedUserIds.isEmpty()) {
+                predicates.add(root.get("userId").in(allowedUserIds));
+            }
 
             if (userId != null) {
                 predicates.add(cb.equal(root.get("userId"), userId));

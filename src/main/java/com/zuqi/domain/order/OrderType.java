@@ -4,5 +4,6 @@ public enum OrderType {
     STANDARD,
     CREDIT,
     PRE_ORDER,
-    POS
+    POS,
+    WALK_IN
 }

@@ -4,6 +4,7 @@ import com.zuqi.ai.feature.DemandFeatures;
 import com.zuqi.ai.feature.OrderFeatureService;
 import com.zuqi.ai.model.ModelLoaderService;
 import com.zuqi.ai.model.ModelPhaseService;
+import com.zuqi.ai.model.ModelRegistry;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,6 +16,7 @@ import org.tribuo.regression.Regressor;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -34,6 +36,7 @@ public class DemandForecaster {
     private final OrderFeatureService orderFeatureService;
     private final DemandFeatureBuilder featureBuilder;
     private final ModelPhaseService phaseService;
+    private final ModelRegistry modelRegistry;
 
     private static final String MODEL_NAME = "demand_forecaster";
     private static final BigDecimal MIN_QUANTITY = BigDecimal.ZERO;
@@ -80,14 +83,30 @@ public class DemandForecaster {
             double confidence = phaseService.applyModifier(
                     calculateConfidence(prediction, features), MODEL_NAME);
 
-            log.debug("Demand forecast for merchant {} SKU {}: {} units (confidence {:.2f})",
-                    merchantId, productId, forecastedQuantity, confidence);
+            // 8. Compute prediction interval bounds from stored residual percentiles
+            double[] residuals = loadResidualPercentiles();
+            double lower, upper;
+            if (residuals != null) {
+                lower = Math.max(0.0, predictedQty + residuals[0]);
+                upper = Math.min(MAX_QUANTITY.doubleValue(), predictedQty + residuals[1]);
+            } else {
+                // Fallback: ±20% of prediction until model is retrained with residual data
+                lower = Math.max(0.0, predictedQty * 0.8);
+                upper = Math.min(MAX_QUANTITY.doubleValue(), predictedQty * 1.2);
+            }
+
+            log.debug("Demand forecast for merchant {} SKU {}: {} units [{} – {}] (confidence {})",
+                    merchantId, productId, forecastedQuantity,
+                    String.format("%.0f", lower), String.format("%.0f", upper),
+                    String.format("%.2f", confidence));
 
             return DemandForecast.builder()
                     .merchantId(merchantId)
                     .productId(productId)
                     .predictedQuantity(forecastedQuantity)
                     .confidence(confidence)
+                    .lowerBound(lower)
+                    .upperBound(upper)
                     .rollingAvg4w(features.rollingAvg4w())
                     .rollingAvg12w(features.rollingAvg12w())
                     .trendDirection(features.trendDirection())
@@ -130,11 +149,15 @@ public class DemandForecaster {
             BigDecimal fallbackQty = features.rollingAvg4w() != null ?
                     features.rollingAvg4w() : BigDecimal.ZERO;
 
+            double fallback = fallbackQty.doubleValue();
+
             return DemandForecast.builder()
                     .merchantId(merchantId)
                     .productId(productId)
                     .predictedQuantity(fallbackQty)
                     .confidence(0.5) // Low confidence for fallback
+                    .lowerBound(Math.max(0.0, fallback * 0.7))
+                    .upperBound(fallback * 1.3)
                     .rollingAvg4w(features.rollingAvg4w())
                     .rollingAvg12w(features.rollingAvg12w())
                     .trendDirection(features.trendDirection())
@@ -150,6 +173,8 @@ public class DemandForecaster {
                     .productId(productId)
                     .predictedQuantity(BigDecimal.ZERO)
                     .confidence(0.0)
+                    .lowerBound(0.0)
+                    .upperBound(0.0)
                     .rollingAvg4w(BigDecimal.ZERO)
                     .rollingAvg12w(BigDecimal.ZERO)
                     .trendDirection("STABLE")
@@ -194,6 +219,26 @@ public class DemandForecaster {
     }
 
     /**
+     * Load P10/P90 residuals stored in the model registry after the last training run.
+     * Returns null if the active model predates this feature (triggers ±20% fallback).
+     */
+    private double[] loadResidualPercentiles() {
+        return modelRegistry.getActiveModel(MODEL_NAME)
+                .map(registry -> {
+                    Map<String, Object> metrics = registry.getPerformanceMetrics();
+                    if (metrics == null
+                            || !metrics.containsKey("lower_residual")
+                            || !metrics.containsKey("upper_residual")) {
+                        return null;
+                    }
+                    double lower = ((Number) metrics.get("lower_residual")).doubleValue();
+                    double upper = ((Number) metrics.get("upper_residual")).doubleValue();
+                    return new double[]{lower, upper};
+                })
+                .orElse(null);
+    }
+
+    /**
      * Get model version from metadata.
      */
     private int getModelVersion(Model<Regressor> model) {
@@ -211,6 +256,8 @@ public class DemandForecaster {
             UUID productId,
             BigDecimal predictedQuantity,     // Predicted quantity for next week
             double confidence,                 // 0.0-1.0 (prediction confidence)
+            double lowerBound,                 // P10 prediction interval lower bound
+            double upperBound,                 // P90 prediction interval upper bound
             BigDecimal rollingAvg4w,          // Historical context
             BigDecimal rollingAvg12w,         // Historical context
             String trendDirection,             // Trend indicator

@@ -105,6 +105,9 @@ public class FundsTransfer {
     @JoinColumn(name = "supplier_bill_id")
     private SupplierBill supplierBill;
 
+    @Column(name = "approval_status", length = 30)
+    private String approvalStatus = "NOT_REQUIRED";
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

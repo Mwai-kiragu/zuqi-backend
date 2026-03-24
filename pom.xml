@@ -113,6 +113,11 @@
             <artifactId>tribuo-anomaly-libsvm</artifactId>
             <version>${tribuo.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.tribuo</groupId>
+            <artifactId>tribuo-clustering-kmeans</artifactId>
+            <version>${tribuo.version}</version>
+        </dependency>
 
         <!-- Override xgboost4j transitive dependency to 2.1.1 which includes
              macOS ARM64 (aarch64) native libraries (missing in the 1.6.2 that

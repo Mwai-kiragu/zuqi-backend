@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.tribuo.Dataset;
+import org.tribuo.Example;
 import org.tribuo.Model;
 import org.tribuo.regression.Regressor;
 
@@ -96,6 +97,12 @@ public class DemandModelTrainingPipeline {
             Model<Regressor> model = modelTrainer.train(trainData);
             log.info("✅ Step 4 complete: Model trained");
 
+            // Compute residual percentiles from test set (used for confidence intervals at inference)
+            double[] residualPercentiles = computeResidualPercentiles(model, testData);
+            log.info("📊 Residual percentiles — P10: {}, P90: {}",
+                    String.format("%.2f", residualPercentiles[0]),
+                    String.format("%.2f", residualPercentiles[1]));
+
             // Step 5: Evaluate model
             log.info("Step 5/6: Evaluating demand forecasting model...");
             Dataset<Regressor> testDataset = buildTestDataset(testData);
@@ -113,7 +120,7 @@ public class DemandModelTrainingPipeline {
             UUID modelId = null;
 
             if (evaluation.passedQualityGate()) {
-                modelId = promoteModel(model, evaluation, trainData.size());
+                modelId = promoteModel(model, evaluation, trainData.size(), residualPercentiles);
                 log.info("✅ Model promoted to ACTIVE: {}", modelId);
             } else {
                 log.warn("❌ Model NOT promoted (failed quality gate)");
@@ -151,6 +158,36 @@ public class DemandModelTrainingPipeline {
                     .durationMs(pipelineDuration)
                     .build();
         }
+    }
+
+    /**
+     * Compute P10 and P90 residuals from the test set.
+     *
+     * Residual = actual - predicted. Storing these two numbers in the model registry
+     * lets the forecaster produce lower/upper bounds at inference time:
+     *   lower = max(0, predicted + P10_residual)
+     *   upper = min(10000, predicted + P90_residual)
+     */
+    private double[] computeResidualPercentiles(
+            Model<Regressor> model,
+            List<DemandModelTrainer.DemandTrainingExample> testData) {
+
+        List<Double> residuals = new ArrayList<>();
+
+        for (DemandModelTrainer.DemandTrainingExample example : testData) {
+            Example<Regressor> featureExample = featureBuilder.buildRegressionExample(
+                    example.features(), BigDecimal.ZERO);
+            double predicted = model.predict(featureExample).getOutput().getValues()[0];
+            double actual = example.actualQuantity().doubleValue();
+            residuals.add(actual - predicted);
+        }
+
+        Collections.sort(residuals);
+
+        int p10Index = (int) (residuals.size() * 0.10);
+        int p90Index = Math.min((int) (residuals.size() * 0.90), residuals.size() - 1);
+
+        return new double[]{residuals.get(p10Index), residuals.get(p90Index)};
     }
 
     /**
@@ -352,7 +389,8 @@ public class DemandModelTrainingPipeline {
      */
     private UUID promoteModel(Model<Regressor> model,
                                ModelEvaluator.RegressorEvaluationResult eval,
-                               int trainingSize) {
+                               int trainingSize,
+                               double[] residualPercentiles) {
         String modelName = "demand_forecaster";
 
         try {
@@ -379,13 +417,14 @@ public class DemandModelTrainingPipeline {
             byte[] modelBinary = serializeModel(model);
 
             // 3. Update with training results
-            Map<String, Object> performanceMetrics = Map.of(
-                    "rmse", eval.rmse(),
-                    "mae", eval.mae(),
-                    "r2", eval.r2(),
-                    "explained_variance", eval.explainedVariance(),
-                    "training_samples", trainingSize
-            );
+            Map<String, Object> performanceMetrics = new HashMap<>();
+            performanceMetrics.put("rmse", eval.rmse());
+            performanceMetrics.put("mae", eval.mae());
+            performanceMetrics.put("r2", eval.r2());
+            performanceMetrics.put("explained_variance", eval.explainedVariance());
+            performanceMetrics.put("training_samples", trainingSize);
+            performanceMetrics.put("lower_residual", residualPercentiles[0]);
+            performanceMetrics.put("upper_residual", residualPercentiles[1]);
 
             Map<String, Object> featureColumns = Map.of(
                     "feature_names", featureBuilder.getFeatureNames(),

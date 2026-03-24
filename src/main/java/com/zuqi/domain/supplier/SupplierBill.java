@@ -96,6 +96,12 @@ public class SupplierBill {
     @JoinColumn(name = "created_by")
     private User createdBy;
 
+    @Column(name = "approval_status", length = 30)
+    private String approvalStatus = "NOT_REQUIRED";
+
+    @Column(name = "submitted_by_id")
+    private java.util.UUID submittedById;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

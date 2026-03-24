@@ -1,11 +1,13 @@
 package com.zuqi.service.impl;
 
+import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
 import com.zuqi.api.dto.product.ProductBranchPriceRequest;
 import com.zuqi.api.dto.product.ProductBranchPriceResponse;
 import com.zuqi.api.dto.product.ProductCategoryRequest;
 import com.zuqi.api.dto.product.ProductCategoryResponse;
 import com.zuqi.api.dto.product.ProductRequest;
 import com.zuqi.api.dto.product.ProductResponse;
+import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.branch.DistributorBranch;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.gl.GlAccount;
@@ -22,6 +24,7 @@ import com.zuqi.repository.ProductBranchPriceRepository;
 import com.zuqi.repository.ProductCategoryRepository;
 import com.zuqi.repository.ProductRepository;
 import com.zuqi.repository.StockRepository;
+import com.zuqi.service.ApprovalService;
 import com.zuqi.service.ProductService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +39,7 @@ import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -53,6 +57,7 @@ public class ProductServiceImpl implements ProductService {
     private final StockRepository stockRepository;
     private final GlAccountRepository glAccountRepository;
     private final SecurityUtils securityUtils;
+    private final ApprovalService approvalService;
 
     @Override
     @Transactional(readOnly = true)
@@ -200,8 +205,28 @@ public class ProductServiceImpl implements ProductService {
             product.setCategory(category);
         }
 
+        boolean needsApproval = securityUtils.currentUserHasRole("INITIATOR");
+        product.setApprovalStatus(needsApproval ? "PENDING_APPROVAL" : "APPROVED");
+        UUID currentUserId = securityUtils.getCurrentUserId();
+        product.setCreatedById(currentUserId);
+
         Product savedProduct = productRepository.save(product);
         log.info("Product created successfully with ID: {}", savedProduct.getId());
+
+        if (needsApproval && currentUserId != null) {
+            approvalService.createRequest(currentUserId, CreateApprovalRequestDto.builder()
+                    .workflowType(ApprovalWorkflowType.PRODUCT_PRICE_EDIT)
+                    .entityType("PRODUCT")
+                    .entityId(savedProduct.getId())
+                    .entityName(savedProduct.getName())
+                    .description("New product: " + savedProduct.getName())
+                    .requestedValues(Map.of(
+                            "name", savedProduct.getName(),
+                            "sku", savedProduct.getSku(),
+                            "unitPrice", Objects.toString(savedProduct.getUnitPrice(), "")))
+                    .requiredApprovals(1)
+                    .build());
+        }
 
         if (request.getBranchPrices() != null && !request.getBranchPrices().isEmpty()) {
             saveBranchPrices(savedProduct, request.getBranchPrices());

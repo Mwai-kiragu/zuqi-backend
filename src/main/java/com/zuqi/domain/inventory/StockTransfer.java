@@ -83,6 +83,12 @@ public class StockTransfer {
     @Column(name = "received_at")
     private LocalDateTime receivedAt;
 
+    @Column(name = "approval_status", length = 30)
+    private String approvalStatus = "NOT_REQUIRED";
+
+    @Column(name = "submitted_by_id")
+    private java.util.UUID submittedById;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -112,4 +113,8 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID>, JpaSp
     Page<Customer> findByKycStatus(KycStatus status, Pageable pageable);
 
     Page<Customer> findByKycStatusNot(KycStatus status, Pageable pageable);
+
+    @Modifying
+    @Query("UPDATE Customer c SET c.approvalStatus = :status WHERE c.id = :id")
+    void updateApprovalStatus(@Param("id") UUID id, @Param("status") String status);
 }

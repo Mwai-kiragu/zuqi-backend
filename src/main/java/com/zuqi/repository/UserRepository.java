@@ -33,6 +33,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     List<User> findByDistributorId(UUID distributorId);
 
+    List<User> findByDistributorIdIn(java.util.Collection<UUID> distributorIds);
+
     List<User> findByDistributorIdAndActiveTrue(UUID distributorId);
 
     List<User> findByDistributorIdAndActiveFalse(UUID distributorId);

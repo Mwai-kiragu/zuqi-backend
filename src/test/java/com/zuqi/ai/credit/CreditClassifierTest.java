@@ -6,7 +6,7 @@ import com.zuqi.ai.model.ModelLoaderService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.math.BigDecimal;
@@ -29,10 +29,10 @@ class CreditClassifierTest {
     @Autowired
     private CreditClassifier creditClassifier;
 
-    @MockBean
+    @MockitoBean
     private ModelLoaderService modelLoader;
 
-    @MockBean
+    @MockitoBean
     private MerchantFeatureService merchantFeatureService;
 
     // ── Test helpers ───────────────────────────────────────────────────────

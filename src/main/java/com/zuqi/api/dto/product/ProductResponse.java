@@ -51,6 +51,8 @@ public class ProductResponse {
 
     // Per-branch price overrides / availability (null = not requested)
     private List<ProductBranchPriceResponse> branchPrices;
+    private String approvalStatus;
+    private UUID createdById;
 
     public static ProductResponse fromEntity(Product product) {
         return ProductResponse.builder()
@@ -76,6 +78,8 @@ public class ProductResponse {
                 .deactivatedByName(product.getDeactivatedBy() != null ? product.getDeactivatedBy().getFullName() : null)
                 .revenueAccountId(product.getRevenueAccountId())
                 .cogsAccountId(product.getCogsAccountId())
+                .approvalStatus(product.getApprovalStatus())
+                .createdById(product.getCreatedById())
                 .build();
     }
 

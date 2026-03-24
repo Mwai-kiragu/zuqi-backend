@@ -10,6 +10,12 @@ import com.zuqi.ai.agent.tools.FundsTransferTool;
 import com.zuqi.ai.agent.tools.PosSalesTool;
 import com.zuqi.ai.agent.tools.StockTransferTool;
 import com.zuqi.ai.agent.tools.HelpTool;
+import com.zuqi.ai.agent.tools.BalanceSheetTool;
+import com.zuqi.ai.agent.tools.ProfitLossTool;
+import com.zuqi.ai.agent.tools.TrialBalanceTool;
+import com.zuqi.ai.agent.tools.CashFlowTool;
+import com.zuqi.ai.agent.tools.ArAgingTool;
+import com.zuqi.ai.agent.tools.ApAgingTool;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -52,6 +58,12 @@ public class RoleAwareToolProvider {
     private final PosSalesTool              posSalesTool;
     private final StockTransferTool         stockTransferTool;
     private final HelpTool                  helpTool;
+    private final BalanceSheetTool          balanceSheetTool;
+    private final ProfitLossTool            profitLossTool;
+    private final TrialBalanceTool          trialBalanceTool;
+    private final CashFlowTool              cashFlowTool;
+    private final ArAgingTool               arAgingTool;
+    private final ApAgingTool               apAgingTool;
 
     /** Returns the tool instances permitted for the given role. */
     public List<Object> getToolsForRole(String role) {
@@ -70,7 +82,9 @@ public class RoleAwareToolProvider {
 
             case "FINANCE" ->
                     List.of(paymentPerformanceTool, creditSummaryTool, salesTrendTool,
-                            invoiceTool, expensesTool, fundsTransferTool, helpTool);
+                            invoiceTool, expensesTool, fundsTransferTool,
+                            balanceSheetTool, profitLossTool, trialBalanceTool,
+                            cashFlowTool, arAgingTool, apAgingTool, helpTool);
 
             case "MERCHANT_ADMIN" ->
                     List.of(salesTrendTool, inventoryHealthTool, paymentPerformanceTool,
@@ -90,6 +104,8 @@ public class RoleAwareToolProvider {
                 repPerformanceTool, merchantMetricsTool, anomalyAlertsTool,
                 deliveryMetricsTool, creditSummaryTool, demandForecastSummaryTool,
                 invoiceTool, expensesTool, procurementTool,
-                fundsTransferTool, posSalesTool, stockTransferTool, helpTool);
+                fundsTransferTool, posSalesTool, stockTransferTool,
+                balanceSheetTool, profitLossTool, trialBalanceTool,
+                cashFlowTool, arAgingTool, apAgingTool, helpTool);
     }
 }

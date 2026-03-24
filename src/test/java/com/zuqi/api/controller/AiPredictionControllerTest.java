@@ -54,7 +54,7 @@ class AiPredictionControllerTest {
                 .thenReturn(new PageImpl<>(List.of(stock)));
 
         StockoutPredictor.StockoutResult result = new StockoutPredictor.StockoutResult(
-                warehouseId, productId, 0.75, "STOCKOUT", 3.0, "stockout_predictor-v1");
+                warehouseId, productId, 0.75, "STOCKOUT", 3.0, 100.0, 10.0, "STABLE", 0.0, "stockout_predictor-v1");
         when(stockoutPredictor.predict(warehouseId, productId)).thenReturn(result);
 
         ResponseEntity<?> response = controller.getStockoutPredictions(warehouseId, distributorId);

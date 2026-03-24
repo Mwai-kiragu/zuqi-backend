@@ -54,6 +54,8 @@ public class SupplierResponse {
     private String deactivationReason;
     private LocalDateTime deactivatedAt;
     private String deactivatedByName;
+    private String approvalStatus;
+    private java.util.UUID createdById;
 
     public static SupplierResponse fromEntity(Supplier s) {
         return SupplierResponse.builder()
@@ -92,6 +94,8 @@ public class SupplierResponse {
                 .deactivationReason(s.getDeactivationReason())
                 .deactivatedAt(s.getDeactivatedAt())
                 .deactivatedByName(s.getDeactivatedBy() != null ? s.getDeactivatedBy().getFullName() : null)
+                .approvalStatus(s.getApprovalStatus())
+                .createdById(s.getCreatedById())
                 .build();
     }
 }

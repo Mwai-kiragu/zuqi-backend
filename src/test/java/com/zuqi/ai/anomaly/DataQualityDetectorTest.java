@@ -4,6 +4,8 @@ import com.zuqi.ai.event.OrderCreatedEvent;
 import com.zuqi.domain.ai.AlertSeverity;
 import com.zuqi.domain.ai.AlertType;
 import com.zuqi.domain.ai.AnomalyAlert;
+import com.zuqi.ai.model.ModelLoaderService;
+import com.zuqi.ai.model.ModelPhaseService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,8 +29,10 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class DataQualityDetectorTest {
 
-    @Mock
-    private AlertService alertService;
+    @Mock private AlertService              alertService;
+    @Mock private DataQualityFeatureBuilder featureBuilder;
+    @Mock private ModelLoaderService        modelLoader;
+    @Mock private ModelPhaseService         phaseService;
 
     private DataQualityDetector detector;
 
@@ -41,7 +45,7 @@ class DataQualityDetectorTest {
     void setUp() {
         lenient().when(alertService.createAlert(any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(mock(AnomalyAlert.class));
-        detector = new DataQualityDetector(alertService);
+        detector = new DataQualityDetector(alertService, featureBuilder, modelLoader, phaseService);
     }
 
     // ── Rule 1: at least one item ──────────────────────────────────────────

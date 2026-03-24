@@ -3,6 +3,12 @@ package com.zuqi.ai.assistant;
 import com.zuqi.ai.agent.tools.*;
 import com.zuqi.ai.assistant.tools.CreditSummaryTool;
 import com.zuqi.ai.assistant.tools.DemandForecastSummaryTool;
+import com.zuqi.ai.agent.tools.BalanceSheetTool;
+import com.zuqi.ai.agent.tools.ProfitLossTool;
+import com.zuqi.ai.agent.tools.TrialBalanceTool;
+import com.zuqi.ai.agent.tools.CashFlowTool;
+import com.zuqi.ai.agent.tools.ArAgingTool;
+import com.zuqi.ai.agent.tools.ApAgingTool;
 import com.zuqi.domain.ai.ReportType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +41,12 @@ public class AssistantReportBuilder {
     private final DeliveryMetricsTool       deliveryMetricsTool;
     private final CreditSummaryTool         creditSummaryTool;
     private final DemandForecastSummaryTool demandForecastSummaryTool;
+    private final BalanceSheetTool          balanceSheetTool;
+    private final ProfitLossTool            profitLossTool;
+    private final TrialBalanceTool          trialBalanceTool;
+    private final CashFlowTool              cashFlowTool;
+    private final ArAgingTool               arAgingTool;
+    private final ApAgingTool               apAgingTool;
 
     /**
      * Gather data for the given reportType, then generate the report section by section.
@@ -57,6 +69,12 @@ public class AssistantReportBuilder {
             case MERCHANT_SUMMARY -> assembleMerchantData(distIdStr, periodDays);
             case DEMAND_FORECAST  -> assembleDemandData(distIdStr);
             case ANOMALY_SUMMARY  -> assembleAnomalyData(distIdStr, periodDays);
+            case BALANCE_SHEET    -> balanceSheetTool.getBalanceSheet(distIdStr);
+            case PROFIT_LOSS      -> profitLossTool.getProfitLoss(distIdStr, periodDays);
+            case TRIAL_BALANCE    -> trialBalanceTool.getTrialBalance(distIdStr);
+            case CASH_FLOW        -> cashFlowTool.getCashFlow(distIdStr, periodDays);
+            case AR_AGING         -> arAgingTool.getArAging(distIdStr);
+            case AP_AGING         -> apAgingTool.getApAging(distIdStr);
         };
 
         String header = buildHeader(reportType, distributorId, periodDays, today);
@@ -70,6 +88,12 @@ public class AssistantReportBuilder {
             case MERCHANT_SUMMARY -> buildMerchantSummarySections(data, periodDays);
             case DEMAND_FORECAST  -> buildDemandForecastSections(data);
             case ANOMALY_SUMMARY  -> buildAnomalySummarySections(data, periodDays);
+            case BALANCE_SHEET    -> buildBalanceSheetSections(data);
+            case PROFIT_LOSS      -> buildProfitLossSections(data, periodDays);
+            case TRIAL_BALANCE    -> buildTrialBalanceSections(data);
+            case CASH_FLOW        -> buildCashFlowSections(data, periodDays);
+            case AR_AGING         -> buildArAgingSections(data);
+            case AP_AGING         -> buildApAgingSections(data);
         };
 
         log.info("Completed {} report (4 sections) for distributor={}", reportType, distIdStr);
@@ -766,5 +790,448 @@ public class AssistantReportBuilder {
         return "ANOMALY ALERTS:\n" + anomalyAlertsTool.getAnomalyAlerts(distId, periodDays)
              + "\n\nINVENTORY HEALTH:\n" + inventoryHealthTool.getInventoryHealth(distId)
              + "\n\nPAYMENT PERFORMANCE:\n" + paymentPerformanceTool.getPaymentPerformance(distId);
+    }
+
+    // ── BALANCE SHEET ─────────────────────────────────────────────────────────
+
+    private String[] buildBalanceSheetSections(String data) {
+        String s1 = reportAiService.generateSection("""
+                You are writing the Executive Summary for a Balance Sheet report for a Kenyan FMCG distributor.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Executive Summary section (2-3 sentences).
+                Focus on: total assets, total liabilities, total equity, whether the sheet is balanced, \
+                and the overall financial health of the business. Flag any imbalance immediately. \
+                Be direct and executive-ready.
+                """.formatted(data));
+
+        String s2 = reportAiService.generateSection("""
+                You are writing the Key Metrics table for a Balance Sheet report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Key Metrics section.
+                Produce a markdown table: Metric | Value | Status
+                Include:
+                - Total Assets (KES)
+                - Total Liabilities (KES)
+                - Total Equity (KES)
+                - Total Liabilities + Equity (KES)
+                - Balance Sheet Balanced?
+                - Top Asset Account (name + balance)
+                - Top Liability Account (name + balance)
+                Status = ✅ Good / ⚠ Watch / 🔴 Critical. Flag if not balanced.
+                """.formatted(data));
+
+        String s3 = reportAiService.generateSection("""
+                You are writing the Analysis section for a Balance Sheet report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Analysis section with these sub-sections:
+                ### Asset Quality
+                What assets does the business hold? Are they primarily current (liquid) or fixed (long-term)? \
+                Is the asset base adequate to support operations?
+
+                ### Liability Structure
+                What are the major liabilities? Is leverage (debt ratio) at a manageable level? \
+                Are liabilities short-term or long-term?
+
+                ### Equity & Financial Strength
+                What does the equity position indicate? Is the business funded primarily by equity or debt? \
+                Is retained earnings positive?
+
+                Use specific KES figures. Be analytical and concise.
+                """.formatted(data));
+
+        String s4 = reportAiService.generateSection("""
+                You are writing the Recommendations section for a Balance Sheet report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Recommendations section.
+                Provide exactly 5 numbered recommendations. Each must:
+                - Start with a **bold action phrase**
+                - Address a specific balance sheet risk or opportunity
+                Focus on: improving asset liquidity, reducing high-cost liabilities, strengthening equity, \
+                addressing any imbalance, and optimising the asset mix.
+                """.formatted(data));
+
+        return new String[]{s1, s2, s3, s4};
+    }
+
+    // ── PROFIT & LOSS ─────────────────────────────────────────────────────────
+
+    private String[] buildProfitLossSections(String data, String periodDays) {
+        String s1 = reportAiService.generateSection("""
+                You are writing the Executive Summary for a Profit & Loss Statement for a Kenyan FMCG distributor.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Executive Summary section (2-3 sentences).
+                Focus on: total revenue (KES), gross profit, net income, gross margin (%%), \
+                and whether the business is profitable. Flag losses immediately. Be direct.
+                """.formatted(data));
+
+        String s2 = reportAiService.generateSection("""
+                You are writing the Key Metrics table for a Profit & Loss Statement.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Key Metrics section.
+                Produce a markdown table: Metric | Value (KES) | Status
+                Include:
+                - Total Revenue
+                - Cost of Goods Sold (COGS)
+                - Gross Profit
+                - Gross Margin (%%)
+                - Total Operating Expenses
+                - Net Income
+                - Net Margin (%%)
+                Status = ✅ Profitable / ⚠ Breakeven / 🔴 Loss. Calculate margins from the data.
+                """.formatted(data));
+
+        String s3 = reportAiService.generateSection("""
+                You are writing the Analysis section for a Profit & Loss Statement covering the last %s days.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Analysis section with these sub-sections:
+                ### Revenue & Gross Profit
+                Is revenue growing or stable? What is the gross margin? Is COGS well controlled?
+
+                ### Operating Expenses
+                What are the major expense drivers? Are expenses proportionate to revenue? \
+                Are there any unusually large expense lines?
+
+                ### Profitability Assessment
+                Is the business generating net profit? If not, what is driving the loss? \
+                How does this period compare to expectations?
+
+                Use specific KES figures. Be direct and analytical.
+                """.formatted(periodDays, data));
+
+        String s4 = reportAiService.generateSection("""
+                You are writing the Recommendations section for a Profit & Loss Statement.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Recommendations section.
+                Provide exactly 5 numbered recommendations. Each must:
+                - Start with a **bold action phrase**
+                - Target a specific revenue, cost, or margin improvement
+                Focus on: growing revenue, reducing COGS through better procurement, \
+                cutting non-essential expenses, improving gross margin, and accelerating path to profitability.
+                """.formatted(data));
+
+        return new String[]{s1, s2, s3, s4};
+    }
+
+    // ── TRIAL BALANCE ─────────────────────────────────────────────────────────
+
+    private String[] buildTrialBalanceSections(String data) {
+        String s1 = reportAiService.generateSection("""
+                You are writing the Executive Summary for a Trial Balance for a Kenyan FMCG distributor.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Executive Summary section (2-3 sentences).
+                Focus on: the accounting period, total debits, total credits, whether debits equal credits \
+                (balanced), and if unbalanced — the difference amount. Flag any imbalance as a critical issue. \
+                Be direct.
+                """.formatted(data));
+
+        String s2 = reportAiService.generateSection("""
+                You are writing the Key Metrics table for a Trial Balance.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Key Metrics section.
+                Produce a markdown table: Metric | Value
+                Include:
+                - Period Name
+                - As Of Date
+                - Total Debits (KES)
+                - Total Credits (KES)
+                - Difference (KES) — should be 0 if balanced
+                - Balanced?
+                - Number of Accounts
+                Then produce a second table: Account Type | Total Debit | Total Credit
+                Group accounts by type (ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE) and sum each.
+                """.formatted(data));
+
+        String s3 = reportAiService.generateSection("""
+                You are writing the Analysis section for a Trial Balance.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Analysis section with these sub-sections:
+                ### Balance Status
+                Is the trial balance in balance? If not, what is the discrepancy and what could cause it \
+                (missing entries, posting errors, unposted transactions)?
+
+                ### Account Balance Review
+                Are there any accounts with unusual balances (e.g. a revenue account with a debit balance, \
+                or an expense account with a credit balance)? Identify the 2-3 most significant accounts.
+
+                ### Period Close Readiness
+                Based on the trial balance, is the period ready to be closed? \
+                Are there obvious posting gaps or errors to resolve first?
+
+                Be specific with account names and amounts from the data.
+                """.formatted(data));
+
+        String s4 = reportAiService.generateSection("""
+                You are writing the Recommendations section for a Trial Balance.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Recommendations section.
+                Provide exactly 5 numbered recommendations. Each must:
+                - Start with a **bold action phrase**
+                - Address a specific accounting accuracy or period-close issue
+                Focus on: investigating any imbalance, reviewing unusual account balances, \
+                ensuring all transactions are posted, reconciling key accounts before period close, \
+                and improving journal entry quality.
+                """.formatted(data));
+
+        return new String[]{s1, s2, s3, s4};
+    }
+
+    // ── CASH FLOW ────────────────────────────────────────────────────────────
+
+    private String[] buildCashFlowSections(String data, String periodDays) {
+        String s1 = reportAiService.generateSection("""
+                You are writing the Executive Summary for a Cash Flow Statement for a Kenyan FMCG distributor.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Executive Summary section (2-3 sentences).
+                Focus on: net cash change (positive = cash generated, negative = cash consumed), \
+                operating cash flow direction, and whether the business is generating or burning cash. \
+                Flag negative operating cash flow as a critical concern. Be direct.
+                """.formatted(data));
+
+        String s2 = reportAiService.generateSection("""
+                You are writing the Key Metrics table for a Cash Flow Statement.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Key Metrics section.
+                Produce a markdown table: Activity | Cash Flow (KES) | Status
+                Include:
+                - Operating Activities
+                - Investing Activities
+                - Financing Activities
+                - Net Cash Change
+                Status = ✅ Positive / 🔴 Negative / ⚠ Near Zero.
+                Also list the top 3 individual line items by absolute amount.
+                """.formatted(data));
+
+        String s3 = reportAiService.generateSection("""
+                You are writing the Analysis section for a Cash Flow Statement covering the last %s days.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Analysis section with these sub-sections:
+                ### Operating Cash Flow
+                Is the core business generating or consuming cash? What are the main operating drivers \
+                (collections from customers, payments to suppliers, operating expenses)?
+
+                ### Investing & Financing
+                Is the business investing in growth (negative investing cash flow) or liquidating assets? \
+                Is it drawing down debt or repaying it?
+
+                ### Liquidity Position
+                Taking all three sections together, is the business's cash position improving or deteriorating? \
+                What is the risk to near-term liquidity?
+
+                Use specific KES figures from the data.
+                """.formatted(periodDays, data));
+
+        String s4 = reportAiService.generateSection("""
+                You are writing the Recommendations section for a Cash Flow Statement.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Recommendations section.
+                Provide exactly 5 numbered recommendations. Each must:
+                - Start with a **bold action phrase**
+                - Target a specific cash flow improvement
+                Focus on: accelerating collections to improve operating cash flow, \
+                deferring non-essential capital expenditure, optimising supplier payment terms, \
+                reducing cash burn in loss-making areas, and maintaining adequate cash reserves.
+                """.formatted(data));
+
+        return new String[]{s1, s2, s3, s4};
+    }
+
+    // ── AR AGING ─────────────────────────────────────────────────────────────
+
+    private String[] buildArAgingSections(String data) {
+        String s1 = reportAiService.generateSection("""
+                You are writing the Executive Summary for an Accounts Receivable Aging report \
+                for a Kenyan FMCG distributor.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Executive Summary section (2-3 sentences).
+                Focus on: total outstanding receivables (KES), proportion that is current vs overdue, \
+                the amount in the 90+ days bucket, and whether the collection situation is under control \
+                or at a critical level. Be direct.
+                """.formatted(data));
+
+        String s2 = reportAiService.generateSection("""
+                You are writing the Key Metrics table for an AR Aging report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Key Metrics section.
+                Produce a markdown table: Aging Bucket | Amount (KES) | %% of Total | Status
+                Rows:
+                - Current (not yet due)
+                - 1 – 30 days overdue
+                - 31 – 60 days overdue
+                - 61 – 90 days overdue
+                - 90+ days overdue
+                - **Total Outstanding**
+                Status = ✅ Current / ⚠ Watch / 🔴 Critical. \
+                Flag anything 90+ days as critical.
+                Then list the top 5 overdue customers from the data with their balances.
+                """.formatted(data));
+
+        String s3 = reportAiService.generateSection("""
+                You are writing the Analysis section for an AR Aging report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Analysis section with these sub-sections:
+                ### Collection Efficiency
+                What proportion of receivables are current vs overdue? \
+                Is the collection cycle healthy (most amounts current) or deteriorating (large overdue buckets)?
+
+                ### High-Risk Receivables
+                Focus on the 61-90 day and 90+ day buckets. Name the top overdue customers. \
+                What is the risk that these become bad debts?
+
+                ### Impact on Cash Flow
+                How does the overdue AR balance affect the distributor's cash position and ability to pay suppliers?
+
+                Reference specific KES amounts and customer names.
+                """.formatted(data));
+
+        String s4 = reportAiService.generateSection("""
+                You are writing the Recommendations section for an AR Aging report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Recommendations section.
+                Provide exactly 5 numbered recommendations. Each must:
+                - Start with a **bold action phrase**
+                - Target a specific customer group or collection action
+                Focus on: immediately escalating 90+ day accounts for legal action or write-off review, \
+                calling 61-90 day customers to arrange payment plans, reviewing credit terms for repeat offenders, \
+                incentivising early payment, and improving invoice-to-collection cycle time.
+                """.formatted(data));
+
+        return new String[]{s1, s2, s3, s4};
+    }
+
+    // ── AP AGING ─────────────────────────────────────────────────────────────
+
+    private String[] buildApAgingSections(String data) {
+        String s1 = reportAiService.generateSection("""
+                You are writing the Executive Summary for an Accounts Payable Aging report \
+                for a Kenyan FMCG distributor.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Executive Summary section (2-3 sentences).
+                Focus on: total outstanding payables (KES), proportion current vs overdue, \
+                overdue supplier obligations, and whether delayed payments risk supplier relationships \
+                or supply chain disruption. Be direct.
+                """.formatted(data));
+
+        String s2 = reportAiService.generateSection("""
+                You are writing the Key Metrics table for an AP Aging report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Key Metrics section.
+                Produce a markdown table: Aging Bucket | Amount (KES) | %% of Total | Status
+                Rows:
+                - Current (not yet due)
+                - 1 – 30 days overdue
+                - 31 – 60 days overdue
+                - 61 – 90 days overdue
+                - 90+ days overdue
+                - **Total Payable**
+                Flag anything 60+ days as a supplier relationship risk.
+                Then list the top 5 overdue suppliers with amounts.
+                """.formatted(data));
+
+        String s3 = reportAiService.generateSection("""
+                You are writing the Analysis section for an AP Aging report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Analysis section with these sub-sections:
+                ### Payment Obligations Overview
+                Is the business paying suppliers on time? What proportion is current vs overdue? \
+                Is the overdue trend worsening?
+
+                ### Supplier Relationship Risk
+                For 60+ day overdue balances — which suppliers are most at risk of stopping supply? \
+                Name specific overdue suppliers from the data.
+
+                ### Cash Management Implications
+                Does the high AP balance indicate a cash flow problem? \
+                Or is the business deliberately extending payment terms to manage liquidity?
+
+                Use specific KES figures and supplier names.
+                """.formatted(data));
+
+        String s4 = reportAiService.generateSection("""
+                You are writing the Recommendations section for an AP Aging report.
+
+                DATA:
+                %s
+
+                Write ONLY the ## Recommendations section.
+                Provide exactly 5 numbered recommendations. Each must:
+                - Start with a **bold action phrase**
+                - Target a specific supplier or payment obligation
+                Focus on: immediately settling 90+ day overdue accounts, \
+                negotiating payment plans for 60-90 day balances, \
+                prioritising payments to key FMCG suppliers to protect supply chain, \
+                improving cash reserves for timely supplier payments, \
+                and reviewing purchasing terms to align with cash flow cycles.
+                """.formatted(data));
+
+        return new String[]{s1, s2, s3, s4};
     }
 }

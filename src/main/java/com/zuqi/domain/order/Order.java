@@ -127,6 +127,13 @@ public class Order {
     @Builder.Default
     private List<OrderStatusHistory> statusHistory = new ArrayList<>();
 
+    @Column(name = "approval_status", length = 30)
+    @Builder.Default
+    private String approvalStatus = "NOT_REQUIRED";
+
+    @Column(name = "submitted_by_id")
+    private UUID submittedById;
+
     @Version
     private Long version;
 

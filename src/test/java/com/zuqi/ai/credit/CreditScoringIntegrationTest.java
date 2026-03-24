@@ -12,7 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.context.ActiveProfiles;
 
 import java.util.Optional;
@@ -41,22 +41,22 @@ class CreditScoringIntegrationTest {
     @Autowired
     private CreditScoringOrchestrator creditScoringOrchestrator;
 
-    @MockBean
+    @MockitoBean
     private ChatLanguageModel chatLanguageModel;
 
-    @MockBean
+    @MockitoBean
     private CustomerRepository merchantRepository;
 
-    @MockBean
+    @MockitoBean
     private MerchantFeatureService merchantFeatureService;
 
-    @MockBean
+    @MockitoBean
     private MerchantEmbeddingService embeddingService;
 
-    @MockBean
+    @MockitoBean
     private PredictionLogger predictionLogger;
 
-    @MockBean
+    @MockitoBean
     private LlmMetricsService llmMetricsService;
 
     private UUID testMerchantId;

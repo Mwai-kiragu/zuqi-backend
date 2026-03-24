@@ -161,4 +161,11 @@ public class Customer {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "deactivated_by")
     private User deactivatedBy;
+
+    @Column(name = "approval_status", length = 30)
+    @Builder.Default
+    private String approvalStatus = "APPROVED";
+
+    @Column(name = "created_by_id")
+    private UUID createdById;
 }
