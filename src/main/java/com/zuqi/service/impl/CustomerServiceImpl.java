@@ -17,8 +17,11 @@ import com.zuqi.repository.OrderRepository;
 import com.zuqi.repository.UserRepository;
 import com.zuqi.ai.event.MerchantCreatedEvent;
 import com.zuqi.ai.feature.FeatureStore;
+import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
+import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.audit.ActivityAction;
 import com.zuqi.service.ActivityLogService;
+import com.zuqi.service.ApprovalService;
 import com.zuqi.service.CustomerService;
 import com.zuqi.service.EmailService;
 import com.zuqi.util.SecurityUtils;
@@ -32,6 +35,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -49,6 +54,7 @@ public class CustomerServiceImpl implements CustomerService {
     private final ApplicationEventPublisher eventPublisher;
     private final FeatureStore featureStore;
     private final EmailService emailService;
+    private final ApprovalService approvalService;
 
     @Override
     @Transactional(readOnly = true)
@@ -197,8 +203,28 @@ public class CustomerServiceImpl implements CustomerService {
             customer.setAssignedSalesRep(salesRep);
         }
 
+        boolean needsApproval = securityUtils.currentUserHasRole("INITIATOR");
+        customer.setApprovalStatus(needsApproval ? "PENDING_APPROVAL" : "APPROVED");
+        UUID currentUserId = securityUtils.getCurrentUserId();
+        customer.setCreatedById(currentUserId);
+
         Customer saved = customerRepository.save(customer);
         log.info("Customer created with ID: {}", saved.getId());
+
+        if (needsApproval && currentUserId != null) {
+            approvalService.createRequest(currentUserId, CreateApprovalRequestDto.builder()
+                    .workflowType(ApprovalWorkflowType.CUSTOMER_KYC_APPROVAL)
+                    .entityType("CUSTOMER")
+                    .entityId(saved.getId())
+                    .entityName(saved.getBusinessName())
+                    .description("New customer: " + saved.getBusinessName())
+                    .requestedValues(Map.of(
+                            "businessName", saved.getBusinessName(),
+                            "phone", saved.getPhone(),
+                            "kraPin", Objects.toString(saved.getKraPin(), "")))
+                    .requiredApprovals(1)
+                    .build());
+        }
 
         User currentUser = securityUtils.getCurrentUser();
         if (currentUser != null) {

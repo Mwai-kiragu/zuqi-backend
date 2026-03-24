@@ -266,6 +266,12 @@ public class UserServiceImpl implements UserService {
         Set<Role> roles = new HashSet<>();
         roles.add(role);
 
+        // Optionally add a workflow tier role (INITIATOR / VERIFIER / AUTHORIZER)
+        if (request.getWorkflowTierRole() != null && !request.getWorkflowTierRole().isBlank()) {
+            roleRepository.findByName(RoleName.valueOf(request.getWorkflowTierRole()))
+                    .ifPresent(roles::add);
+        }
+
         User user = User.builder()
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
@@ -362,9 +368,13 @@ public class UserServiceImpl implements UserService {
         user.setEmail(request.getEmail());
         user.setPhoneNumber(request.getPhoneNumber());
 
-        // Update role
+        // Update role (clear all, add primary + optional workflow tier)
         user.getRoles().clear();
         user.getRoles().add(role);
+        if (request.getWorkflowTierRole() != null && !request.getWorkflowTierRole().isBlank()) {
+            roleRepository.findByName(RoleName.valueOf(request.getWorkflowTierRole()))
+                    .ifPresent(tierRole -> user.getRoles().add(tierRole));
+        }
 
         // Update distributor and merchant IDs
         user.setDistributorId(request.getDistributorId());

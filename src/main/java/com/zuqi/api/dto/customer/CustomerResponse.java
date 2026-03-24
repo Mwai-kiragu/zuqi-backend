@@ -54,6 +54,8 @@ public class CustomerResponse {
     private String deactivationReason;
     private LocalDateTime deactivatedAt;
     private String deactivatedByName;
+    private String approvalStatus;
+    private java.util.UUID createdById;
 
     public static CustomerResponse fromEntity(Customer customer) {
         return CustomerResponse.builder()
@@ -92,6 +94,8 @@ public class CustomerResponse {
                 .deactivationReason(customer.getDeactivationReason())
                 .deactivatedAt(customer.getDeactivatedAt())
                 .deactivatedByName(customer.getDeactivatedBy() != null ? customer.getDeactivatedBy().getFullName() : null)
+                .approvalStatus(customer.getApprovalStatus())
+                .createdById(customer.getCreatedById())
                 .build();
     }
 }

@@ -41,4 +41,8 @@ public class CreateUserRequest {
 
     /** Optional: role within the branch. Defaults to the system role if not provided. */
     private String branchRole;
+
+    /** Optional: additional workflow tier role (INITIATOR / VERIFIER / AUTHORIZER).
+     *  When provided the user will carry BOTH their primary functional role AND this tier role. */
+    private String workflowTierRole;
 }

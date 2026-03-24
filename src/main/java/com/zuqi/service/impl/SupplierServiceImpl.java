@@ -10,9 +10,12 @@ import com.zuqi.domain.supplier.SupplierCategory;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.DuplicateResourceException;
 import com.zuqi.exception.ResourceNotFoundException;
+import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
+import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.SupplierCategoryRepository;
 import com.zuqi.repository.SupplierRepository;
+import com.zuqi.service.ApprovalService;
 import com.zuqi.service.SupplierService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -36,6 +41,7 @@ public class SupplierServiceImpl implements SupplierService {
     private final SupplierCategoryRepository categoryRepository;
     private final DistributorRepository distributorRepository;
     private final SecurityUtils securityUtils;
+    private final ApprovalService approvalService;
 
     private String generateSupplierCode() {
         long count = supplierRepository.countAll();
@@ -149,7 +155,29 @@ public class SupplierServiceImpl implements SupplierService {
             }
         }
 
-        return SupplierResponse.fromEntity(supplierRepository.save(supplier));
+        boolean needsApproval = securityUtils.currentUserHasRole("INITIATOR");
+        supplier.setApprovalStatus(needsApproval ? "PENDING_APPROVAL" : "APPROVED");
+        UUID currentUserId = securityUtils.getCurrentUserId();
+        supplier.setCreatedById(currentUserId);
+
+        Supplier saved = supplierRepository.save(supplier);
+
+        if (needsApproval && currentUserId != null) {
+            approvalService.createRequest(currentUserId, CreateApprovalRequestDto.builder()
+                    .workflowType(ApprovalWorkflowType.SUPPLIER_CREATION)
+                    .entityType("SUPPLIER")
+                    .entityId(saved.getId())
+                    .entityName(saved.getName())
+                    .description("New supplier: " + saved.getName())
+                    .requestedValues(Map.of(
+                            "name", saved.getName(),
+                            "phone", saved.getPhone(),
+                            "kraPin", Objects.toString(saved.getKraPin(), "")))
+                    .requiredApprovals(1)
+                    .build());
+        }
+
+        return SupplierResponse.fromEntity(saved);
     }
 
     @Override

@@ -35,4 +35,7 @@ public class UpdateUserRequest {
     private UUID merchantId;
 
     private Boolean active;
+
+    /** Optional: additional workflow tier role (INITIATOR / VERIFIER / AUTHORIZER). Empty string = remove tier role. */
+    private String workflowTierRole;
 }

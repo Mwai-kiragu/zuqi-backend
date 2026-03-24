@@ -18,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -101,5 +102,15 @@ public class ApprovalController {
     @Operation(summary = "Count pending approval requests")
     public ResponseEntity<ApiResponse<Long>> countPending() {
         return ResponseEntity.ok(ApiResponse.success(approvalService.countPending()));
+    }
+
+    @GetMapping("/entity/{entityType}/{entityId}")
+    @Operation(summary = "Get approval requests for a specific entity")
+    public ResponseEntity<ApiResponse<List<ApprovalRequestResponse>>> getByEntity(
+            @PathVariable String entityType,
+            @PathVariable UUID entityId,
+            @RequestParam(required = false, defaultValue = "PENDING") ApprovalStatus status) {
+        List<ApprovalRequestResponse> result = approvalService.getByEntity(entityType.toUpperCase(), entityId, status);
+        return ResponseEntity.ok(ApiResponse.success(result));
     }
 }

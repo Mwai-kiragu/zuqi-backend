@@ -7,6 +7,7 @@ import com.zuqi.api.dto.common.PageResponse;
 import com.zuqi.domain.approval.ApprovalStatus;
 import com.zuqi.domain.approval.ApprovalWorkflowType;
 
+import java.util.List;
 import java.util.UUID;
 
 public interface ApprovalService {
@@ -29,4 +30,6 @@ public interface ApprovalService {
     long countPending();
 
     void expireStaleRequests();
+
+    List<ApprovalRequestResponse> getByEntity(String entityType, UUID entityId, ApprovalStatus status);
 }

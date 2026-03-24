@@ -17,6 +17,9 @@ import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.ApprovalActionRepository;
 import com.zuqi.repository.ApprovalRequestRepository;
+import com.zuqi.repository.CustomerRepository;
+import com.zuqi.repository.ProductRepository;
+import com.zuqi.repository.SupplierRepository;
 import com.zuqi.repository.UserRepository;
 import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.ApprovalService;
@@ -46,6 +49,9 @@ public class ApprovalServiceImpl implements ApprovalService {
     private final ApprovalRequestRepository approvalRequestRepository;
     private final ApprovalActionRepository approvalActionRepository;
     private final UserRepository userRepository;
+    private final CustomerRepository customerRepository;
+    private final SupplierRepository supplierRepository;
+    private final ProductRepository productRepository;
     private final ActivityLogService activityLogService;
     private final EmailService emailService;
     private final EmailConfig emailConfig;
@@ -117,6 +123,10 @@ public class ApprovalServiceImpl implements ApprovalService {
             throw new ValidationException("You have already acted on this request");
         }
 
+        if (request.getRequestedById().equals(approverId)) {
+            throw new ValidationException("The maker cannot approve their own request");
+        }
+
         User approver = userRepository.findById(approverId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", approverId.toString()));
 
@@ -160,7 +170,24 @@ public class ApprovalServiceImpl implements ApprovalService {
 
         notifyRequesterAsync(updated, approver);
 
+        if (updated.getStatus() == ApprovalStatus.APPROVED) {
+            updateEntityApprovalStatus(updated, "APPROVED");
+        } else if (updated.getStatus() == ApprovalStatus.REJECTED) {
+            updateEntityApprovalStatus(updated, "REJECTED");
+        }
+
         return toResponse(updated);
+    }
+
+    private void updateEntityApprovalStatus(ApprovalRequest request, String status) {
+        if (request.getEntityId() == null) return;
+        UUID entityId = request.getEntityId();
+        switch (request.getEntityType()) {
+            case "CUSTOMER" -> customerRepository.updateApprovalStatus(entityId, status);
+            case "SUPPLIER" -> supplierRepository.updateApprovalStatus(entityId, status);
+            case "PRODUCT"  -> productRepository.updateApprovalStatus(entityId, status);
+            default -> { /* no-op for other entity types */ }
+        }
     }
 
     @Override
@@ -232,6 +259,13 @@ public class ApprovalServiceImpl implements ApprovalService {
     @Transactional(readOnly = true)
     public long countPending() {
         return approvalRequestRepository.countByStatus(ApprovalStatus.PENDING);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ApprovalRequestResponse> getByEntity(String entityType, UUID entityId, ApprovalStatus status) {
+        return approvalRequestRepository.findByEntityTypeAndEntityIdAndStatus(entityType, entityId, status)
+                .stream().map(this::toResponse).toList();
     }
 
     @Override
