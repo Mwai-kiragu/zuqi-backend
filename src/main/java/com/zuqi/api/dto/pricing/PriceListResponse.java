@@ -20,6 +20,8 @@ public class PriceListResponse {
     private LocalDate validFrom;
     private LocalDate validTo;
     private List<ItemResponse> items;
+    private String approvalStatus;
+    private UUID createdById;
     private LocalDateTime createdAt;
 
     @Data @Builder

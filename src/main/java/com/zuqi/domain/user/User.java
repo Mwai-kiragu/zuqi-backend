@@ -1,5 +1,6 @@
 package com.zuqi.domain.user;
 
+import com.zuqi.domain.accesscontrol.UserGroup;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
@@ -78,6 +79,11 @@ public class User implements UserDetails {
 
     @Column(name = "merchant_id")
     private UUID merchantId;
+
+    /** Staff group — drives module permissions and workflow tier. Null for system-level users. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "user_group_id")
+    private UserGroup userGroup;
 
     /** Set at request-time from the JWT branchId claim. Not persisted. */
     @Transient

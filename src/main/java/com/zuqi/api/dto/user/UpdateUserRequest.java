@@ -38,4 +38,7 @@ public class UpdateUserRequest {
 
     /** Optional: additional workflow tier role (INITIATOR / VERIFIER / AUTHORIZER). Empty string = remove tier role. */
     private String workflowTierRole;
+
+    /** Optional: assign user to a UserGroup (drives module permissions + workflow tier). */
+    private UUID userGroupId;
 }

@@ -18,6 +18,8 @@ public interface PosService {
 
     PosShiftResponse closeShift(UUID shiftId, CloseShiftRequest request, UUID cashierId);
 
+    PosShiftResponse reconcileShift(UUID shiftId, UUID supervisorId);
+
     PosShiftResponse getCurrentShift(UUID branchId, UUID cashierId);
 
     ShiftReconciliationResponse getShiftReconciliation(UUID shiftId);

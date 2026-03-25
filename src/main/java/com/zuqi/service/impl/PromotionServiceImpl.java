@@ -1,7 +1,9 @@
 package com.zuqi.service.impl;
 
+import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
 import com.zuqi.api.dto.pricing.CreatePromotionRequest;
 import com.zuqi.api.dto.pricing.PromotionResponse;
+import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.pricing.Promotion;
 import com.zuqi.domain.product.Product;
@@ -10,6 +12,7 @@ import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.ProductRepository;
 import com.zuqi.repository.PromotionRepository;
+import com.zuqi.service.ApprovalService;
 import com.zuqi.service.PromotionService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +21,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -28,11 +32,15 @@ public class PromotionServiceImpl implements PromotionService {
     private final ProductRepository     productRepository;
     private final DistributorRepository distributorRepository;
     private final SecurityUtils         securityUtils;
+    private final ApprovalService       approvalService;
 
     @Override
     @Transactional
     public PromotionResponse create(CreatePromotionRequest request) {
         Distributor distributor = resolveDistributor();
+        UUID currentUserId = securityUtils.getCurrentUserId();
+        boolean needsApproval = securityUtils.currentUserHasWorkflowTier("INITIATOR");
+
         Product product = request.getProductId() != null
                 ? productRepository.findById(request.getProductId())
                         .orElseThrow(() -> new ResourceNotFoundException("Product", "id", request.getProductId()))
@@ -49,9 +57,29 @@ public class PromotionServiceImpl implements PromotionService {
                 .validFrom(request.getValidFrom())
                 .validTo(request.getValidTo())
                 .active(true)
+                .approvalStatus(needsApproval ? "PENDING_APPROVAL" : "APPROVED")
+                .createdById(currentUserId)
                 .build();
 
-        return toResponse(promotionRepository.save(promotion));
+        Promotion saved = promotionRepository.save(promotion);
+
+        if (needsApproval) {
+            approvalService.createRequest(currentUserId,
+                    CreateApprovalRequestDto.builder()
+                            .workflowType(ApprovalWorkflowType.DISCOUNT_APPROVAL)
+                            .entityType("PROMOTION")
+                            .entityId(saved.getId())
+                            .entityName(saved.getName())
+                            .description("New promotion: " + saved.getName())
+                            .requestedValues(Map.of(
+                                    "name", saved.getName(),
+                                    "promotionType", saved.getPromotionType(),
+                                    "discountValue", String.valueOf(saved.getDiscountValue())))
+                            .requiredApprovals(1)
+                            .build());
+        }
+
+        return toResponse(saved);
     }
 
     @Override
@@ -123,6 +151,8 @@ public class PromotionServiceImpl implements PromotionService {
                 .validFrom(p.getValidFrom())
                 .validTo(p.getValidTo())
                 .active(p.isActive())
+                .approvalStatus(p.getApprovalStatus())
+                .createdById(p.getCreatedById())
                 .createdAt(p.getCreatedAt())
                 .build();
     }

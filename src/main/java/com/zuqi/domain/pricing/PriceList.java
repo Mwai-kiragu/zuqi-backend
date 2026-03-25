@@ -52,6 +52,13 @@ public class PriceList {
     @Builder.Default
     private List<PriceListItem> items = new ArrayList<>();
 
+    @Column(name = "approval_status", length = 30)
+    @Builder.Default
+    private String approvalStatus = "APPROVED";
+
+    @Column(name = "created_by_id")
+    private UUID createdById;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

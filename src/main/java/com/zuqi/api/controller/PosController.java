@@ -67,6 +67,13 @@ public class PosController {
         return ResponseEntity.ok(ApiResponse.success("Shift closed", posService.closeShift(shiftId, request, cashierId)));
     }
 
+    @PostMapping("/shifts/{shiftId}/reconcile")
+    @Operation(summary = "Reconcile a closed shift (supervisor only)", description = "Approves reconciliation for a closed shift. Caller must not be the shift's cashier.")
+    public ResponseEntity<ApiResponse<PosShiftResponse>> reconcileShift(@PathVariable UUID shiftId) {
+        UUID supervisorId = securityUtils.getCurrentUserId();
+        return ResponseEntity.ok(ApiResponse.success("Shift reconciled", posService.reconcileShift(shiftId, supervisorId)));
+    }
+
     @GetMapping("/shifts/{shiftId}/reconciliation")
     @Operation(summary = "Get shift reconciliation preview (payment breakdown before closing)")
     public ResponseEntity<ApiResponse<ShiftReconciliationResponse>> getShiftReconciliation(

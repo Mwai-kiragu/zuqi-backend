@@ -22,5 +22,7 @@ public class PromotionResponse {
     private LocalDate validFrom;
     private LocalDate validTo;
     private boolean active;
+    private String approvalStatus;
+    private UUID createdById;
     private LocalDateTime createdAt;
 }

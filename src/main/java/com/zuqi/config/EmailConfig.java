@@ -18,6 +18,18 @@ public class EmailConfig {
     private String from;
     private String fromName;
     private boolean enabled = true;
+    /** Email provider: SMTP (default/Gmail) or SES (Amazon SES) */
+    private String provider = "SMTP";
+
+    @Getter
+    @Setter
+    public static class SesProperties {
+        private String region = "us-east-1";
+        private String accessKey;
+        private String secretKey;
+    }
+
+    private SesProperties ses = new SesProperties();
 
     @Bean
     public SpringTemplateEngine emailTemplateEngine() {

@@ -27,4 +27,9 @@ public class PosShiftResponse {
     private LocalDateTime openedAt;
     private LocalDateTime closedAt;
     private LocalDateTime createdAt;
+
+    /** NOT_REQUIRED | PENDING | APPROVED | REJECTED */
+    private String reconciliationStatus;
+    private UUID reconciledById;
+    private LocalDateTime reconciledAt;
 }

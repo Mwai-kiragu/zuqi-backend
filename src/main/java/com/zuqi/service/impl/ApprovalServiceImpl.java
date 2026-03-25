@@ -15,10 +15,17 @@ import com.zuqi.domain.audit.ActivityAction;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
+import com.zuqi.domain.inventory.Stock;
+import com.zuqi.domain.inventory.StockMovement;
 import com.zuqi.repository.ApprovalActionRepository;
 import com.zuqi.repository.ApprovalRequestRepository;
 import com.zuqi.repository.CustomerRepository;
+import com.zuqi.repository.PosShiftRepository;
+import com.zuqi.repository.PriceListRepository;
 import com.zuqi.repository.ProductRepository;
+import com.zuqi.repository.PromotionRepository;
+import com.zuqi.repository.StockMovementRepository;
+import com.zuqi.repository.StockRepository;
 import com.zuqi.repository.SupplierRepository;
 import com.zuqi.repository.UserRepository;
 import com.zuqi.service.ActivityLogService;
@@ -52,6 +59,11 @@ public class ApprovalServiceImpl implements ApprovalService {
     private final CustomerRepository customerRepository;
     private final SupplierRepository supplierRepository;
     private final ProductRepository productRepository;
+    private final PriceListRepository priceListRepository;
+    private final PromotionRepository promotionRepository;
+    private final StockMovementRepository stockMovementRepository;
+    private final StockRepository stockRepository;
+    private final PosShiftRepository posShiftRepository;
     private final ActivityLogService activityLogService;
     private final EmailService emailService;
     private final EmailConfig emailConfig;
@@ -171,22 +183,73 @@ public class ApprovalServiceImpl implements ApprovalService {
         notifyRequesterAsync(updated, approver);
 
         if (updated.getStatus() == ApprovalStatus.APPROVED) {
-            updateEntityApprovalStatus(updated, "APPROVED");
+            updateEntityApprovalStatus(updated, "APPROVED", approverId);
         } else if (updated.getStatus() == ApprovalStatus.REJECTED) {
-            updateEntityApprovalStatus(updated, "REJECTED");
+            updateEntityApprovalStatus(updated, "REJECTED", approverId);
         }
 
         return toResponse(updated);
     }
 
-    private void updateEntityApprovalStatus(ApprovalRequest request, String status) {
+    private void updateEntityApprovalStatus(ApprovalRequest request, String status, UUID approverId) {
         if (request.getEntityId() == null) return;
         UUID entityId = request.getEntityId();
         switch (request.getEntityType()) {
-            case "CUSTOMER" -> customerRepository.updateApprovalStatus(entityId, status);
-            case "SUPPLIER" -> supplierRepository.updateApprovalStatus(entityId, status);
-            case "PRODUCT"  -> productRepository.updateApprovalStatus(entityId, status);
+            case "CUSTOMER"       -> customerRepository.updateApprovalStatus(entityId, status);
+            case "SUPPLIER"       -> supplierRepository.updateApprovalStatus(entityId, status);
+            case "PRODUCT"        -> productRepository.updateApprovalStatus(entityId, status);
+            case "PRICE_LIST"     -> priceListRepository.updateApprovalStatus(entityId, status);
+            case "PROMOTION"      -> promotionRepository.updateApprovalStatus(entityId, status);
+            case "STOCK_MOVEMENT" -> {
+                stockMovementRepository.updateApprovalStatus(entityId, status);
+                if ("APPROVED".equals(status)) {
+                    applyApprovedStockMovement(entityId);
+                }
+            }
+            case "POS_SHIFT" -> {
+                String reconcileStatus = "APPROVED".equals(status) ? "APPROVED" : "REJECTED";
+                posShiftRepository.updateReconciliationStatus(entityId, reconcileStatus,
+                        approverId, java.time.LocalDateTime.now());
+            }
             default -> { /* no-op for other entity types */ }
+        }
+    }
+
+    private void applyApprovedStockMovement(UUID movementId) {
+        try {
+            StockMovement movement = stockMovementRepository.findById(movementId).orElse(null);
+            if (movement == null || !"APPROVED".equals(movement.getApprovalStatus())) return;
+
+            Stock stock = stockRepository.findByWarehouseIdAndProductId(
+                    movement.getWarehouse().getId(), movement.getProduct().getId())
+                    .orElseGet(() -> {
+                        Stock s = new Stock();
+                        s.setWarehouse(movement.getWarehouse());
+                        s.setProduct(movement.getProduct());
+                        s.setQuantity(java.math.BigDecimal.ZERO);
+                        s.setReservedQuantity(java.math.BigDecimal.ZERO);
+                        return s;
+                    });
+
+            java.math.BigDecimal newQty;
+            switch (movement.getMovementType()) {
+                case IN         -> newQty = stock.getQuantity().add(movement.getQuantity());
+                case ADJUSTMENT -> newQty = movement.getQuantity();
+                case OUT, TRANSFER -> {
+                    newQty = stock.getQuantity().subtract(movement.getQuantity());
+                    if (newQty.compareTo(java.math.BigDecimal.ZERO) < 0) {
+                        log.warn("Approved stock movement {} would result in negative stock — skipping apply", movementId);
+                        return;
+                    }
+                }
+                default -> { return; }
+            }
+            stock.setQuantity(newQty);
+            stock.setLastStockCheck(java.time.LocalDateTime.now());
+            stockRepository.save(stock);
+            log.info("Applied approved stock movement {} — new balance: {}", movementId, newQty);
+        } catch (Exception e) {
+            log.warn("Could not apply approved stock movement {}: {}", movementId, e.getMessage());
         }
     }
 

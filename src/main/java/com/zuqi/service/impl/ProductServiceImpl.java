@@ -17,6 +17,9 @@ import com.zuqi.domain.product.ProductCategory;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.DuplicateResourceException;
 import com.zuqi.exception.ResourceNotFoundException;
+import com.zuqi.api.dto.inventory.StockAdjustmentRequest;
+import com.zuqi.domain.inventory.Stock;
+import com.zuqi.domain.inventory.StockMovement;
 import com.zuqi.repository.DistributorBranchRepository;
 import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.GlAccountRepository;
@@ -24,7 +27,9 @@ import com.zuqi.repository.ProductBranchPriceRepository;
 import com.zuqi.repository.ProductCategoryRepository;
 import com.zuqi.repository.ProductRepository;
 import com.zuqi.repository.StockRepository;
+import com.zuqi.repository.WarehouseRepository;
 import com.zuqi.service.ApprovalService;
+import com.zuqi.service.InventoryService;
 import com.zuqi.service.ProductService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -55,9 +60,11 @@ public class ProductServiceImpl implements ProductService {
     private final DistributorBranchRepository branchRepository;
     private final ProductBranchPriceRepository branchPriceRepository;
     private final StockRepository stockRepository;
+    private final WarehouseRepository warehouseRepository;
     private final GlAccountRepository glAccountRepository;
     private final SecurityUtils securityUtils;
     private final ApprovalService approvalService;
+    private final InventoryService inventoryService;
 
     @Override
     @Transactional(readOnly = true)
@@ -205,7 +212,7 @@ public class ProductServiceImpl implements ProductService {
             product.setCategory(category);
         }
 
-        boolean needsApproval = securityUtils.currentUserHasRole("INITIATOR");
+        boolean needsApproval = securityUtils.currentUserHasWorkflowTier("INITIATOR");
         product.setApprovalStatus(needsApproval ? "PENDING_APPROVAL" : "APPROVED");
         UUID currentUserId = securityUtils.getCurrentUserId();
         product.setCreatedById(currentUserId);
@@ -230,6 +237,45 @@ public class ProductServiceImpl implements ProductService {
 
         if (request.getBranchPrices() != null && !request.getBranchPrices().isEmpty()) {
             saveBranchPrices(savedProduct, request.getBranchPrices());
+        }
+
+        // Opening stock — create a Stock record in the specified warehouse
+        if (request.getOpeningStockWarehouseId() != null) {
+            UUID warehouseId = request.getOpeningStockWarehouseId();
+            warehouseRepository.findById(warehouseId).ifPresent(warehouse -> {
+                BigDecimal qty = request.getOpeningStockQuantity() != null
+                        ? request.getOpeningStockQuantity() : BigDecimal.ZERO;
+
+                if (qty.compareTo(BigDecimal.ZERO) > 0) {
+                    // Use InventoryService so the INITIATOR check + approval flow applies automatically
+                    try {
+                        StockAdjustmentRequest stockReq = StockAdjustmentRequest.builder()
+                                .warehouseId(warehouseId)
+                                .productId(savedProduct.getId())
+                                .quantity(qty)
+                                .movementType(StockMovement.MovementType.IN)
+                                .referenceType("PRODUCT_CREATION")
+                                .referenceId(savedProduct.getId())
+                                .notes("Opening stock for new product: " + savedProduct.getName())
+                                .build();
+                        inventoryService.adjustStock(stockReq, securityUtils.getCurrentUserId());
+                    } catch (Exception e) {
+                        log.warn("Could not create opening stock movement for product {}: {}", savedProduct.getId(), e.getMessage());
+                    }
+                } else {
+                    // Quantity = 0: create a zero-quantity Stock record so the product appears in inventory
+                    boolean exists = stockRepository.findByWarehouseIdAndProductId(warehouseId, savedProduct.getId()).isPresent();
+                    if (!exists) {
+                        stockRepository.save(Stock.builder()
+                                .warehouse(warehouse)
+                                .product(savedProduct)
+                                .quantity(BigDecimal.ZERO)
+                                .reservedQuantity(BigDecimal.ZERO)
+                                .build());
+                        log.info("Created zero-quantity stock record for product {} in warehouse {}", savedProduct.getId(), warehouseId);
+                    }
+                }
+            });
         }
 
         ProductResponse response = ProductResponse.fromEntity(savedProduct);

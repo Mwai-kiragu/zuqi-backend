@@ -57,4 +57,14 @@ public class AuthenticationResponse {
 
     @JsonProperty("must_change_password")
     private boolean mustChangePassword;
+
+    /** Effective workflow tier: from UserGroup if set, else from legacy role (INITIATOR/VERIFIER/AUTHORIZER). */
+    @JsonProperty("workflow_tier")
+    private String workflowTier;
+
+    @JsonProperty("user_group_id")
+    private UUID userGroupId;
+
+    @JsonProperty("user_group_name")
+    private String userGroupName;
 }

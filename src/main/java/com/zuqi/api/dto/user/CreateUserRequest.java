@@ -45,4 +45,7 @@ public class CreateUserRequest {
     /** Optional: additional workflow tier role (INITIATOR / VERIFIER / AUTHORIZER).
      *  When provided the user will carry BOTH their primary functional role AND this tier role. */
     private String workflowTierRole;
+
+    /** Optional: assign user to a UserGroup (drives module permissions + workflow tier). */
+    private UUID userGroupId;
 }

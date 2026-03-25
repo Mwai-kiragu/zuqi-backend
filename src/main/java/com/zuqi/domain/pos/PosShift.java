@@ -65,6 +65,17 @@ public class PosShift {
     @Column(name = "closed_at")
     private LocalDateTime closedAt;
 
+    /** NOT_REQUIRED | PENDING | APPROVED | REJECTED */
+    @Column(name = "reconciliation_status", length = 30)
+    @Builder.Default
+    private String reconciliationStatus = "NOT_REQUIRED";
+
+    @Column(name = "reconciled_by_id")
+    private UUID reconciledById;
+
+    @Column(name = "reconciled_at")
+    private LocalDateTime reconciledAt;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

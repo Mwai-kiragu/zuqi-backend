@@ -269,6 +269,12 @@ app:
     from: ${EMAIL_FROM:onesmusmwai40@gmail.com}
     from-name: ${EMAIL_FROM_NAME:Zuqi}
     enabled: ${EMAIL_ENABLED:true}
+    # EMAIL_PROVIDER=SMTP (default) or SES
+    provider: ${EMAIL_PROVIDER:SMTP}
+    ses:
+      region: ${AWS_SES_REGION:us-east-1}
+      access-key: ${AWS_SES_ACCESS_KEY:}
+      secret-key: ${AWS_SES_SECRET_KEY:}
   frontend:
     url: ${FRONTEND_URL:https://zuqi.pestoe.com}
 
