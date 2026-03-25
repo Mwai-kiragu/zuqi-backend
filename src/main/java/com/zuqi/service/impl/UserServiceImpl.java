@@ -12,6 +12,7 @@ import com.zuqi.domain.branch.DistributorBranch;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.merchant.Merchant;
 import com.zuqi.domain.audit.ActivityAction;
+import com.zuqi.domain.accesscontrol.UserGroup;
 import com.zuqi.domain.user.Role;
 import com.zuqi.domain.user.RoleName;
 import com.zuqi.domain.user.User;
@@ -23,6 +24,7 @@ import com.zuqi.repository.DistributorBranchRepository;
 import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.MerchantRepository;
 import com.zuqi.repository.RoleRepository;
+import com.zuqi.repository.UserGroupRepository;
 import com.zuqi.repository.UserRepository;
 import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.EmailService;
@@ -51,6 +53,7 @@ public class UserServiceImpl implements UserService {
     private final DistributorRepository distributorRepository;
     private final MerchantRepository merchantRepository;
     private final PasswordEncoder passwordEncoder;
+    private final UserGroupRepository userGroupRepository;
     private final SecurityUtils securityUtils;
     private final ActivityLogService activityLogService;
     private final EmailService emailService;
@@ -272,6 +275,12 @@ public class UserServiceImpl implements UserService {
                     .ifPresent(roles::add);
         }
 
+        // Resolve optional UserGroup
+        UserGroup userGroup = null;
+        if (request.getUserGroupId() != null) {
+            userGroup = userGroupRepository.findById(request.getUserGroupId()).orElse(null);
+        }
+
         User user = User.builder()
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
@@ -281,6 +290,7 @@ public class UserServiceImpl implements UserService {
                 .roles(roles)
                 .distributorId(finalDistributorId)
                 .merchantId(request.getMerchantId())
+                .userGroup(userGroup)
                 .active(true)
                 .emailVerified(false)
                 .build();
@@ -379,6 +389,13 @@ public class UserServiceImpl implements UserService {
         // Update distributor and merchant IDs
         user.setDistributorId(request.getDistributorId());
         user.setMerchantId(request.getMerchantId());
+
+        // Update UserGroup
+        if (request.getUserGroupId() != null) {
+            userGroupRepository.findById(request.getUserGroupId()).ifPresent(user::setUserGroup);
+        } else {
+            user.setUserGroup(null);
+        }
 
         if (request.getActive() != null) {
             user.setActive(request.getActive());

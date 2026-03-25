@@ -30,4 +30,6 @@ public class StockMovementResponse {
     private UUID createdById;
     private String createdByName;
     private LocalDateTime createdAt;
+    /** APPROVED | PENDING_APPROVAL | REJECTED */
+    private String approvalStatus;
 }

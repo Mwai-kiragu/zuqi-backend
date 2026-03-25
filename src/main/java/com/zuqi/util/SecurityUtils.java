@@ -1,10 +1,12 @@
 package com.zuqi.util;
 
+import com.zuqi.domain.accesscontrol.UserTypePermission;
 import com.zuqi.domain.user.User;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.UUID;
 
 @Component
@@ -73,6 +75,60 @@ public class SecurityUtils {
         // Other users can only access their own distributor
         UUID userDistributorId = getCurrentUserDistributorId();
         return userDistributorId != null && userDistributorId.equals(distributorId);
+    }
+
+    /**
+     * Returns the workflow tier from the user's group (INITIATOR / VERIFIER / AUTHORIZER),
+     * or null if the user has no group or the group has no workflow tier.
+     * Also falls back to the legacy role-based tier for backwards compatibility.
+     */
+    public String getCurrentUserWorkflowTier() {
+        User user = getCurrentUser();
+        if (user == null) return null;
+        // UserGroup-based tier (new system)
+        if (user.getUserGroup() != null && user.getUserGroup().getWorkflowTier() != null) {
+            return user.getUserGroup().getWorkflowTier();
+        }
+        // Legacy role-based tier (for existing INITIATOR/VERIFIER/AUTHORIZER role users)
+        for (String tier : List.of("INITIATOR", "VERIFIER", "AUTHORIZER")) {
+            if (hasRole(user, tier)) return tier;
+        }
+        return null;
+    }
+
+    /**
+     * Returns true if the current user's workflow tier matches the given tier.
+     */
+    public boolean currentUserHasWorkflowTier(String tier) {
+        return tier != null && tier.equals(getCurrentUserWorkflowTier());
+    }
+
+    /**
+     * Returns true if the current user can perform the given action on the given module.
+     * System-level admins (SUPER_ADMIN, DISTRIBUTOR_ADMIN, MERCHANT_ADMIN) always have access.
+     * Staff users are checked against their UserType permissions.
+     */
+    public boolean currentUserHasModulePermission(String module, String action) {
+        User user = getCurrentUser();
+        if (user == null) return false;
+        // System admins bypass module permissions
+        for (String adminRole : List.of("SUPER_ADMIN", "DISTRIBUTOR_ADMIN", "MERCHANT_ADMIN")) {
+            if (hasRole(user, adminRole)) return true;
+        }
+        // Check UserType permissions
+        if (user.getUserGroup() == null || user.getUserGroup().getUserType() == null) return false;
+        return user.getUserGroup().getUserType().getPermissions().stream()
+                .filter(p -> p.getModule().equalsIgnoreCase(module))
+                .findFirst()
+                .map(p -> switch (action.toUpperCase()) {
+                    case "CREATE" -> p.isCanCreate();
+                    case "READ"   -> p.isCanRead();
+                    case "UPDATE" -> p.isCanUpdate();
+                    case "DELETE" -> p.isCanDelete();
+                    case "APPROVE" -> p.isCanApprove();
+                    default -> false;
+                })
+                .orElse(false);
     }
 
     /**

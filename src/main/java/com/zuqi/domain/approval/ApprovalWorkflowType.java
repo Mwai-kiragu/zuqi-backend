@@ -37,5 +37,8 @@ public enum ApprovalWorkflowType {
     // User Management
     USER_CREATION,
     USER_DEACTIVATION,
-    USER_ROLE_CHANGE
+    USER_ROLE_CHANGE,
+
+    // POS
+    POS_SHIFT_RECONCILIATION
 }

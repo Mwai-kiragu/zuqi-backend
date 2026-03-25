@@ -22,6 +22,8 @@ public interface InventoryService {
 
     StockResponse adjustStock(StockAdjustmentRequest request, UUID userId);
 
+    StockMovementResponse approveStockAdjustment(UUID movementId, UUID approverId);
+
     Page<StockResponse> getLowStock(UUID distributorId, Pageable pageable);
 
     // Warehouse operations

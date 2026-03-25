@@ -57,6 +57,14 @@ public class StockMovement {
     @JoinColumn(name = "created_by")
     private User createdBy;
 
+    @Column(name = "created_by_id")
+    private UUID createdById;
+
+    /** APPROVED (default) | PENDING_APPROVAL | REJECTED */
+    @Column(name = "approval_status", length = 30)
+    @Builder.Default
+    private String approvalStatus = "APPROVED";
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

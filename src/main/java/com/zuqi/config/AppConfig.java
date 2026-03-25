@@ -11,5 +11,5 @@ import org.springframework.context.annotation.Configuration;
 @Setter
 public class AppConfig {
 
-    private String url = "http://localhost:3000";
+    private String url = "https://zuqi.pestoe.com";
 }

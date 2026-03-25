@@ -1,6 +1,8 @@
 package com.zuqi.service.impl;
 
+import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
 import com.zuqi.api.dto.pricing.*;
+import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.pricing.PriceList;
 import com.zuqi.domain.pricing.PriceListItem;
@@ -10,6 +12,7 @@ import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.PriceListRepository;
 import com.zuqi.repository.ProductRepository;
+import com.zuqi.service.ApprovalService;
 import com.zuqi.service.PriceListService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -33,11 +38,14 @@ public class PriceListServiceImpl implements PriceListService {
     private final ProductRepository    productRepository;
     private final DistributorRepository distributorRepository;
     private final SecurityUtils        securityUtils;
+    private final ApprovalService      approvalService;
 
     @Override
     @Transactional
     public PriceListResponse create(CreatePriceListRequest request) {
         Distributor distributor = resolveDistributor();
+        UUID currentUserId = securityUtils.getCurrentUserId();
+        boolean needsApproval = securityUtils.currentUserHasWorkflowTier("INITIATOR");
 
         PriceList priceList = PriceList.builder()
                 .distributor(distributor)
@@ -47,10 +55,28 @@ public class PriceListServiceImpl implements PriceListService {
                 .active(true)
                 .validFrom(request.getValidFrom())
                 .validTo(request.getValidTo())
+                .approvalStatus(needsApproval ? "PENDING_APPROVAL" : "APPROVED")
+                .createdById(currentUserId)
                 .build();
 
         buildItems(priceList, request.getItems());
-        return toResponse(priceListRepository.save(priceList));
+        PriceList saved = priceListRepository.save(priceList);
+
+        if (needsApproval) {
+            approvalService.createRequest(currentUserId,
+                    CreateApprovalRequestDto.builder()
+                            .workflowType(ApprovalWorkflowType.PRODUCT_PRICE_EDIT)
+                            .entityType("PRICE_LIST")
+                            .entityId(saved.getId())
+                            .entityName(saved.getName())
+                            .description("New price list: " + saved.getName())
+                            .requestedValues(Map.of("name", saved.getName(),
+                                    "itemCount", String.valueOf(saved.getItems().size())))
+                            .requiredApprovals(1)
+                            .build());
+        }
+
+        return toResponse(saved);
     }
 
     @Override
@@ -139,6 +165,8 @@ public class PriceListServiceImpl implements PriceListService {
                 .validFrom(pl.getValidFrom())
                 .validTo(pl.getValidTo())
                 .items(items)
+                .approvalStatus(pl.getApprovalStatus())
+                .createdById(pl.getCreatedById())
                 .createdAt(pl.getCreatedAt())
                 .build();
     }

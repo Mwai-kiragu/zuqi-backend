@@ -86,6 +86,18 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     // OTP expires in 10 minutes
     private static final int OTP_EXPIRY_MINUTES = 10;
 
+    private String resolveWorkflowTier(User user) {
+        // Prefer UserGroup workflow tier over legacy role-based tier
+        if (user.getUserGroup() != null && user.getUserGroup().getWorkflowTier() != null) {
+            return user.getUserGroup().getWorkflowTier();
+        }
+        if (user.getRoles() == null) return null;
+        return user.getRoles().stream()
+                .map(r -> r.getName())
+                .filter(n -> n.equals("INITIATOR") || n.equals("VERIFIER") || n.equals("AUTHORIZER"))
+                .findFirst().orElse(null);
+    }
+
     private String resolveKycStatus(User user) {
         // Brand Merchant admin: resolve KYC from Merchant entity
         if (user.getMerchantId() != null) {
@@ -444,6 +456,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .emailVerified(savedUser.isEmailVerified())
                 .kycStatus(resolveKycStatus(savedUser))
                 .mustChangePassword(savedUser.isMustChangePassword())
+                .workflowTier(resolveWorkflowTier(savedUser))
+                .userGroupId(savedUser.getUserGroup() != null ? savedUser.getUserGroup().getId() : null)
+                .userGroupName(savedUser.getUserGroup() != null ? savedUser.getUserGroup().getName() : null)
                 .build();
     }
 
@@ -501,6 +516,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .emailVerified(user.isEmailVerified())
                 .kycStatus(resolveKycStatus(user))
                 .mustChangePassword(user.isMustChangePassword())
+                .workflowTier(resolveWorkflowTier(user))
+                .userGroupId(user.getUserGroup() != null ? user.getUserGroup().getId() : null)
+                .userGroupName(user.getUserGroup() != null ? user.getUserGroup().getName() : null)
                 .build();
     }
 
@@ -544,6 +562,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .phoneNumber(user.getPhoneNumber())
                 .emailVerified(user.isEmailVerified())
                 .kycStatus(resolveKycStatus(user))
+                .workflowTier(resolveWorkflowTier(user))
+                .userGroupId(user.getUserGroup() != null ? user.getUserGroup().getId() : null)
+                .userGroupName(user.getUserGroup() != null ? user.getUserGroup().getName() : null)
                 .build();
     }
 
@@ -707,6 +728,9 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .emailVerified(true)
                 .kycStatus(resolveKycStatus(user))
                 .mustChangePassword(user.isMustChangePassword())
+                .workflowTier(resolveWorkflowTier(user))
+                .userGroupId(user.getUserGroup() != null ? user.getUserGroup().getId() : null)
+                .userGroupName(user.getUserGroup() != null ? user.getUserGroup().getName() : null)
                 .build();
     }
 

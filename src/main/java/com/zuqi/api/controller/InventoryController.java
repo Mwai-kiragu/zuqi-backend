@@ -69,13 +69,22 @@ public class InventoryController {
     }
 
     @PostMapping("/adjust")
-    @Operation(summary = "Adjust stock", description = "Adjust stock levels (IN, OUT, ADJUSTMENT, TRANSFER)")
+    @Operation(summary = "Adjust stock", description = "Adjust stock levels (IN, OUT, ADJUSTMENT, TRANSFER). INITIATOR role creates a pending movement awaiting approval.")
     public ResponseEntity<ApiResponse<StockResponse>> adjustStock(
             @Valid @RequestBody StockAdjustmentRequest request,
             @AuthenticationPrincipal User currentUser) {
         StockResponse stock = inventoryService.adjustStock(request, currentUser.getId());
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Stock adjusted successfully", stock));
+    }
+
+    @PostMapping("/movements/{movementId}/approve")
+    @Operation(summary = "Approve a pending stock adjustment", description = "VERIFIER/AUTHORIZER approves a pending stock movement and applies the quantity change")
+    public ResponseEntity<ApiResponse<StockMovementResponse>> approveStockAdjustment(
+            @PathVariable UUID movementId,
+            @AuthenticationPrincipal User currentUser) {
+        StockMovementResponse response = inventoryService.approveStockAdjustment(movementId, currentUser.getId());
+        return ResponseEntity.ok(ApiResponse.success("Stock adjustment approved", response));
     }
 
     @GetMapping("/low-stock")

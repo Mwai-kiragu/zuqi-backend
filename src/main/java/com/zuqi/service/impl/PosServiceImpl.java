@@ -1,6 +1,8 @@
 package com.zuqi.service.impl;
 
+import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
 import com.zuqi.api.dto.pos.*;
+import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.branch.DistributorBranch;
 import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.inventory.*;
@@ -16,6 +18,7 @@ import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.event.PosSaleCompletedEvent;
 import com.zuqi.repository.*;
+import com.zuqi.service.ApprovalService;
 import com.zuqi.service.GlAutoPostingService;
 import com.zuqi.service.InvoiceService;
 import com.zuqi.service.PaymentService;
@@ -62,6 +65,7 @@ public class PosServiceImpl implements PosService {
     private final PaymentService paymentService;
     private final GlAutoPostingService glAutoPostingService;
     private final ApplicationEventPublisher eventPublisher;
+    private final ApprovalService approvalService;
 
 
     @Override
@@ -144,6 +148,7 @@ public class PosServiceImpl implements PosService {
         PosShift shift = shiftRepository.findById(shiftId)
                 .orElseThrow(() -> new ResourceNotFoundException("Shift", "id", shiftId));
 
+        // Maker-checker: only the shift's own cashier can close (record the cash count)
         if (!shift.getCashier().getId().equals(cashierId)) {
             throw new ValidationException("Only the shift owner can close this shift");
         }
@@ -164,8 +169,52 @@ public class PosServiceImpl implements PosService {
         shift.setExpectedCash(shift.getOpeningFloat().add(cashSales != null ? cashSales : BigDecimal.ZERO));
         shift.setNotes(request.getNotes());
         shift.setClosedAt(LocalDateTime.now());
+        shift.setReconciliationStatus("PENDING");
 
-        return mapToShiftResponse(shiftRepository.save(shift));
+        PosShift saved = shiftRepository.save(shift);
+
+        // Create an approval request for reconciliation — a different user must approve
+        try {
+            approvalService.createRequest(cashierId, CreateApprovalRequestDto.builder()
+                    .workflowType(ApprovalWorkflowType.POS_SHIFT_RECONCILIATION)
+                    .entityType("POS_SHIFT")
+                    .entityId(saved.getId())
+                    .entityName("Shift closed by " + shift.getCashier().getFullName())
+                    .description("POS shift reconciliation: closing float " + request.getClosingFloat()
+                            + ", expected cash " + saved.getExpectedCash())
+                    .requiredApprovals(1)
+                    .build());
+        } catch (Exception e) {
+            log.warn("Could not create reconciliation approval request for shift {}: {}", shiftId, e.getMessage());
+        }
+
+        log.info("Shift {} closed by cashier {} — reconciliation pending supervisor approval", shiftId, cashierId);
+        return mapToShiftResponse(saved);
+    }
+
+    @Override
+    @Transactional
+    public PosShiftResponse reconcileShift(UUID shiftId, UUID supervisorId) {
+        PosShift shift = shiftRepository.findById(shiftId)
+                .orElseThrow(() -> new ResourceNotFoundException("Shift", "id", shiftId));
+
+        if (shift.getStatus() != PosShiftStatus.CLOSED) {
+            throw new ValidationException("Shift must be closed before reconciliation");
+        }
+        if (!"PENDING".equals(shift.getReconciliationStatus())) {
+            throw new ValidationException("Shift reconciliation is not pending");
+        }
+        if (shift.getCashier().getId().equals(supervisorId)) {
+            throw new ValidationException("The cashier cannot reconcile their own shift");
+        }
+
+        shiftRepository.updateReconciliationStatus(shiftId, "APPROVED", supervisorId, LocalDateTime.now());
+        shift.setReconciliationStatus("APPROVED");
+        shift.setReconciledById(supervisorId);
+        shift.setReconciledAt(LocalDateTime.now());
+
+        log.info("Shift {} reconciled by supervisor {}", shiftId, supervisorId);
+        return mapToShiftResponse(shift);
     }
 
     @Override
@@ -759,6 +808,9 @@ public class PosServiceImpl implements PosService {
                 .openedAt(shift.getOpenedAt())
                 .closedAt(shift.getClosedAt())
                 .createdAt(shift.getCreatedAt())
+                .reconciliationStatus(shift.getReconciliationStatus())
+                .reconciledById(shift.getReconciledById())
+                .reconciledAt(shift.getReconciledAt())
                 .build();
     }
 

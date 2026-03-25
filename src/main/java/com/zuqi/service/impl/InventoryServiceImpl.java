@@ -1,6 +1,8 @@
 package com.zuqi.service.impl;
 
+import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
 import com.zuqi.api.dto.inventory.*;
+import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.inventory.Stock;
 import com.zuqi.domain.inventory.StockMovement;
@@ -13,6 +15,7 @@ import com.zuqi.domain.branch.DistributorBranch;
 import com.zuqi.repository.*;
 import com.zuqi.ai.event.StockAdjustedEvent;
 import com.zuqi.ai.feature.FeatureStore;
+import com.zuqi.service.ApprovalService;
 import com.zuqi.service.InventoryService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -45,6 +49,7 @@ public class InventoryServiceImpl implements InventoryService {
     private final SecurityUtils securityUtils;
     private final ApplicationEventPublisher eventPublisher;
     private final FeatureStore featureStore;
+    private final ApprovalService approvalService;
 
 
     @Override
@@ -86,6 +91,50 @@ public class InventoryServiceImpl implements InventoryService {
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+
+        // INITIATOR role → create pending movement without applying stock change
+        boolean needsApproval = securityUtils.currentUserHasWorkflowTier("INITIATOR");
+        if (needsApproval) {
+            StockMovement pending = StockMovement.builder()
+                    .warehouse(warehouse)
+                    .product(product)
+                    .movementType(request.getMovementType())
+                    .quantity(request.getQuantity())
+                    .referenceType(request.getReferenceType())
+                    .referenceId(request.getReferenceId())
+                    .notes(request.getNotes())
+                    .createdBy(user)
+                    .createdById(userId)
+                    .approvalStatus("PENDING_APPROVAL")
+                    .build();
+            StockMovement saved = stockMovementRepository.save(pending);
+
+            approvalService.createRequest(userId, CreateApprovalRequestDto.builder()
+                    .workflowType(ApprovalWorkflowType.STOCK_ADJUSTMENT)
+                    .entityType("STOCK_MOVEMENT")
+                    .entityId(saved.getId())
+                    .entityName(request.getMovementType().name() + " " + request.getQuantity() + " x " + product.getName())
+                    .description("Stock " + request.getMovementType().name() + " of " + request.getQuantity()
+                            + " units of " + product.getName() + " in " + warehouse.getName())
+                    .requestedValues(Map.of(
+                            "warehouseId", warehouse.getId().toString(),
+                            "productId", product.getId().toString(),
+                            "movementType", request.getMovementType().name(),
+                            "quantity", request.getQuantity().toPlainString()))
+                    .requiredApprovals(1)
+                    .build());
+
+            log.info("Stock adjustment pending approval - Warehouse: {}, Product: {}, Type: {}, Qty: {}",
+                    warehouse.getName(), product.getName(), request.getMovementType(), request.getQuantity());
+
+            // Return current stock unchanged
+            Stock currentStock = stockRepository.findByWarehouseIdAndProductId(
+                    request.getWarehouseId(), request.getProductId())
+                    .orElseGet(() -> Stock.builder()
+                            .warehouse(warehouse).product(product)
+                            .quantity(BigDecimal.ZERO).reservedQuantity(BigDecimal.ZERO).build());
+            return mapToStockResponse(currentStock);
+        }
 
         // Get or create stock record
         Stock stock = stockRepository.findByWarehouseIdAndProductId(
@@ -129,7 +178,7 @@ public class InventoryServiceImpl implements InventoryService {
         stock.setLastStockCheck(LocalDateTime.now());
         Stock savedStock = stockRepository.save(stock);
 
-        // Create movement record
+        // Create movement record (immediately approved)
         StockMovement movement = StockMovement.builder()
                 .warehouse(warehouse)
                 .product(product)
@@ -139,6 +188,8 @@ public class InventoryServiceImpl implements InventoryService {
                 .referenceId(request.getReferenceId())
                 .notes(request.getNotes())
                 .createdBy(user)
+                .createdById(userId)
+                .approvalStatus("APPROVED")
                 .build();
         stockMovementRepository.save(movement);
 
@@ -154,6 +205,61 @@ public class InventoryServiceImpl implements InventoryService {
         publishStockAdjustedEvent(savedStock, previousQuantity, request);
 
         return mapToStockResponse(savedStock);
+    }
+
+    @Override
+    @Transactional
+    public StockMovementResponse approveStockAdjustment(UUID movementId, UUID approverId) {
+        StockMovement movement = stockMovementRepository.findById(movementId)
+                .orElseThrow(() -> new ResourceNotFoundException("StockMovement", "id", movementId));
+
+        if (!"PENDING_APPROVAL".equals(movement.getApprovalStatus())) {
+            throw new ValidationException("Movement is not pending approval");
+        }
+        if (movement.getCreatedById() != null && movement.getCreatedById().equals(approverId)) {
+            throw new ValidationException("The maker cannot approve their own stock adjustment");
+        }
+
+        // Apply the stock change
+        Warehouse warehouse = movement.getWarehouse();
+        Product product = movement.getProduct();
+
+        Stock stock = stockRepository.findByWarehouseIdAndProductId(warehouse.getId(), product.getId())
+                .orElseGet(() -> Stock.builder()
+                        .warehouse(warehouse).product(product)
+                        .quantity(BigDecimal.ZERO).reservedQuantity(BigDecimal.ZERO).build());
+
+        BigDecimal previousQuantity = stock.getQuantity();
+        BigDecimal newQuantity;
+        switch (movement.getMovementType()) {
+            case IN -> newQuantity = stock.getQuantity().add(movement.getQuantity());
+            case OUT -> {
+                newQuantity = stock.getQuantity().subtract(movement.getQuantity());
+                if (newQuantity.compareTo(BigDecimal.ZERO) < 0) {
+                    throw new ValidationException("Insufficient stock. Available: " + stock.getQuantity());
+                }
+            }
+            case ADJUSTMENT -> newQuantity = movement.getQuantity();
+            case TRANSFER -> {
+                newQuantity = stock.getQuantity().subtract(movement.getQuantity());
+                if (newQuantity.compareTo(BigDecimal.ZERO) < 0) {
+                    throw new ValidationException("Insufficient stock for transfer. Available: " + stock.getQuantity());
+                }
+            }
+            default -> throw new ValidationException("Invalid movement type");
+        }
+
+        stock.setQuantity(newQuantity);
+        stock.setLastStockCheck(LocalDateTime.now());
+        stockRepository.save(stock);
+
+        stockMovementRepository.updateApprovalStatus(movementId, "APPROVED");
+        movement.setApprovalStatus("APPROVED");
+
+        featureStore.invalidateWarehouseCache(warehouse.getId());
+        log.info("Stock adjustment approved by {} - movement {}, new balance: {}", approverId, movementId, newQuantity);
+
+        return mapToStockMovementResponse(movement);
     }
 
     @Override
@@ -483,6 +589,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .createdById(movement.getCreatedBy() != null ? movement.getCreatedBy().getId() : null)
                 .createdByName(movement.getCreatedBy() != null ? movement.getCreatedBy().getFullName() : null)
                 .createdAt(movement.getCreatedAt())
+                .approvalStatus(movement.getApprovalStatus())
                 .build();
     }
 
