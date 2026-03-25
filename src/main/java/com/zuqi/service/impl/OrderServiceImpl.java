@@ -32,6 +32,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -216,11 +217,18 @@ public class OrderServiceImpl implements OrderService {
             Product product = productRepository.findById(itemRequest.getProductId())
                     .orElseThrow(() -> new ResourceNotFoundException("Product", "id", itemRequest.getProductId()));
 
+            BigDecimal discountPct = itemRequest.getDiscountPercent() != null ? itemRequest.getDiscountPercent() : BigDecimal.ZERO;
+            BigDecimal effectivePrice = product.getUnitPrice().subtract(
+                    product.getUnitPrice().multiply(discountPct).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP));
+            if (product.getMinSalePrice() != null && effectivePrice.compareTo(product.getMinSalePrice()) < 0) {
+                throw new ValidationException("Price for " + product.getName() + " is below the minimum allowed price of " + product.getMinSalePrice());
+            }
+
             OrderItem item = OrderItem.builder()
                     .product(product)
                     .quantity(itemRequest.getQuantity())
                     .unitPrice(product.getUnitPrice())
-                    .discountPercent(itemRequest.getDiscountPercent() != null ? itemRequest.getDiscountPercent() : BigDecimal.ZERO)
+                    .discountPercent(discountPct)
                     .build();
 
             item.calculateTotal();

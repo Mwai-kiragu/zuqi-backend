@@ -15,4 +15,6 @@ public interface UserGroupRepository extends JpaRepository<UserGroup, UUID> {
     List<UserGroup> findByDistributorId(UUID distributorId);
 
     boolean existsByDistributorIdAndName(UUID distributorId, String name);
+
+    boolean existsByDistributorIdAndNameAndUserTypeId(UUID distributorId, String name, UUID userTypeId);
 }

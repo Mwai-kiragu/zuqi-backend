@@ -67,4 +67,8 @@ public class ProductRequest {
     /** Optional: opening stock quantity (default 0, creates a stock record to show product in inventory) */
     @DecimalMin(value = "0.0", message = "Opening stock must be non-negative")
     private BigDecimal openingStockQuantity;
+
+    /** Optional floor price — no sale or POS transaction may go below this */
+    @DecimalMin(value = "0.0", message = "Floor price must be non-negative")
+    private BigDecimal minSalePrice;
 }

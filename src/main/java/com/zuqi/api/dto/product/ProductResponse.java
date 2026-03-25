@@ -53,6 +53,7 @@ public class ProductResponse {
     private List<ProductBranchPriceResponse> branchPrices;
     private String approvalStatus;
     private UUID createdById;
+    private BigDecimal minSalePrice;
 
     public static ProductResponse fromEntity(Product product) {
         return ProductResponse.builder()
@@ -80,6 +81,7 @@ public class ProductResponse {
                 .cogsAccountId(product.getCogsAccountId())
                 .approvalStatus(product.getApprovalStatus())
                 .createdById(product.getCreatedById())
+                .minSalePrice(product.getMinSalePrice())
                 .build();
     }
 

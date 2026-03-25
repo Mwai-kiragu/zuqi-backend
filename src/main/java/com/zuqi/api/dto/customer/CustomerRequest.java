@@ -48,6 +48,10 @@ public class CustomerRequest {
     @Pattern(regexp = "^[AP]\\d{9}[A-Z]$", message = "Invalid KRA PIN format (e.g. A123456789Z)")
     private String kraPin;
 
+    @NotBlank(message = "National ID is required")
+    @Size(max = 20, message = "National ID must not exceed 20 characters")
+    private String nationalId;
+
     private List<Map<String, Object>> contactPersons;
 
     private BigDecimal latitude;
