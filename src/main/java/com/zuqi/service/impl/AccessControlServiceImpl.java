@@ -120,8 +120,9 @@ public class AccessControlServiceImpl implements AccessControlService {
     @Transactional
     public UserGroupResponse createUserGroup(UserGroupRequest request) {
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
-        if (distributorId != null && userGroupRepository.existsByDistributorIdAndName(distributorId, request.getName())) {
-            throw new ValidationException("A user group with this name already exists");
+        if (distributorId != null && userGroupRepository.existsByDistributorIdAndNameAndUserTypeId(
+                distributorId, request.getName(), request.getUserTypeId())) {
+            throw new ValidationException("A user group with this name already exists for this user type");
         }
 
         UserType userType = userTypeRepository.findById(request.getUserTypeId())
@@ -149,6 +150,16 @@ public class AccessControlServiceImpl implements AccessControlService {
 
         UserType userType = userTypeRepository.findById(request.getUserTypeId())
                 .orElseThrow(() -> new ResourceNotFoundException("UserType", "id", request.getUserTypeId()));
+
+        // Check for name collision only if name or user type is changing
+        UUID distributorId = securityUtils.getDistributorIdForFiltering();
+        boolean nameChanged = !request.getName().equals(g.getName());
+        boolean typeChanged = !request.getUserTypeId().equals(g.getUserType().getId());
+        if (distributorId != null && (nameChanged || typeChanged)
+                && userGroupRepository.existsByDistributorIdAndNameAndUserTypeId(
+                        distributorId, request.getName(), request.getUserTypeId())) {
+            throw new ValidationException("A user group with this name already exists for this user type");
+        }
 
         validateWorkflowTier(request.getWorkflowTier());
 

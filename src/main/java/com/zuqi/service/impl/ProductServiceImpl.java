@@ -204,6 +204,7 @@ public class ProductServiceImpl implements ProductService {
                 .allBranches(request.isAllBranches())
                 .revenueAccountId(request.getRevenueAccountId())
                 .cogsAccountId(request.getCogsAccountId())
+                .minSalePrice(request.getMinSalePrice())
                 .build();
 
         if (request.getCategoryId() != null) {
@@ -329,6 +330,7 @@ public class ProductServiceImpl implements ProductService {
         // GL account overrides (null clears the override)
         product.setRevenueAccountId(request.getRevenueAccountId());
         product.setCogsAccountId(request.getCogsAccountId());
+        product.setMinSalePrice(request.getMinSalePrice());
 
         Product updatedProduct = productRepository.save(product);
         log.info("Product updated successfully: {}", id);

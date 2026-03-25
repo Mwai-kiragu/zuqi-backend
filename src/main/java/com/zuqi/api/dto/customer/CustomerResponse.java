@@ -30,6 +30,7 @@ public class CustomerResponse {
     private String county;
     private String subCounty;
     private String kraPin;
+    private String nationalId;
     private List<Map<String, Object>> contactPersons;
     private BigDecimal latitude;
     private BigDecimal longitude;
@@ -70,6 +71,7 @@ public class CustomerResponse {
                 .county(customer.getCounty())
                 .subCounty(customer.getSubCounty())
                 .kraPin(customer.getKraPin())
+                .nationalId(customer.getNationalId())
                 .contactPersons(customer.getContactPersons())
                 .latitude(customer.getLatitude())
                 .longitude(customer.getLongitude())

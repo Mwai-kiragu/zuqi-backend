@@ -336,6 +336,10 @@ public class PosServiceImpl implements PosService {
                     .multiply(itemReq.getQuantity())
                     .subtract(discount);
 
+            if (product.getMinSalePrice() != null && itemReq.getUnitPrice().compareTo(product.getMinSalePrice()) < 0) {
+                throw new ValidationException("Price for " + product.getName() + " is below the minimum allowed price of " + product.getMinSalePrice());
+            }
+
             PosSaleItem item = PosSaleItem.builder()
                     .sale(sale)
                     .product(product)

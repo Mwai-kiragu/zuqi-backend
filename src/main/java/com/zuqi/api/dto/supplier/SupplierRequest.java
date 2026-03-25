@@ -18,6 +18,7 @@ public class SupplierRequest {
     @Size(max = 255)
     private String name;
 
+    @NotBlank(message = "KRA PIN is required for suppliers")
     @Pattern(regexp = "^[AP]\\d{9}[A-Z]$", message = "Invalid KRA PIN format (e.g. A123456789Z)")
     private String kraPin;
 

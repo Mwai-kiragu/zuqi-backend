@@ -180,6 +180,7 @@ public class CustomerServiceImpl implements CustomerService {
                 .county(request.getCounty())
                 .subCounty(request.getSubCounty())
                 .kraPin(request.getKraPin())
+                .nationalId(request.getNationalId())
                 .contactPersons(request.getContactPersons() != null ? request.getContactPersons() : new java.util.ArrayList<>())
                 .latitude(request.getLatitude())
                 .longitude(request.getLongitude())
@@ -271,6 +272,7 @@ public class CustomerServiceImpl implements CustomerService {
         customer.setCounty(request.getCounty());
         customer.setSubCounty(request.getSubCounty());
         customer.setKraPin(request.getKraPin());
+        customer.setNationalId(request.getNationalId());
         if (request.getContactPersons() != null) customer.setContactPersons(request.getContactPersons());
         customer.setLatitude(request.getLatitude());
         customer.setLongitude(request.getLongitude());

@@ -68,6 +68,9 @@ public class Customer {
     @Column(name = "kra_pin", length = 20, unique = true)
     private String kraPin;
 
+    @Column(name = "national_id", length = 20)
+    private String nationalId;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "contact_persons", columnDefinition = "jsonb")
     @Builder.Default

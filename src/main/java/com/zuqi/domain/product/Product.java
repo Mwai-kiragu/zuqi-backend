@@ -78,6 +78,9 @@ public class Product {
     @Builder.Default
     private boolean allBranches = true;
 
+    @Column(name = "min_sale_price", precision = 15, scale = 2)
+    private BigDecimal minSalePrice;
+
     @Column(nullable = false)
     @Builder.Default
     private boolean active = true;
