@@ -3,21 +3,31 @@ package com.zuqi.ai.synthetic;
 import com.zuqi.ai.synthetic.dto.*;
 
 import com.zuqi.ai.anomaly.AnomalyFeatureBuilder;
+import com.zuqi.ai.cashflow.CashFlowFeatureBuilder;
 import com.zuqi.ai.credit.CreditMlFeatureBuilder;
-import com.zuqi.ai.prediction.StockoutFeatureBuilder;
+import com.zuqi.ai.crm.ChurnFeatureBuilder;
+import com.zuqi.ai.crm.ClvFeatureBuilder;
+import com.zuqi.ai.crm.CustomerAnalyticsFeatures;
+import com.zuqi.ai.crm.SegmentationFeatureBuilder;
+import com.zuqi.ai.crm.SyntheticCustomerAnalyticsFeatureBuilder;
 import com.zuqi.ai.feature.DemandFeatures;
+import com.zuqi.ai.feature.ExpiryFeatures;
 import com.zuqi.ai.feature.InventoryFeatures;
 import com.zuqi.ai.feature.MerchantFeatures;
 import com.zuqi.ai.feature.MerchantPaymentTrendFeatures;
 import com.zuqi.ai.feature.PaymentFeatures;
 import com.zuqi.ai.feature.SalesRepFeatures;
+import com.zuqi.ai.prediction.StockoutFeatureBuilder;
+import com.zuqi.ai.recon.ReconFeatureBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.tribuo.Example;
 import org.tribuo.Feature;
+import org.tribuo.MutableDataset;
 import org.tribuo.anomaly.Event;
 import org.tribuo.classification.Label;
+import org.tribuo.clustering.ClusterID;
 import org.tribuo.impl.ArrayExample;
 import org.tribuo.regression.Regressor;
 
@@ -42,7 +52,7 @@ import java.util.stream.Collectors;
  *       New classification models build vectors inline with {@link ArrayExample}.</li>
  * </ol>
  *
- * <h3>Supported models (9 total)</h3>
+ * <h3>Supported models (15 total)</h3>
  * <ul>
  *   <li>{@link DataPhaseTracker#MODEL_CREDIT_CLASSIFIER}           → {@code Example<Label>}</li>
  *   <li>{@link DataPhaseTracker#MODEL_CREDIT_LIMIT_REGRESSOR}      → {@code Example<Regressor>}</li>
@@ -53,6 +63,12 @@ import java.util.stream.Collectors;
  *   <li>{@link DataPhaseTracker#MODEL_PAYMENT_DISTRESS_CLASSIFIER} → {@code Example<Label>}</li>
  *   <li>{@link DataPhaseTracker#MODEL_REP_PERFORMANCE_PREDICTOR}   → {@code Example<Label>}</li>
  *   <li>{@link DataPhaseTracker#MODEL_DATA_QUALITY_DETECTOR}       → {@code Example<Label>}</li>
+ *   <li>{@link DataPhaseTracker#MODEL_BANK_RECON_MATCHER}          → {@code Example<Label>}</li>
+ *   <li>{@link DataPhaseTracker#MODEL_CASH_FLOW_PREDICTOR}         → {@code Example<Regressor>}</li>
+ *   <li>{@link DataPhaseTracker#MODEL_CUSTOMER_CLV_PREDICTOR}      → {@code Example<Regressor>}</li>
+ *   <li>{@link DataPhaseTracker#MODEL_CHURN_PREDICTOR}             → {@code Example<Label>}</li>
+ *   <li>{@link DataPhaseTracker#MODEL_EXPIRY_RISK_PREDICTOR}       → {@code Example<Label>}</li>
+ *   <li>{@link DataPhaseTracker#MODEL_CUSTOMER_SEGMENTER}          → {@code MutableDataset<ClusterID>} (K-Means)</li>
  * </ul>
  */
 @Service
@@ -60,6 +76,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class SyntheticFeatureStore {
 
+    // ── Original 9 builders ────────────────────────────────────────────────
     private final SyntheticMerchantFeatureBuilder  merchantFeatureBuilder;
     private final SyntheticPaymentFeatureBuilder   paymentFeatureBuilder;
     private final SyntheticInventoryFeatureBuilder inventoryFeatureBuilder;
@@ -68,6 +85,17 @@ public class SyntheticFeatureStore {
     private final CreditMlFeatureBuilder           creditMlFeatureBuilder;
     private final AnomalyFeatureBuilder            anomalyFeatureBuilder;
     private final StockoutFeatureBuilder           stockoutFeatureBuilder;
+
+    // ── Phase 7 builders ───────────────────────────────────────────────────
+    private final SyntheticReconFeatureBuilder             syntheticReconFeatureBuilder;
+    private final SyntheticCashFlowFeatureBuilder          syntheticCashFlowFeatureBuilder;
+    private final SyntheticExpiryFeatureBuilder            syntheticExpiryFeatureBuilder;
+    private final SyntheticCustomerAnalyticsFeatureBuilder syntheticCustomerAnalyticsFeatureBuilder;
+    private final ReconFeatureBuilder                      reconFeatureBuilder;
+    private final CashFlowFeatureBuilder                   cashFlowFeatureBuilder;
+    private final ClvFeatureBuilder                        clvFeatureBuilder;
+    private final ChurnFeatureBuilder                      churnFeatureBuilder;
+    private final SegmentationFeatureBuilder               segmentationFeatureBuilder;
 
     // ── Credit classifier ──────────────────────────────────────────────────
 
@@ -427,6 +455,190 @@ public class SyntheticFeatureStore {
         return examples;
     }
 
+    // ── Bank recon matcher ─────────────────────────────────────────────────
+
+    /**
+     * Build labelled classification examples for bank reconciliation matching.
+     *
+     * <p>True MATCH pairs are bank statement lines paired with their confirmed payment.
+     * NO_MATCH pairs include both easy negatives (random payment) and hard negatives
+     * (similar amount, different merchant). Roughly 50% MATCH / 50% NO_MATCH.
+     *
+     * @param bundle the synthetic dataset
+     * @return list of Tribuo {@code Example<Label>} instances
+     */
+    public List<Example<Label>> buildBankReconExamples(SyntheticDataBundle bundle) {
+        List<Example<Label>> examples = new ArrayList<>();
+        List<SyntheticReconFeatureBuilder.LabelledReconExample> labelled =
+                syntheticReconFeatureBuilder.buildLabelledExamples(
+                        bundle.getBankStatementLines(), bundle.getPayments());
+        for (var le : labelled) {
+            try {
+                examples.add(reconFeatureBuilder.buildLabelledExample(le.features(), le.label()));
+            } catch (Exception ex) {
+                log.warn("[SyntheticFeatureStore] Skipping recon example: {}", ex.getMessage());
+            }
+        }
+        log.info("[SyntheticFeatureStore] Built {} bank recon examples", examples.size());
+        return examples;
+    }
+
+    // ── Cash flow predictor ────────────────────────────────────────────────
+
+    /**
+     * Build regression examples for cash flow forecasting.
+     *
+     * <p>One example per {@link SyntheticCashFlowSnapshot}. The actual
+     * {@code netCashFlow} stored in the snapshot is the regression target.
+     *
+     * @param bundle the synthetic dataset
+     * @return list of Tribuo {@code Example<Regressor>} instances
+     */
+    public List<Example<Regressor>> buildCashFlowExamples(SyntheticDataBundle bundle) {
+        List<Example<Regressor>> examples = new ArrayList<>();
+        List<SyntheticCashFlowFeatureBuilder.LabelledCashFlowExample> labelled =
+                syntheticCashFlowFeatureBuilder.buildLabelledExamples(bundle.getCashFlowSnapshots());
+        for (var le : labelled) {
+            try {
+                examples.add(cashFlowFeatureBuilder.buildLabelledExample(le.features(), le.netCashFlow()));
+            } catch (Exception ex) {
+                log.warn("[SyntheticFeatureStore] Skipping cash flow example: {}", ex.getMessage());
+            }
+        }
+        log.info("[SyntheticFeatureStore] Built {} cash flow examples", examples.size());
+        return examples;
+    }
+
+    // ── CLV predictor ──────────────────────────────────────────────────────
+
+    /**
+     * Build regression examples for Customer Lifetime Value prediction.
+     *
+     * <p>One example per merchant. The 12-month revenue from the synthetic order history
+     * ({@code revenue12m}) is the regression target.
+     *
+     * @param bundle the synthetic dataset
+     * @return list of Tribuo {@code Example<Regressor>} instances
+     */
+    public List<Example<Regressor>> buildClvExamples(SyntheticDataBundle bundle) {
+        LocalDateTime asOf = bundle.getGeneratedAt();
+        List<Example<Regressor>> examples = new ArrayList<>();
+        for (SyntheticMerchant merchant : bundle.getMerchants()) {
+            try {
+                CustomerAnalyticsFeatures f = syntheticCustomerAnalyticsFeatureBuilder
+                        .computeFeatures(merchant, bundle, asOf);
+                examples.add(clvFeatureBuilder.buildLabelledExample(f, f.revenue12m()));
+            } catch (Exception ex) {
+                log.warn("[SyntheticFeatureStore] Skipping merchant {} for CLV: {}",
+                        merchant.syntheticId(), ex.getMessage());
+            }
+        }
+        log.info("[SyntheticFeatureStore] Built {} CLV examples", examples.size());
+        return examples;
+    }
+
+    // ── Churn predictor ────────────────────────────────────────────────────
+
+    /**
+     * Build labelled classification examples for churn prediction.
+     *
+     * <p>One example per merchant. Label is {@code "CHURNED"} when
+     * {@code daysSinceLastOrder > 60}; otherwise {@code "ACTIVE"}.
+     *
+     * @param bundle the synthetic dataset
+     * @return list of Tribuo {@code Example<Label>} instances
+     */
+    public List<Example<Label>> buildChurnExamples(SyntheticDataBundle bundle) {
+        LocalDateTime asOf = bundle.getGeneratedAt();
+        List<Example<Label>> examples = new ArrayList<>();
+        for (SyntheticMerchant merchant : bundle.getMerchants()) {
+            try {
+                CustomerAnalyticsFeatures f = syntheticCustomerAnalyticsFeatureBuilder
+                        .computeFeatures(merchant, bundle, asOf);
+                boolean churned = f.daysSinceLastOrder() > 60;
+                examples.add(churnFeatureBuilder.buildLabelledExample(f, churned));
+            } catch (Exception ex) {
+                log.warn("[SyntheticFeatureStore] Skipping merchant {} for churn: {}",
+                        merchant.syntheticId(), ex.getMessage());
+            }
+        }
+        log.info("[SyntheticFeatureStore] Built {} churn examples", examples.size());
+        return examples;
+    }
+
+    // ── Expiry risk predictor (classifier) ────────────────────────────────
+
+    /** Feature names mirror {@code ExpiryRiskFeatureBuilder} for training/inference consistency. */
+    private static final String[] EXPIRY_RISK_FEATURE_NAMES = {
+            "days_to_expiry", "current_stock_qty", "avg_daily_sales_rate",
+            "projected_days_to_sell", "similar_sku_velocity", "warehouse_turnover_rate",
+            "price_sensitivity_score", "batch_age_ratio"
+    };
+
+    /**
+     * Build labelled classification examples for expiry risk prediction.
+     *
+     * <p>One example per {@link com.zuqi.ai.synthetic.generators.SyntheticExpiryBatchGenerator.SyntheticExpiryBatch}.
+     * Label is {@code "HIGH_RISK"} when {@code daysToExpiry < projectedDaysToSell}
+     * (product will expire before selling out); otherwise {@code "LOW_RISK"}.
+     *
+     * @param bundle the synthetic dataset
+     * @return list of Tribuo {@code Example<Label>} instances
+     */
+    public List<Example<Label>> buildExpiryRiskExamples(SyntheticDataBundle bundle) {
+        List<Example<Label>> examples = new ArrayList<>();
+        for (var batch : bundle.getExpiryBatches()) {
+            try {
+                ExpiryFeatures f = syntheticExpiryFeatureBuilder.buildFeatures(batch);
+                boolean highRisk = f.daysToExpiry() < f.projectedDaysToSell();
+                Label label = new Label(highRisk ? "HIGH_RISK" : "LOW_RISK");
+                double[] values = {
+                        Math.max(0.0, f.daysToExpiry()),
+                        Math.max(0.0, f.currentStockQty()),
+                        Math.max(0.0, f.avgDailySalesRate()),
+                        Math.min(999.0, Math.max(0.0, f.projectedDaysToSell())),
+                        Math.max(0.0, f.similarSkuVelocity()),
+                        Math.max(0.0, f.warehouseTurnoverRate()),
+                        Math.min(1.0, Math.max(0.0, f.priceSensitivityScore())),
+                        Math.min(1.0, Math.max(0.0, f.batchAgeRatio()))
+                };
+                examples.add(new ArrayExample<>(label, EXPIRY_RISK_FEATURE_NAMES, values));
+            } catch (Exception ex) {
+                log.warn("[SyntheticFeatureStore] Skipping expiry batch: {}", ex.getMessage());
+            }
+        }
+        log.info("[SyntheticFeatureStore] Built {} expiry risk examples", examples.size());
+        return examples;
+    }
+
+    // ── Customer segmenter (K-Means) ───────────────────────────────────────
+
+    /**
+     * Build an unlabelled clustering dataset for K-Means merchant segmentation.
+     *
+     * <p>One example per merchant using 9 features capturing value, engagement,
+     * and payment-health signals. {@link ClusterID} output is {@code UNASSIGNED}
+     * for all training examples — cluster assignments are discovered by the trainer.
+     *
+     * @param bundle the synthetic dataset
+     * @return Tribuo {@code MutableDataset<ClusterID>} ready for K-Means training
+     */
+    public MutableDataset<ClusterID> buildSegmentationDataset(SyntheticDataBundle bundle) {
+        LocalDateTime asOf = bundle.getGeneratedAt();
+        List<CustomerAnalyticsFeatures> featuresList = new ArrayList<>();
+        for (SyntheticMerchant merchant : bundle.getMerchants()) {
+            try {
+                featuresList.add(syntheticCustomerAnalyticsFeatureBuilder
+                        .computeFeatures(merchant, bundle, asOf));
+            } catch (Exception ex) {
+                log.warn("[SyntheticFeatureStore] Skipping merchant {} for segmentation: {}",
+                        merchant.syntheticId(), ex.getMessage());
+            }
+        }
+        log.info("[SyntheticFeatureStore] Built segmentation dataset with {} examples", featuresList.size());
+        return segmentationFeatureBuilder.buildDataset(featuresList);
+    }
+
     // ── Counts / diagnostics ───────────────────────────────────────────────
 
     /**
@@ -456,15 +668,22 @@ public class SyntheticFeatureStore {
                 .count();
 
         Map<String, Integer> counts = new LinkedHashMap<>();
-        counts.put(DataPhaseTracker.MODEL_CREDIT_CLASSIFIER,          bundle.getMerchants().size());
-        counts.put(DataPhaseTracker.MODEL_CREDIT_LIMIT_REGRESSOR,     bundle.getMerchants().size());
-        counts.put(DataPhaseTracker.MODEL_DEMAND_FORECASTER,          (int) distinctMerchantSkuPairs);
-        counts.put(DataPhaseTracker.MODEL_STOCKOUT_PREDICTOR,         (int) distinctWarehouseSkuPairs);
-        counts.put(DataPhaseTracker.MODEL_SHRINKAGE_DETECTOR,         (int) distinctWarehouseSkuPairs);
-        counts.put(DataPhaseTracker.MODEL_PAYMENT_ANOMALY_DETECTOR,   bundle.getPayments().size());
+        counts.put(DataPhaseTracker.MODEL_CREDIT_CLASSIFIER,           bundle.getMerchants().size());
+        counts.put(DataPhaseTracker.MODEL_CREDIT_LIMIT_REGRESSOR,      bundle.getMerchants().size());
+        counts.put(DataPhaseTracker.MODEL_DEMAND_FORECASTER,           (int) distinctMerchantSkuPairs);
+        counts.put(DataPhaseTracker.MODEL_STOCKOUT_PREDICTOR,          (int) distinctWarehouseSkuPairs);
+        counts.put(DataPhaseTracker.MODEL_SHRINKAGE_DETECTOR,          (int) distinctWarehouseSkuPairs);
+        counts.put(DataPhaseTracker.MODEL_PAYMENT_ANOMALY_DETECTOR,    bundle.getPayments().size());
         counts.put(DataPhaseTracker.MODEL_PAYMENT_DISTRESS_CLASSIFIER, bundle.getMerchants().size());
-        counts.put(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR,  (int) distinctRepIds);
-        counts.put(DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR,      bundle.getMerchants().size());
+        counts.put(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR,   (int) distinctRepIds);
+        counts.put(DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR,       bundle.getMerchants().size());
+        // Phase 7 models
+        counts.put(DataPhaseTracker.MODEL_BANK_RECON_MATCHER,          bundle.getBankStatementLines().size());
+        counts.put(DataPhaseTracker.MODEL_CASH_FLOW_PREDICTOR,         bundle.getCashFlowSnapshots().size());
+        counts.put(DataPhaseTracker.MODEL_CUSTOMER_CLV_PREDICTOR,      bundle.getMerchants().size());
+        counts.put(DataPhaseTracker.MODEL_CHURN_PREDICTOR,             bundle.getMerchants().size());
+        counts.put(DataPhaseTracker.MODEL_EXPIRY_RISK_PREDICTOR,       bundle.getExpiryBatches().size());
+        counts.put(DataPhaseTracker.MODEL_CUSTOMER_SEGMENTER,          bundle.getMerchants().size());
         return Collections.unmodifiableMap(counts);
     }
 

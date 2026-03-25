@@ -157,8 +157,9 @@ p, FINANCE, /v1/reports/:id, GET
 p, FINANCE, /v1/credit, GET
 p, FINANCE, /v1/credit/:id, GET
 
-# AI System Health - SUPER_ADMIN + DISTRIBUTOR_ADMIN (read)
+# AI System Health - SUPER_ADMIN + MERCHANT_ADMIN (full) + DISTRIBUTOR_ADMIN (read)
 p, SUPER_ADMIN, /v1/ai/system/*, .*
+p, MERCHANT_ADMIN, /v1/ai/system/*, .*
 p, DISTRIBUTOR_ADMIN, /v1/ai/system/health, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/system/models, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/system/models/:name, GET
@@ -471,6 +472,50 @@ p, FINANCE, /v1/gl/journals/:id/submit, POST
 p, FINANCE, /v1/gl/budgets, GET|POST
 p, FINANCE, /v1/gl/reports/trial-balance, GET
 p, FINANCE, /v1/gl/reports/budget-variance, GET
+
+# ── Phase 7: AI Analytics ──────────────────────────────────────────────────
+# Inventory: reorder
+p, WAREHOUSE_MANAGER, /v1/ai/analytics/reorder/suggestions/:distributorId, GET
+p, WAREHOUSE_MANAGER, /v1/ai/analytics/reorder/suggestions/:id/approve, POST
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/reorder/suggestions/:distributorId, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/reorder/suggestions/:id/approve, POST
+
+# Inventory: expiry
+p, WAREHOUSE_MANAGER, /v1/ai/analytics/expiry/risks/:distributorId, GET
+p, WAREHOUSE_MANAGER, /v1/ai/analytics/expiry/risks/:distributorId/:warehouseId, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/expiry/risks/:distributorId, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/expiry/risks/:distributorId/:warehouseId, GET
+
+# CRM: segments, churn, recommendations, visit plans
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/customers/segments/:distributorId, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/customers/churn/:distributorId, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/customers/churn/:distributorId/at-risk, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/customers/recommendations/:customerId, GET
+p, SALES_REP, /v1/ai/analytics/customers/recommendations/:customerId, GET
+p, SALES_REP, /v1/ai/analytics/customers/churn/:distributorId/at-risk, GET
+p, SALES_REP, /v1/ai/analytics/reps/:repId/visit-plan, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/reps/:repId/visit-plan, GET
+
+# Procurement: supplier risk, price trends
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/suppliers/risk/:distributorId, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/suppliers/price-trends/:distributorId, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/suppliers/price-trends/:distributorId/:supplierId, GET
+p, FINANCE, /v1/ai/analytics/suppliers/risk/:distributorId, GET
+p, FINANCE, /v1/ai/analytics/suppliers/price-trends/:distributorId, GET
+
+# Sales: pricing recommendations
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/pricing/recommendations/:distributorId, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/pricing/recommendations/:id/apply, POST
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/pricing/recommendations/:id/reject, POST
+p, FINANCE, /v1/ai/analytics/pricing/recommendations/:distributorId, GET
+
+# Finance: cash flow forecast
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/cashflow/forecast/:distributorId, GET
+p, FINANCE, /v1/ai/analytics/cashflow/forecast/:distributorId, GET
+
+# CRM: product recommendations (distributor-level)
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/customers/product-recs/:distributorId, GET
+p, SALES_REP, /v1/ai/analytics/customers/product-recs/:distributorId, GET
 
 # Role hierarchy - who inherits what
 g, SUPER_ADMIN, DISTRIBUTOR_ADMIN

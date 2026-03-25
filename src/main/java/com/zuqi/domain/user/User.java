@@ -141,6 +141,11 @@ public class User implements UserDetails {
     }
 
     @Override
+    public String getPassword() {
+        return password;
+    }
+
+    @Override
     public String getUsername() {
         return email;
     }
@@ -180,5 +185,14 @@ public class User implements UserDetails {
     @Override
     public int hashCode() {
         return Objects.hash(email);
+    }
+
+    // Explicit setters for transient branch context used by JwtAuthenticationFilter
+    public void setActiveBranchId(UUID activeBranchId) {
+        this.activeBranchId = activeBranchId;
+    }
+
+    public void setActiveBranchHeadquarters(boolean activeBranchHeadquarters) {
+        this.activeBranchHeadquarters = activeBranchHeadquarters;
     }
 }

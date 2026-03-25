@@ -99,6 +99,7 @@ class MerchantMetricsToolTest {
     private Customer mockMerchant(boolean active) {
         Customer m = mock(Customer.class);
         when(m.isActive()).thenReturn(active);
+        lenient().when(m.getBusinessName()).thenReturn(active ? "Active Shop" : "Inactive Shop");
         return m;
     }
 }

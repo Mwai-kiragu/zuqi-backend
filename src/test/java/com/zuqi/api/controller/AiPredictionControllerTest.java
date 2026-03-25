@@ -3,7 +3,11 @@ package com.zuqi.api.controller;
 import com.zuqi.ai.prediction.PredictionAlertService;
 import com.zuqi.ai.prediction.RepPerformancePredictor;
 import com.zuqi.ai.prediction.StockoutPredictor;
+import com.zuqi.ai.prediction.StockoutTrainingPipeline;
+import com.zuqi.ai.synthetic.DataPhaseTracker;
+import com.zuqi.domain.ai.DataPhase;
 import com.zuqi.domain.inventory.Stock;
+import com.zuqi.domain.inventory.Warehouse;
 import com.zuqi.domain.product.Product;
 import com.zuqi.repository.StockRepository;
 import com.zuqi.repository.UserRepository;
@@ -32,11 +36,13 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class AiPredictionControllerTest {
 
-    @Mock private StockoutPredictor       stockoutPredictor;
-    @Mock private RepPerformancePredictor repPerformancePredictor;
-    @Mock private PredictionAlertService  predictionAlertService;
-    @Mock private StockRepository         stockRepository;
-    @Mock private UserRepository          userRepository;
+    @Mock private StockoutPredictor        stockoutPredictor;
+    @Mock private RepPerformancePredictor  repPerformancePredictor;
+    @Mock private PredictionAlertService   predictionAlertService;
+    @Mock private StockRepository          stockRepository;
+    @Mock private UserRepository           userRepository;
+    @Mock private StockoutTrainingPipeline stockoutTrainingPipeline;
+    @Mock private DataPhaseTracker         dataPhaseTracker;
 
     @InjectMocks
     private AiPredictionController controller;
@@ -52,6 +58,7 @@ class AiPredictionControllerTest {
         Stock stock = mockStock(productId);
         when(stockRepository.findByWarehouseId(eq(warehouseId), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(stock)));
+        when(dataPhaseTracker.getPhase(anyString(), any())).thenReturn(DataPhase.SYNTHETIC);
 
         StockoutPredictor.StockoutResult result = new StockoutPredictor.StockoutResult(
                 warehouseId, productId, 0.75, "STOCKOUT", 3.0, 100.0, 10.0, "STABLE", 0.0, "stockout_predictor-v1");
@@ -70,6 +77,7 @@ class AiPredictionControllerTest {
 
         when(stockRepository.findByWarehouseId(any(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
+        when(dataPhaseTracker.getPhase(anyString(), any())).thenReturn(DataPhase.SYNTHETIC);
 
         ResponseEntity<?> response = controller.getStockoutPredictions(warehouseId, distributorId);
 
@@ -146,9 +154,14 @@ class AiPredictionControllerTest {
     private Stock mockStock(UUID productId) {
         Product product = new Product();
         product.setId(productId);
+        product.setName("Test Product");
+
+        Warehouse warehouse = new Warehouse();
+        warehouse.setName("Test Warehouse");
 
         Stock stock = new Stock();
         stock.setProduct(product);
+        stock.setWarehouse(warehouse);
         return stock;
     }
 }

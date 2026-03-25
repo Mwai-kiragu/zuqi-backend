@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Git Commit Rules
+
+- **Never** add `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>` to commit messages.
+
 ## Project Overview
 
 Zuqi is a field sales and supply chain execution platform built with Spring Boot 3.5. It provides order processing, payment integration (KCB Bank, M-Pesa), AI-powered credit scoring, and inventory management for distributors and merchants in Kenya.

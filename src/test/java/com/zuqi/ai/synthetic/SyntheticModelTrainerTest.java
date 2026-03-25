@@ -1,10 +1,16 @@
 package com.zuqi.ai.synthetic;
 
-import com.zuqi.ai.synthetic.dto.*;
-
+import com.zuqi.ai.cashflow.CashFlowTrainingPipeline;
+import com.zuqi.ai.crm.ChurnTrainingPipeline;
+import com.zuqi.ai.crm.ClvTrainingPipeline;
+import com.zuqi.ai.crm.SegmentationTrainingPipeline;
+import com.zuqi.ai.crm.VisitTrainingPipeline;
+import com.zuqi.ai.demand.ExpiryRiskTrainingPipeline;
 import com.zuqi.ai.pipeline.ModelTrainingService;
-
 import com.zuqi.ai.model.ModelRegistry;
+import com.zuqi.ai.prediction.RepPerformanceTrainingPipeline;
+import com.zuqi.ai.pricing.PricingTrainingPipeline;
+import com.zuqi.ai.recon.ReconTrainingPipeline;
 import com.zuqi.domain.ai.AIModelRegistry;
 import com.zuqi.domain.ai.DataPhase;
 import com.zuqi.domain.ai.ModelStatus;
@@ -46,6 +52,15 @@ class SyntheticModelTrainerTest {
     @Mock DataMixer              dataMixer;
     @Mock ModelRegistry          modelRegistry;
     @Mock DataPhaseTracker       phaseTracker;
+    @Mock ReconTrainingPipeline         reconTrainingPipeline;
+    @Mock CashFlowTrainingPipeline      cashFlowTrainingPipeline;
+    @Mock ExpiryRiskTrainingPipeline    expiryRiskTrainingPipeline;
+    @Mock SegmentationTrainingPipeline  segmentationTrainingPipeline;
+    @Mock ClvTrainingPipeline           clvTrainingPipeline;
+    @Mock ChurnTrainingPipeline         churnTrainingPipeline;
+    @Mock VisitTrainingPipeline              visitTrainingPipeline;
+    @Mock PricingTrainingPipeline            pricingTrainingPipeline;
+    @Mock RepPerformanceTrainingPipeline     repPerformanceTrainingPipeline;
 
     @SuppressWarnings("unchecked")
     @Mock Trainer<Label>    classificationTrainer;
@@ -62,7 +77,35 @@ class SyntheticModelTrainerTest {
     void setUp() {
         trainer = new ModelTrainingService(
                 featureStore, dataMixer, modelRegistry, phaseTracker,
-                classificationTrainer, regressionTrainer, anomalyTrainer);
+                classificationTrainer, regressionTrainer, anomalyTrainer,
+                reconTrainingPipeline, cashFlowTrainingPipeline,
+                expiryRiskTrainingPipeline, segmentationTrainingPipeline,
+                clvTrainingPipeline, churnTrainingPipeline,
+                visitTrainingPipeline, pricingTrainingPipeline,
+                repPerformanceTrainingPipeline);
+
+        // Default: all 8 dedicated pipelines succeed (avoids NPE from null TrainingResult)
+        lenient().when(reconTrainingPipeline.runPipeline()).thenReturn(
+                new ReconTrainingPipeline.TrainingResult(true, 0.92, UUID.randomUUID(), null));
+        lenient().when(cashFlowTrainingPipeline.runPipeline()).thenReturn(
+                new CashFlowTrainingPipeline.TrainingResult(true, 5000.0, 0.82, UUID.randomUUID(), null));
+        lenient().when(expiryRiskTrainingPipeline.runPipeline()).thenReturn(
+                new ExpiryRiskTrainingPipeline.TrainingResult(true, 0.12, UUID.randomUUID(), null));
+        lenient().when(segmentationTrainingPipeline.runPipeline()).thenReturn(
+                new SegmentationTrainingPipeline.TrainingResult(true, UUID.randomUUID(), java.util.Map.of(), null));
+        lenient().when(clvTrainingPipeline.runPipeline()).thenReturn(
+                new ClvTrainingPipeline.TrainingResult(true, 9000.0, UUID.randomUUID(), null));
+        lenient().when(churnTrainingPipeline.runPipeline()).thenReturn(
+                new ChurnTrainingPipeline.TrainingResult(true, 0.85, UUID.randomUUID(), null));
+        lenient().when(visitTrainingPipeline.runPipeline()).thenReturn(
+                new VisitTrainingPipeline.TrainingResult(true, 0.22, UUID.randomUUID(), null));
+        lenient().when(pricingTrainingPipeline.runPipeline()).thenReturn(
+                new PricingTrainingPipeline.TrainingResult(true, 28.0, UUID.randomUUID(), null));
+        lenient().when(repPerformanceTrainingPipeline.runPipeline()).thenReturn(
+                RepPerformanceTrainingPipeline.TrainingPipelineResult.builder()
+                        .success(true).passedQualityGate(true)
+                        .modelId(UUID.randomUUID()).trainSize(320)
+                        .r2(0.85).rmse(8.0).build());
     }
 
     // ── Registry interactions ────────────────────────────────────────────────
@@ -73,11 +116,11 @@ class SyntheticModelTrainerTest {
 
         trainer.trainAllModels(emptyBundle(), DISTRIBUTOR_ID);
 
-        // Each model: registerModel → updateModelAfterTraining → setDataPhaseMetadata → promoteToActive
-        verify(modelRegistry, times(9)).registerModel(any(), any(), any(), any());
-        verify(modelRegistry, times(9)).updateModelAfterTraining(any(), any(), any(), any());
-        verify(modelRegistry, times(9)).setDataPhaseMetadata(any(), eq(DataPhase.SYNTHETIC), anyInt(), eq(0));
-        verify(modelRegistry, times(9)).promoteToActive(any());
+        // 8 core-model inline blocks use registerAndPromote(); rep_performance delegates to pipeline mock
+        verify(modelRegistry, times(8)).registerModel(any(), any(), any(), any());
+        verify(modelRegistry, times(8)).updateModelAfterTraining(any(), any(), any(), any());
+        verify(modelRegistry, times(8)).setDataPhaseMetadata(any(), eq(DataPhase.SYNTHETIC), anyInt(), eq(0));
+        verify(modelRegistry, times(8)).promoteToActive(any());
     }
 
     @Test
@@ -103,7 +146,8 @@ class SyntheticModelTrainerTest {
         verify(modelRegistry).registerModel(eq(DataPhaseTracker.MODEL_SHRINKAGE_DETECTOR),         any(), any(), any());
         verify(modelRegistry).registerModel(eq(DataPhaseTracker.MODEL_PAYMENT_ANOMALY_DETECTOR),   any(), any(), any());
         verify(modelRegistry).registerModel(eq(DataPhaseTracker.MODEL_PAYMENT_DISTRESS_CLASSIFIER),any(), any(), any());
-        verify(modelRegistry).registerModel(eq(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR),  any(), any(), any());
+        // rep_performance_predictor delegates to RepPerformanceTrainingPipeline — registry calls happen inside mocked pipeline
+        verify(modelRegistry, never()).registerModel(eq(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR), any(), any(), any());
         verify(modelRegistry).registerModel(eq(DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR),      any(), any(), any());
     }
 
@@ -162,7 +206,7 @@ class SyntheticModelTrainerTest {
                 .containsEntry(DataPhaseTracker.MODEL_SHRINKAGE_DETECTOR,          8)
                 .containsEntry(DataPhaseTracker.MODEL_PAYMENT_ANOMALY_DETECTOR,    9)
                 .containsEntry(DataPhaseTracker.MODEL_PAYMENT_DISTRESS_CLASSIFIER,14)
-                .containsEntry(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR,  10)
+                .containsEntry(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, 320) // from mocked pipeline trainSize
                 .containsEntry(DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR,      13);
     }
 
@@ -199,8 +243,8 @@ class SyntheticModelTrainerTest {
         ModelTrainingService.TrainingResult result =
                 trainer.trainAllModels(emptyBundle(), DISTRIBUTOR_ID);
 
-        // credit_classifier skipped → only 8 models registered
-        verify(modelRegistry, times(8)).registerModel(any(), any(), any(), any());
+        // credit_classifier skipped, rep_performance delegates to pipeline → only 7 inline models register
+        verify(modelRegistry, times(7)).registerModel(any(), any(), any(), any());
         assertThat(result.trainedModelIds())
                 .doesNotContainKey(DataPhaseTracker.MODEL_CREDIT_CLASSIFIER);
         assertThat(result.success()).isTrue();   // skip is not an error
@@ -254,8 +298,8 @@ class SyntheticModelTrainerTest {
 
         assertThat(result.trainedModelIds())
                 .doesNotContainKey(DataPhaseTracker.MODEL_SHRINKAGE_DETECTOR);
-        // 8 others still trained
-        assertThat(result.trainedModelIds()).hasSize(8);
+        // 7 core inline (shrinkage skipped) + 9 pipeline models (incl. rep_performance) = 16
+        assertThat(result.trainedModelIds()).hasSize(16);
     }
 
     // ── Error isolation ──────────────────────────────────────────────────────
@@ -289,8 +333,8 @@ class SyntheticModelTrainerTest {
         assertThat(result.success()).isFalse();
         assertThat(result.errors()).hasSize(1);
         assertThat(result.errors().get(0)).contains(DataPhaseTracker.MODEL_CREDIT_CLASSIFIER);
-        // The other 8 models still trained
-        assertThat(result.trainedModelIds()).hasSize(8);
+        // The other 7 core inline + 9 pipeline models (incl. rep_performance) = 16
+        assertThat(result.trainedModelIds()).hasSize(16);
     }
 
     @Test
@@ -313,7 +357,8 @@ class SyntheticModelTrainerTest {
         assertThat(result.success()).isFalse();
         assertThat(result.errors()).hasSize(1);
         assertThat(result.errors().get(0)).contains(DataPhaseTracker.MODEL_SHRINKAGE_DETECTOR);
-        assertThat(result.trainedModelIds()).hasSize(8);
+        // 7 core inline (shrinkage fails) + 9 pipeline (incl. rep_performance) = 16
+        assertThat(result.trainedModelIds()).hasSize(16);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -553,6 +598,7 @@ class SyntheticModelTrainerTest {
     private SyntheticDataBundle emptyBundle() {
         return SyntheticDataBundle.create(
                 List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+                List.of(), List.of(), List.of(),
                 1L, SyntheticDataConfig.defaultConfig(UUID.randomUUID(), 42L));
     }
 }

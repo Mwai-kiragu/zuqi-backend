@@ -1,5 +1,6 @@
 package com.zuqi.api.controller;
 
+import com.zuqi.ai.demand.DemandForecastJob;
 import com.zuqi.ai.demand.DemandForecaster;
 import com.zuqi.ai.demand.DemandModelTrainingPipeline;
 import com.zuqi.ai.demand.OrderSuggestionService;
@@ -42,6 +43,7 @@ public class DemandForecastController {
     private final OrderSuggestionService orderSuggestionService;
     private final DemandModelTrainingPipeline trainingPipeline;
     private final DemandForecastRepository demandForecastRepository;
+    private final DemandForecastJob demandForecastJob;
 
     /**
      * List all stored demand forecasts for a distributor (paginated).
@@ -236,6 +238,30 @@ public class DemandForecastController {
             );
 
             return ResponseEntity.ok(ApiResponse.success(response));
+        }
+    }
+
+    /**
+     * Manually trigger the demand forecast job without waiting for the 3 AM cron.
+     * Useful for populating ai_demand_forecasts on a fresh database.
+     */
+    @PostMapping("/forecast/run")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(
+            summary = "Trigger demand forecast job now",
+            description = "Runs the nightly demand forecast job immediately for all distributors. Admin only."
+    )
+    public ResponseEntity<ApiResponse<Void>> runForecastJob() {
+        log.info("POST /v1/ai/demand/forecast/run — manual trigger");
+        try {
+            demandForecastJob.generateForecasts();
+            long count = demandForecastRepository.count();
+            return ResponseEntity.ok(ApiResponse.success(
+                    "Demand forecast job completed. Total forecasts in DB: " + count));
+        } catch (Exception e) {
+            log.error("Manual forecast job failed: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("Forecast job failed: " + e.getMessage()));
         }
     }
 

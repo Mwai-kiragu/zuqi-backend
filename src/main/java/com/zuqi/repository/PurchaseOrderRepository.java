@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,4 +38,21 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, UU
     @Query("SELECT po FROM PurchaseOrder po JOIN FETCH po.supplier WHERE po.distributorId = :distributorId " +
            "AND po.status IN ('CONFIRMED', 'PARTIALLY_RECEIVED', 'RECEIVED')")
     List<PurchaseOrder> findOutstandingByDistributorId(@Param("distributorId") UUID distributorId);
+
+    // AI feature queries (Phase 2 plan — Section 1.4)
+    @Query("SELECT po FROM PurchaseOrder po WHERE po.supplier.id = :supplierId AND po.distributorId = :distributorId")
+    List<PurchaseOrder> findBySupplierIdAndDistributorId(@Param("supplierId") UUID supplierId,
+                                                         @Param("distributorId") UUID distributorId);
+
+    // AI Phase 3 — cash flow feature queries
+    @Query("SELECT po FROM PurchaseOrder po WHERE po.distributorId = :distributorId " +
+           "AND po.expectedDeliveryDate >= :fromDate AND po.expectedDeliveryDate <= :toDate")
+    List<PurchaseOrder> findByDistributorIdAndExpectedDeliveryDateBetween(
+            @Param("distributorId") UUID distributorId,
+            @Param("fromDate") LocalDate fromDate,
+            @Param("toDate") LocalDate toDate);
+
+    @Query("SELECT po FROM PurchaseOrder po WHERE po.distributorId = :distributorId " +
+           "AND po.status IN ('DRAFT', 'PENDING', 'CONFIRMED')")
+    List<PurchaseOrder> findPendingByDistributorId(@Param("distributorId") UUID distributorId);
 }

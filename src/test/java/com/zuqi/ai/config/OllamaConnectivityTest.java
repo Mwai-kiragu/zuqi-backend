@@ -49,10 +49,10 @@ class OllamaConnectivityTest {
         // When generating embeddings
         dev.langchain4j.data.embedding.Embedding embedding = embeddingModel.embed(text).content();
 
-        // Then we should get a 384-dimensional vector (all-MiniLM-L6-v2)
+        // Then we should get a 768-dimensional vector (nomic-embed-text)
         assertThat(embedding).isNotNull();
-        assertThat(embedding.dimension()).isEqualTo(384);
-        assertThat(embedding.vectorAsList()).hasSize(384);
+        assertThat(embedding.dimension()).isEqualTo(768);
+        assertThat(embedding.vectorAsList()).hasSize(768);
         System.out.println("Embedding dimension: " + embedding.dimension());
     }
 }

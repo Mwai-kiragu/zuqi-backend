@@ -15,10 +15,12 @@ import org.springframework.stereotype.Service;
 import org.tribuo.Example;
 import org.tribuo.Model;
 import org.tribuo.MutableDataset;
+import org.tribuo.Trainer;
 import org.tribuo.anomaly.AnomalyFactory;
 import org.tribuo.anomaly.Event;
 import org.tribuo.classification.Label;
 import org.tribuo.classification.LabelFactory;
+import org.tribuo.clustering.ClusterID;
 import org.tribuo.provenance.SimpleDataSourceProvenance;
 import org.tribuo.regression.Regressor;
 import org.tribuo.regression.RegressionFactory;
@@ -27,15 +29,18 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Orchestrates hyperparameter tuning for all 9 Zuqi ML models.
+ * Orchestrates hyperparameter tuning for all 15 Zuqi ML models.
  *
  * <h3>Algorithm per model</h3>
  * <ol>
@@ -62,6 +67,7 @@ public class ModelTuningService {
     private final ModelRegistry             modelRegistry;
     private final DataPhaseTracker          phaseTracker;
     private final CrossValidationTuner      cvTuner;
+    private final Trainer<ClusterID>        kMeansTrainer;
 
     static final int MIN_CLASSIFICATION_EXAMPLES = 10;
     static final int MIN_REGRESSION_EXAMPLES     = 10;
@@ -70,15 +76,33 @@ public class ModelTuningService {
     // ── Public API ────────────────────────────────────────────────────────
 
     /**
-     * Run hyperparameter tuning for all 9 models for the given distributor.
+     * Run hyperparameter tuning for all 15 trainable models for the given distributor.
      *
      * @param distributorId distributor scope
      * @param config        synthetic data generation config (defines bundle size / seed)
      * @return summary of tuning results and any per-model errors
      */
     public TuningRunResult tuneAllModels(UUID distributorId, SyntheticDataConfig config) {
+        return tuneAllModels(distributorId, config, Set.of());
+    }
+
+    /**
+     * Run hyperparameter tuning for a filtered subset of models.
+     *
+     * @param distributorId distributor scope
+     * @param config        synthetic data generation config
+     * @param modelFilter   if non-empty, only tune models whose name is in this set;
+     *                      empty set means tune all models
+     * @return summary of tuning results and any per-model errors
+     */
+    public TuningRunResult tuneAllModels(UUID distributorId, SyntheticDataConfig config,
+                                          Set<String> modelFilter) {
         long startMs = System.currentTimeMillis();
-        log.info("[Tuning] Starting hyperparameter tuning — distributor={}", distributorId);
+        if (modelFilter.isEmpty()) {
+            log.info("[Tuning] Starting hyperparameter tuning — distributor={} (all models)", distributorId);
+        } else {
+            log.info("[Tuning] Starting hyperparameter tuning — distributor={} models={}", distributorId, modelFilter);
+        }
 
         SyntheticDataBundle bundle = orchestrator.generateBundle(config);
         log.info("[Tuning] Bundle generated — {} merchants", bundle.getMerchants().size());
@@ -91,43 +115,83 @@ public class ModelTuningService {
         List<CandidateConfig<Event>>     anomalyCandidates = HyperparameterGrid.anomalyCandidates();
 
         // ── classifiers ───────────────────────────────────────────────────
-        tuneClassifier(DataPhaseTracker.MODEL_CREDIT_CLASSIFIER,
-                b -> featureStore.buildCreditClassifierExamples(b),
-                bundle, classifCandidates, distributorId, results, errors);
+        if (shouldTune(DataPhaseTracker.MODEL_CREDIT_CLASSIFIER, modelFilter))
+            tuneClassifier(DataPhaseTracker.MODEL_CREDIT_CLASSIFIER,
+                    b -> featureStore.buildCreditClassifierExamples(b),
+                    bundle, classifCandidates, distributorId, results, errors);
 
-        tuneClassifier(DataPhaseTracker.MODEL_STOCKOUT_PREDICTOR,
-                b -> featureStore.buildStockoutPredictorExamples(b),
-                bundle, classifCandidates, distributorId, results, errors);
+        if (shouldTune(DataPhaseTracker.MODEL_STOCKOUT_PREDICTOR, modelFilter))
+            tuneClassifier(DataPhaseTracker.MODEL_STOCKOUT_PREDICTOR,
+                    b -> featureStore.buildStockoutPredictorExamples(b),
+                    bundle, classifCandidates, distributorId, results, errors);
 
-        tuneClassifier(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR,
-                b -> featureStore.buildRepPerformancePredictorExamples(b),
-                bundle, classifCandidates, distributorId, results, errors);
+        if (shouldTune(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, modelFilter))
+            tuneClassifier(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR,
+                    b -> featureStore.buildRepPerformancePredictorExamples(b),
+                    bundle, classifCandidates, distributorId, results, errors);
 
-        tuneClassifier(DataPhaseTracker.MODEL_PAYMENT_DISTRESS_CLASSIFIER,
-                b -> featureStore.buildPaymentDistressExamples(b),
-                bundle, classifCandidates, distributorId, results, errors);
+        if (shouldTune(DataPhaseTracker.MODEL_PAYMENT_DISTRESS_CLASSIFIER, modelFilter))
+            tuneClassifier(DataPhaseTracker.MODEL_PAYMENT_DISTRESS_CLASSIFIER,
+                    b -> featureStore.buildPaymentDistressExamples(b),
+                    bundle, classifCandidates, distributorId, results, errors);
 
-        tuneClassifier(DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR,
-                b -> featureStore.buildDataQualityExamples(b),
-                bundle, classifCandidates, distributorId, results, errors);
+        if (shouldTune(DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR, modelFilter))
+            tuneClassifier(DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR,
+                    b -> featureStore.buildDataQualityExamples(b),
+                    bundle, classifCandidates, distributorId, results, errors);
 
         // ── regressors ────────────────────────────────────────────────────
-        tuneRegressor(DataPhaseTracker.MODEL_CREDIT_LIMIT_REGRESSOR,
-                b -> featureStore.buildCreditLimitRegressorExamples(b),
-                bundle, regCandidates, distributorId, results, errors);
+        if (shouldTune(DataPhaseTracker.MODEL_CREDIT_LIMIT_REGRESSOR, modelFilter))
+            tuneRegressor(DataPhaseTracker.MODEL_CREDIT_LIMIT_REGRESSOR,
+                    b -> featureStore.buildCreditLimitRegressorExamples(b),
+                    bundle, regCandidates, distributorId, results, errors);
 
-        tuneRegressor(DataPhaseTracker.MODEL_DEMAND_FORECASTER,
-                b -> featureStore.buildDemandForecasterExamples(b),
-                bundle, regCandidates, distributorId, results, errors);
+        if (shouldTune(DataPhaseTracker.MODEL_DEMAND_FORECASTER, modelFilter))
+            tuneRegressor(DataPhaseTracker.MODEL_DEMAND_FORECASTER,
+                    b -> featureStore.buildDemandForecasterExamples(b),
+                    bundle, regCandidates, distributorId, results, errors);
 
         // ── anomaly detectors ─────────────────────────────────────────────
-        tuneAnomalyDetector(DataPhaseTracker.MODEL_SHRINKAGE_DETECTOR,
-                b -> featureStore.buildShrinkageDetectorExamples(b),
-                bundle, anomalyCandidates, distributorId, results, errors);
+        if (shouldTune(DataPhaseTracker.MODEL_SHRINKAGE_DETECTOR, modelFilter))
+            tuneAnomalyDetector(DataPhaseTracker.MODEL_SHRINKAGE_DETECTOR,
+                    b -> featureStore.buildShrinkageDetectorExamples(b),
+                    bundle, anomalyCandidates, distributorId, results, errors);
 
-        tuneAnomalyDetector(DataPhaseTracker.MODEL_PAYMENT_ANOMALY_DETECTOR,
-                b -> featureStore.buildPaymentAnomalyExamples(b),
-                bundle, anomalyCandidates, distributorId, results, errors);
+        if (shouldTune(DataPhaseTracker.MODEL_PAYMENT_ANOMALY_DETECTOR, modelFilter))
+            tuneAnomalyDetector(DataPhaseTracker.MODEL_PAYMENT_ANOMALY_DETECTOR,
+                    b -> featureStore.buildPaymentAnomalyExamples(b),
+                    bundle, anomalyCandidates, distributorId, results, errors);
+
+        // ── Phase 7 classifiers ───────────────────────────────────────────
+        if (shouldTune(DataPhaseTracker.MODEL_BANK_RECON_MATCHER, modelFilter))
+            tuneClassifier(DataPhaseTracker.MODEL_BANK_RECON_MATCHER,
+                    b -> featureStore.buildBankReconExamples(b),
+                    bundle, classifCandidates, distributorId, results, errors);
+
+        if (shouldTune(DataPhaseTracker.MODEL_CHURN_PREDICTOR, modelFilter))
+            tuneClassifier(DataPhaseTracker.MODEL_CHURN_PREDICTOR,
+                    b -> featureStore.buildChurnExamples(b),
+                    bundle, classifCandidates, distributorId, results, errors);
+
+        if (shouldTune(DataPhaseTracker.MODEL_EXPIRY_RISK_PREDICTOR, modelFilter))
+            tuneClassifier(DataPhaseTracker.MODEL_EXPIRY_RISK_PREDICTOR,
+                    b -> featureStore.buildExpiryRiskExamples(b),
+                    bundle, classifCandidates, distributorId, results, errors);
+
+        // ── Phase 7 regressors ────────────────────────────────────────────
+        if (shouldTune(DataPhaseTracker.MODEL_CASH_FLOW_PREDICTOR, modelFilter))
+            tuneRegressor(DataPhaseTracker.MODEL_CASH_FLOW_PREDICTOR,
+                    b -> featureStore.buildCashFlowExamples(b),
+                    bundle, regCandidates, distributorId, results, errors);
+
+        if (shouldTune(DataPhaseTracker.MODEL_CUSTOMER_CLV_PREDICTOR, modelFilter))
+            tuneRegressor(DataPhaseTracker.MODEL_CUSTOMER_CLV_PREDICTOR,
+                    b -> featureStore.buildClvExamples(b),
+                    bundle, regCandidates, distributorId, results, errors);
+
+        // ── K-Means (unsupervised — no CV, train once with configured k) ──
+        if (shouldTune(DataPhaseTracker.MODEL_CUSTOMER_SEGMENTER, modelFilter))
+            trainKMeans(bundle, distributorId, results, errors);
 
         long durationMs = System.currentTimeMillis() - startMs;
         log.info("[Tuning] Complete — tuned={}, errors={}, duration={}ms",
@@ -137,6 +201,11 @@ public class ModelTuningService {
     }
 
     // ── Private helpers ───────────────────────────────────────────────────
+
+    /** Returns true when the model should be tuned given the current filter. */
+    private boolean shouldTune(String modelName, Set<String> filter) {
+        return filter.isEmpty() || filter.contains(modelName);
+    }
 
     private void tuneClassifier(String modelName,
                                  Function<SyntheticDataBundle, List<Example<Label>>> exampleFn,
@@ -159,7 +228,9 @@ public class ModelTuningService {
                 return;
             }
 
-            MutableDataset<Label> dataset = toClassificationDataset(mixed, modelName);
+            // Oversample minority class so XGBoost doesn't ignore it
+            List<Example<Label>> balanced = oversampleMinorityClass(mixed, modelName);
+            MutableDataset<Label> dataset = toClassificationDataset(balanced, modelName);
             CrossValidationTuner.BestConfig<Label> best = cvTuner.tuneClassifier(
                     modelName, candidates, dataset);
 
@@ -229,7 +300,8 @@ public class ModelTuningService {
                     modelName, distributorId, List.of(), examples);
 
             // LibSVMAnomalyTrainer (one-class SVM) only accepts EXPECTED events at training
-            // time. ANOMALOUS examples are only used at evaluation time.
+            // time. CV tuner receives ALL examples so test folds contain ANOMALOUS examples
+            // for meaningful F1 evaluation. The final model is still trained on EXPECTED only.
             List<Example<Event>> trainingExamples = mixed.stream()
                     .filter(ex -> ex.getOutput().getType() == Event.EventType.EXPECTED)
                     .collect(Collectors.toList());
@@ -240,11 +312,13 @@ public class ModelTuningService {
                 return;
             }
 
-            MutableDataset<Event> dataset = toAnomalyDataset(trainingExamples, modelName + "_tuning");
+            // Pass ALL examples to CV so test folds include ANOMALOUS events
             CrossValidationTuner.BestConfig<Event> best = cvTuner.tuneAnomalyDetector(
-                    modelName, candidates, dataset);
+                    modelName, candidates, mixed);
 
-            Model<Event> finalModel = best.config().trainer().train(dataset);
+            // Final model trained on EXPECTED-only (LibSVM requirement)
+            MutableDataset<Event> finalTrainDataset = toAnomalyDataset(trainingExamples, modelName + "_tuning");
+            Model<Event> finalModel = best.config().trainer().train(finalTrainDataset);
             UUID modelId = registerAndPromote(modelName, "libsvm_anomaly",
                     finalModel, best.config().hyperparameters(),
                     mixed.size(), 0, distributorId, best.metricValue(), best.metricName());
@@ -322,13 +396,47 @@ public class ModelTuningService {
         modelRegistry.promoteToActive(entry.getId());
         modelRegistry.updateHyperparameters(entry.getId(), hparams);
 
-        log.info("[Tuning] Registered and promoted {} ({}={:.4f}, id={})",
+        log.info("[Tuning] Registered and promoted {} ({}={}, id={})",
                 modelName, metricName, metricValue, entry.getId());
         return entry.getId();
     }
 
     private int safeFeatureCount(Model<?> model) {
         try { return model.getFeatureIDMap().size(); } catch (Exception e) { return 0; }
+    }
+
+    /**
+     * Oversample the minority class by random repetition until the majority:minority
+     * ratio is at most 3:1. This prevents XGBoost from ignoring rare classes entirely.
+     * No oversampling is applied when the dataset is already balanced (ratio ≤ 3).
+     */
+    private List<Example<Label>> oversampleMinorityClass(List<Example<Label>> examples, String modelName) {
+        Map<String, List<Example<Label>>> byClass = examples.stream()
+                .collect(Collectors.groupingBy(ex -> ex.getOutput().getLabel()));
+
+        if (byClass.size() != 2) return examples; // only for binary classifiers
+
+        List<Example<Label>> majority = byClass.values().stream()
+                .max((a, b) -> Integer.compare(a.size(), b.size())).orElse(List.of());
+        List<Example<Label>> minority = byClass.values().stream()
+                .min((a, b) -> Integer.compare(a.size(), b.size())).orElse(List.of());
+
+        double ratio = (double) majority.size() / minority.size();
+        if (ratio <= 3.0) return examples;
+
+        int targetSize = majority.size() / 3; // target: 3:1 majority:minority
+        int toAdd      = Math.max(0, targetSize - minority.size());
+
+        log.info("[Tuning] {} — class imbalance ratio={}, oversampling minority '{}' by {} examples",
+                modelName, String.format("%.1f", ratio), minority.get(0).getOutput().getLabel(), toAdd);
+
+        List<Example<Label>> result = new ArrayList<>(examples);
+        Random rng = new Random(42L);
+        for (int i = 0; i < toAdd; i++) {
+            result.add(minority.get(rng.nextInt(minority.size())));
+        }
+        Collections.shuffle(result, rng);
+        return result;
     }
 
     private boolean isSingleClass(List<Example<Label>> examples) {
@@ -346,6 +454,48 @@ public class ModelTuningService {
             return baos.toByteArray();
         } catch (IOException e) {
             throw new RuntimeException("Model serialization failed for " + model.getName(), e);
+        }
+    }
+
+    // ── K-Means ───────────────────────────────────────────────────────────
+
+    /**
+     * Train a K-Means segmentation model and register it as ACTIVE.
+     *
+     * <p>K-Means is unsupervised — there are no hyperparameter candidates to compare
+     * via cross-validation. A single model is trained using the configured cluster count
+     * (default k=5 from {@code zuqi.ai.kmeans.clusters}) and immediately promoted.
+     *
+     * <p>Metric recorded is {@code num_examples} (training set size) since no
+     * supervised quality metric applies.
+     */
+    private void trainKMeans(SyntheticDataBundle bundle, UUID distributorId,
+                              List<TuningResult> results, List<String> errors) {
+        String modelName = DataPhaseTracker.MODEL_CUSTOMER_SEGMENTER;
+        try {
+            MutableDataset<ClusterID> dataset = featureStore.buildSegmentationDataset(bundle);
+            if (dataset.size() < 10) {
+                log.warn("[Tuning] {} — too few examples ({}), skipping", modelName, dataset.size());
+                return;
+            }
+
+            Model<ClusterID> model = kMeansTrainer.train(dataset);
+
+            Map<String, Object> hparams = new LinkedHashMap<>();
+            hparams.put("clusters", 5);
+
+            UUID modelId = registerAndPromote(modelName, "kmeans",
+                    model, hparams, dataset.size(), 0,
+                    distributorId, (double) dataset.size(), "num_examples");
+
+            results.add(new TuningResult(modelName, modelId, hparams,
+                    dataset.size(), "num_examples", 1, 0));
+
+            log.info("[Tuning] {} — K-Means trained on {} examples", modelName, dataset.size());
+
+        } catch (Exception e) {
+            log.error("[Tuning] {} failed: {}", modelName, e.getMessage(), e);
+            errors.add(modelName + ": " + e.getMessage());
         }
     }
 

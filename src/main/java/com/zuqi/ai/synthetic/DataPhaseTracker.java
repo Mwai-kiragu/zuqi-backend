@@ -47,6 +47,8 @@ public class DataPhaseTracker {
 
     // ── Model name constants ────────────────────────────────────────────────
 
+    // ── Phase 1 model names ─────────────────────────────────────────────────
+
     public static final String MODEL_DEMAND_FORECASTER           = "demand_forecaster";
     public static final String MODEL_CREDIT_CLASSIFIER           = "credit_classifier";
     public static final String MODEL_STOCKOUT_PREDICTOR          = "stockout_predictor";
@@ -56,6 +58,17 @@ public class DataPhaseTracker {
     public static final String MODEL_REP_PERFORMANCE_PREDICTOR   = "rep_performance_predictor";
     public static final String MODEL_CREDIT_LIMIT_REGRESSOR      = "credit_limit_regressor";
     public static final String MODEL_PAYMENT_DISTRESS_CLASSIFIER = "payment_distress_classifier";
+
+    // ── Phase 2 model names (8 new models) ─────────────────────────────────
+
+    public static final String MODEL_BANK_RECON_MATCHER          = "bank_recon_matcher";
+    public static final String MODEL_CASH_FLOW_PREDICTOR         = "cash_flow_predictor";
+    public static final String MODEL_CUSTOMER_SEGMENTER          = "customer_segmenter";
+    public static final String MODEL_CUSTOMER_HEALTH_SCORER      = "customer_health_scorer";
+    public static final String MODEL_CUSTOMER_CLV_PREDICTOR      = "customer_clv_predictor";
+    public static final String MODEL_CHURN_PREDICTOR             = "churn_predictor";
+    public static final String MODEL_REORDER_OPTIMIZER           = "reorder_optimizer";
+    public static final String MODEL_EXPIRY_RISK_PREDICTOR       = "expiry_risk_predictor";
 
     // ── Transition threshold registry ───────────────────────────────────────
 
@@ -85,12 +98,30 @@ public class DataPhaseTracker {
             // ninth entry added via Map.copyOf to stay under Map.of(10) overload limit
     );
 
-    // Map.of has a max of 10 pairs; use a second map for the 9th entry
+    // Map.of has a max of 10 pairs; accumulate all entries via HashMap
     private static final Map<String, TransitionThreshold> ALL_THRESHOLDS;
     static {
         java.util.HashMap<String, TransitionThreshold> m = new java.util.HashMap<>(THRESHOLDS);
+        // Phase 1 — 9th entry (Map.of limit workaround)
         m.put(MODEL_PAYMENT_DISTRESS_CLASSIFIER,
                 new TransitionThreshold(MODEL_PAYMENT_DISTRESS_CLASSIFIER, 100, 300, 0.80));
+        // Phase 2 — 8 new models
+        m.put(MODEL_BANK_RECON_MATCHER,
+                new TransitionThreshold(MODEL_BANK_RECON_MATCHER,      100, 300, 0.80));
+        m.put(MODEL_CASH_FLOW_PREDICTOR,
+                new TransitionThreshold(MODEL_CASH_FLOW_PREDICTOR,      50, 200, 0.80));
+        m.put(MODEL_CUSTOMER_SEGMENTER,
+                new TransitionThreshold(MODEL_CUSTOMER_SEGMENTER,      200, 500, 0.80));
+        m.put(MODEL_CUSTOMER_HEALTH_SCORER,
+                new TransitionThreshold(MODEL_CUSTOMER_HEALTH_SCORER,  200, 500, 0.80));
+        m.put(MODEL_CUSTOMER_CLV_PREDICTOR,
+                new TransitionThreshold(MODEL_CUSTOMER_CLV_PREDICTOR,  100, 300, 0.80));
+        m.put(MODEL_CHURN_PREDICTOR,
+                new TransitionThreshold(MODEL_CHURN_PREDICTOR,         200, 500, 0.80));
+        m.put(MODEL_REORDER_OPTIMIZER,
+                new TransitionThreshold(MODEL_REORDER_OPTIMIZER,        50, 200, 0.80));
+        m.put(MODEL_EXPIRY_RISK_PREDICTOR,
+                new TransitionThreshold(MODEL_EXPIRY_RISK_PREDICTOR,    50, 200, 0.80));
         ALL_THRESHOLDS = java.util.Collections.unmodifiableMap(m);
     }
 

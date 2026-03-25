@@ -15,6 +15,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -51,29 +53,34 @@ public class HyperparameterTuningController {
     // -------------------------------------------------------------------------
 
     /**
-     * Trigger a full hyperparameter tuning run for all 9 ML models.
+     * Trigger hyperparameter tuning for all 15 ML models (or a named subset).
      *
      * <p>The job starts on the async executor and returns immediately.
      * Poll {@code GET /v1/ai/admin/tune/{jobId}/status} until {@code status != "RUNNING"}.
      *
      * @param distributorId UUID of the distributor to scope tuning to
      * @param merchantCount optional override for synthetic merchant count (default 500)
+     * @param models        optional comma-separated list of model names to tune;
+     *                      omit to tune all 15 models
      * @param principal     authenticated user triggering the run
      * @return 202 Accepted with a {@code jobId} for status polling
      */
     @PostMapping("/{distributorId}")
     @Operation(
             summary  = "Start hyperparameter tuning",
-            description = "Triggers async k-fold CV tuning for all 9 ML models using a synthetic "
-                    + "training bundle. Returns immediately with a jobId for status polling.",
+            description = "Triggers async k-fold CV tuning for ML models using a synthetic "
+                    + "training bundle. Pass ?models=credit_classifier,churn_predictor to tune "
+                    + "a subset. Returns immediately with a jobId for status polling.",
             security = @SecurityRequirement(name = "bearerAuth")
     )
     public ResponseEntity<ApiResponse<TuningJobResponse>> startTuning(
             @PathVariable UUID distributorId,
             @RequestParam(required = false) Integer merchantCount,
+            @RequestParam(required = false) List<String> models,
             Principal principal) {
 
         int count = (merchantCount != null && merchantCount > 0) ? merchantCount : DEFAULT_MERCHANT_COUNT;
+        Set<String> modelFilter = (models != null && !models.isEmpty()) ? Set.copyOf(models) : Set.of();
 
         SyntheticDataConfig config = new SyntheticDataConfig(
                 distributorId,
@@ -85,13 +92,15 @@ public class HyperparameterTuningController {
         UUID jobId = UUID.randomUUID();
         String triggeredBy = (principal != null) ? principal.getName() : "system";
 
-        log.info("[TuningController] Tuning job {} started by {} — distributor={}, merchants={}",
-                jobId, triggeredBy, distributorId, count);
+        log.info("[TuningController] Tuning job {} started by {} — distributor={}, merchants={}, filter={}",
+                jobId, triggeredBy, distributorId, count,
+                modelFilter.isEmpty() ? "all" : modelFilter);
 
-        tuningAsyncService.tuneAsync(jobId, distributorId, config);
+        tuningAsyncService.tuneAsync(jobId, distributorId, config, modelFilter);
 
         String statusUrl = "/v1/ai/admin/tune/" + jobId + "/status";
-        TuningJobResponse response = new TuningJobResponse(jobId, distributorId, count, statusUrl);
+        List<String> filterList = modelFilter.isEmpty() ? List.of() : List.copyOf(modelFilter);
+        TuningJobResponse response = new TuningJobResponse(jobId, distributorId, count, filterList, statusUrl);
 
         return ResponseEntity
                 .status(HttpStatus.ACCEPTED)
@@ -106,7 +115,7 @@ public class HyperparameterTuningController {
      * Poll the status of a tuning job.
      *
      * @param jobId UUID returned by the POST endpoint
-     * @return 200 with current status, or 404 if the job is unknown
+     * @return 200 with current status; if the job is unknown returns 200 with status=UNKNOWN
      */
     @GetMapping("/{jobId}/status")
     @Operation(
@@ -120,9 +129,10 @@ public class HyperparameterTuningController {
 
         TuningAsyncService.TuningJobStatus job = tuningAsyncService.getStatus(jobId);
         if (job == null) {
-            return ResponseEntity
-                    .status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponse.error("Tuning job not found: " + jobId));
+            // Return 200 with UNKNOWN so polling scripts don't fail on curl -sf
+            TuningStatusResponse unknown = new TuningStatusResponse(
+                    jobId, null, "UNKNOWN", List.of(), "Job not found (may be initializing or app restarted)", 0L, 0L);
+            return ResponseEntity.ok(ApiResponse.success(unknown));
         }
 
         TuningStatusResponse response = new TuningStatusResponse(

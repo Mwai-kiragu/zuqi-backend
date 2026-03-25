@@ -17,5 +17,12 @@ public enum ReportType {
     TRIAL_BALANCE,
     // ── Aging ────────────────────────────────────────────────────────────────
     AR_AGING,
-    AP_AGING
+    AP_AGING,
+    // ── Phase 7 Analytics ────────────────────────────────────────────────────
+    EXPIRY_RISK,
+    REORDER_SUGGESTIONS,
+    CHURN_RISK,
+    CUSTOMER_HEALTH,
+    SUPPLIER_RISK,
+    PRICE_TRENDS
 }

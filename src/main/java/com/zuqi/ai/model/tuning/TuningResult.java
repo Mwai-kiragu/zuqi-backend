@@ -1,5 +1,7 @@
 package com.zuqi.ai.model.tuning;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import java.util.Map;
 import java.util.UUID;
 
@@ -16,10 +18,10 @@ import java.util.UUID;
  * @param numFolds            k used in k-fold cross-validation
  */
 public record TuningResult(
-        String              modelName,
-        UUID                modelId,
-        Map<String, Object> bestHyperparameters,
-        double              bestMetricValue,
-        String              metricName,
-        int                 candidatesEvaluated,
-        int                 numFolds) {}
+        @JsonProperty("modelName")           String              modelName,
+        @JsonProperty("modelId")             UUID                modelId,
+        @JsonProperty("bestHyperparameters") Map<String, Object> bestHyperparameters,
+        @JsonProperty("bestMetricValue")     double              bestMetricValue,
+        @JsonProperty("metricName")          String              metricName,
+        @JsonProperty("candidatesEvaluated") int                 candidatesEvaluated,
+        @JsonProperty("numFolds")            int                 numFolds) {}

@@ -51,6 +51,25 @@ spring:
     redis:
       time-to-live: 3600000
       cache-null-values: false
+    cache-names:
+      # Feature caches (Phase 1 — original 9 models)
+      - merchantFeatures
+      - merchantPaymentTrends
+      - paymentFeatures
+      - demandFeatures
+      - inventoryFeatures
+      - salesRepFeatures
+      - aiModels
+      # Feature caches (Phase 2 — new models)
+      - reorderFeatures
+      - expiryFeatures
+      - reconFeatures
+      - cashFlowFeatures
+      - customerAnalyticsFeatures
+      - supplierFeatures
+      - pricingFeatures
+      # Infrastructure caches
+      - distanceMatrix
 
   # Jackson Configuration
   jackson:

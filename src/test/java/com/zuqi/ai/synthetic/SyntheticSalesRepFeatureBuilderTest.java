@@ -195,13 +195,16 @@ class SyntheticSalesRepFeatureBuilderTest {
     private SyntheticDataBundle bundleWithActivities(List<SyntheticRepActivity> activities) {
         return SyntheticDataBundle.create(
                 List.of(), List.of(), List.of(), List.of(), List.of(),
-                activities, List.of(),
+                activities, List.of(), List.of(),
+                List.of(), List.of(),
                 1L, SyntheticDataConfig.defaultConfig(UUID.randomUUID(), 42L));
     }
 
     private SyntheticDataBundle emptyBundle() {
         return SyntheticDataBundle.create(
                 List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+                List.of(),
+                List.of(), List.of(),
                 1L, SyntheticDataConfig.defaultConfig(UUID.randomUUID(), 42L));
     }
 }

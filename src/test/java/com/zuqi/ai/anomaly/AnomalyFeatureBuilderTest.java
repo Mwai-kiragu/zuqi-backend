@@ -37,7 +37,7 @@ class AnomalyFeatureBuilderTest {
     @Test
     void inventoryExample_hasEightFeatures() {
         ArrayExample<Event> example = builder.buildInventoryExample(typicalInventory());
-        assertThat(example.size()).isEqualTo(8);
+        assertThat(example.size()).isEqualTo(12);
     }
 
     @Test
@@ -59,13 +59,17 @@ class AnomalyFeatureBuilderTest {
 
         assertThat(names).containsExactlyInAnyOrder(
                 AnomalyFeatureBuilder.FEAT_DISCREPANCY_PCT,
+                AnomalyFeatureBuilder.FEAT_DISCREPANCY_NORM,
                 AnomalyFeatureBuilder.FEAT_MANUAL_ADJ_COUNT_7D,
                 AnomalyFeatureBuilder.FEAT_UNIQUE_ADJUSTING_USERS,
+                AnomalyFeatureBuilder.FEAT_ADJ_TIME_ENTROPY,
                 AnomalyFeatureBuilder.FEAT_CONSUMPTION_RATE_7D,
+                AnomalyFeatureBuilder.FEAT_CONSUMPTION_RATE_30D,
                 AnomalyFeatureBuilder.FEAT_CONSUMPTION_TREND,
                 AnomalyFeatureBuilder.FEAT_PENDING_RESERVED_PCT,
                 AnomalyFeatureBuilder.FEAT_EXPECTED_INCOMING_PCT,
-                AnomalyFeatureBuilder.FEAT_CURRENT_STOCK_NORM
+                AnomalyFeatureBuilder.FEAT_CURRENT_STOCK_NORM,
+                AnomalyFeatureBuilder.FEAT_EXPECTED_STOCK_NORM
         );
     }
 
@@ -87,7 +91,7 @@ class AnomalyFeatureBuilderTest {
                 .build();
 
         ArrayExample<Event> example = builder.buildInventoryExample(empty);
-        assertThat(example.size()).isEqualTo(8);
+        assertThat(example.size()).isEqualTo(12);
         for (Feature f : example) {
             assertThat(Double.isNaN(f.getValue())).as("NaN in " + f.getName()).isFalse();
         }

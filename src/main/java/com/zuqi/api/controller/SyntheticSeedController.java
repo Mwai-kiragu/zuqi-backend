@@ -18,6 +18,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -68,6 +71,7 @@ public class SyntheticSeedController {
     public ResponseEntity<ApiResponse<SyntheticSeedResponse>> triggerGeneration(
             @PathVariable UUID distributorId,
             @RequestBody(required = false) SyntheticSeedRequest request,
+            @RequestParam(required = false) List<String> models,
             Principal principal) {
 
         if (request == null) {
@@ -85,14 +89,18 @@ public class SyntheticSeedController {
                 seed,
                 SyntheticDataConfig.DEFAULT_ARCHETYPE_RATIOS);
 
+        Set<String> modelFilter = (models != null && !models.isEmpty())
+                ? new HashSet<>(models) : Set.of();
+
         String triggeredBy = (principal != null) ? principal.getName() : "system";
         AISyntheticRun run = orchestrator.createRunRecord(distributorId, config, triggeredBy);
         UUID runId = run.getId();
 
-        log.info("[SyntheticSeed] Run {} started by {} — distributor={}, merchants={}, months={}, seed={}",
-                runId, triggeredBy, distributorId, merchantCount, historyMonths, seed);
+        log.info("[SyntheticSeed] Run {} started by {} — distributor={}, merchants={}, months={}, seed={}, filter={}",
+                runId, triggeredBy, distributorId, merchantCount, historyMonths, seed,
+                modelFilter.isEmpty() ? "ALL" : modelFilter);
 
-        generationService.generateAsync(runId, config);
+        generationService.generateAsync(runId, config, modelFilter);
 
         String statusUrl = "/v1/ai/admin/seed-synthetic/" + runId + "/status";
         SyntheticSeedResponse response = new SyntheticSeedResponse(

@@ -68,9 +68,20 @@ public class ModelRegistryService implements ModelRegistry {
         model.setFeatureColumns(featureColumns);
         model.setStatus(ModelStatus.EVALUATING);
 
+        // Populate trainingRecordCount from standard keys used across pipelines
+        if (performanceMetrics != null) {
+            Object count = performanceMetrics.get("training_size");
+            if (count == null) count = performanceMetrics.get("training_samples");
+            if (count == null) count = performanceMetrics.get("synthetic_records");
+            if (count instanceof Number n) {
+                model.setTrainingRecordCount(n.intValue());
+            }
+        }
+
         modelRepository.save(model);
-        log.info("Updated model {} v{} after training - size: {} bytes",
-                model.getModelName(), model.getModelVersion(), modelBinary.length);
+        log.info("Updated model {} v{} after training - size: {} bytes, trainingRecords: {}",
+                model.getModelName(), model.getModelVersion(), modelBinary.length,
+                model.getTrainingRecordCount());
     }
 
     @Override
