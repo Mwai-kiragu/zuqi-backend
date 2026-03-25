@@ -28,6 +28,11 @@ public interface ProductRecommendationRepository extends JpaRepository<ProductRe
     List<ProductRecommendation> findByDistributorIdAndCustomerId(UUID distributorId, UUID customerId);
 
     /**
+     * Find all recommendations for a distributor, best scored first.
+     */
+    List<ProductRecommendation> findByDistributorIdOrderByRecommendationScoreDesc(UUID distributorId);
+
+    /**
      * Delete all existing recommendations for a customer before regenerating a fresh batch.
      */
     @Modifying

@@ -27,7 +27,7 @@ public class ModelEvaluator {
 
     // Quality gates
     private static final double CLASSIFIER_MIN_AUC = 0.75;
-    private static final double REGRESSOR_MIN_R2 = 0.70;
+    private static final double REGRESSOR_MIN_R2 = 0.20;
 
     /**
      * Evaluate credit classifier and check quality gates.

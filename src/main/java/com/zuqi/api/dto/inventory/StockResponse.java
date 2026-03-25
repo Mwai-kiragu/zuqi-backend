@@ -31,4 +31,9 @@ public class StockResponse {
     private boolean lowStock;
     private LocalDateTime lastStockCheck;
     private LocalDateTime updatedAt;
+
+    // AI prediction fields (populated by StockoutPredictor on list endpoints)
+    private Double aiRiskScore;
+    private Double aiDaysUntilStockout;
+    private Double aiDemand7d;
 }

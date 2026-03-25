@@ -58,6 +58,9 @@ public class CustomerResponse {
     private String approvalStatus;
     private java.util.UUID createdById;
 
+    // AI credit score (latest from credit_scores table; null if never evaluated)
+    private BigDecimal aiScore;
+
     public static CustomerResponse fromEntity(Customer customer) {
         return CustomerResponse.builder()
                 .id(customer.getId())

@@ -1,0 +1,5 @@
+# Dev profile overrides
+# Longer JWT expiry so seed-train.sh polling doesn't lose auth
+# during the ~16-minute model training run.
+jwt:
+  access-token-expiration: 3600000  # 60 minutes (prod default: 15 min)

@@ -85,7 +85,7 @@ class MerchantFeatureServiceTest {
 
         assertThatThrownBy(() -> merchantFeatureService.computeFeatures(merchantId, asOfDate))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Merchant not found");
+                .hasMessageContaining("Customer not found");
     }
 
     // ===========================

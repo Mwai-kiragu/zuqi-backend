@@ -17,15 +17,26 @@ import com.zuqi.ai.agent.tools.TrialBalanceTool;
 import com.zuqi.ai.agent.tools.CashFlowTool;
 import com.zuqi.ai.agent.tools.ArAgingTool;
 import com.zuqi.ai.agent.tools.ApAgingTool;
+// Phase 7 analytics tools
+import com.zuqi.ai.agent.tools.ExpiryRiskTool;
+import com.zuqi.ai.agent.tools.ReorderSuggestionTool;
+import com.zuqi.ai.agent.tools.CustomerSegmentTool;
+import com.zuqi.ai.agent.tools.CustomerHealthTool;
+import com.zuqi.ai.agent.tools.ChurnRiskTool;
+import com.zuqi.ai.agent.tools.SupplierRiskTool;
+import com.zuqi.ai.agent.tools.PriceTrendTool;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.service.AiServices;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.aop.framework.Advised;
+import org.springframework.aop.support.AopUtils;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * Wires AssistantAgent with 21 data tools and a DB-backed MessageWindowChatMemory.
+ * Wires AssistantAgent with 28 data tools and a DB-backed MessageWindowChatMemory.
  *
  * Memory design:
  * - chatMemoryProvider creates a per-conversation MessageWindowChatMemory(maxMessages=40)
@@ -37,6 +48,7 @@ import org.springframework.context.annotation.Configuration;
  */
 @Configuration
 @RequiredArgsConstructor
+@Slf4j
 public class AssistantAgentConfig {
 
     private static final int MAX_MESSAGES_IN_WINDOW = 40; // 20 full turns
@@ -66,7 +78,35 @@ public class AssistantAgentConfig {
             TrialBalanceTool trialBalanceTool,
             CashFlowTool cashFlowTool,
             ArAgingTool arAgingTool,
-            ApAgingTool apAgingTool) {
+            ApAgingTool apAgingTool,
+            // Phase 7 analytics tools
+            ExpiryRiskTool expiryRiskTool,
+            ReorderSuggestionTool reorderSuggestionTool,
+            CustomerSegmentTool customerSegmentTool,
+            CustomerHealthTool customerHealthTool,
+            ChurnRiskTool churnRiskTool,
+            SupplierRiskTool supplierRiskTool,
+            PriceTrendTool priceTrendTool,
+            HelpTool helpTool) {
+
+        // LangChain4j uses getDeclaredMethods() to find @Tool annotations.
+        // Spring CGLIB proxies override methods without copying annotations,
+        // so we must unwrap to the real target instance before registering tools.
+        Object[] tools = java.util.Arrays.stream(new Object[]{
+                salesTrendTool, inventoryHealthTool, paymentPerformanceTool,
+                repPerformanceTool, merchantMetricsTool, anomalyAlertsTool,
+                deliveryMetricsTool, creditSummaryTool, demandForecastSummaryTool,
+                invoiceTool, expensesTool, procurementTool,
+                fundsTransferTool, posSalesTool, stockTransferTool,
+                balanceSheetTool, profitLossTool, trialBalanceTool,
+                cashFlowTool, arAgingTool, apAgingTool,
+                // Phase 7
+                expiryRiskTool, reorderSuggestionTool,
+                customerSegmentTool, customerHealthTool, churnRiskTool,
+                supplierRiskTool, priceTrendTool,
+                helpTool})
+                .map(this::unwrapProxy)
+                .toArray();
 
         return AiServices.builder(AssistantAgent.class)
                 .chatLanguageModel(chatLanguageModel)
@@ -76,13 +116,19 @@ public class AssistantAgentConfig {
                                 .maxMessages(MAX_MESSAGES_IN_WINDOW)
                                 .chatMemoryStore(chatMemoryStore)
                                 .build())
-                .tools(salesTrendTool, inventoryHealthTool, paymentPerformanceTool,
-                       repPerformanceTool, merchantMetricsTool, anomalyAlertsTool,
-                       deliveryMetricsTool, creditSummaryTool, demandForecastSummaryTool,
-                       invoiceTool, expensesTool, procurementTool,
-                       fundsTransferTool, posSalesTool, stockTransferTool,
-                       balanceSheetTool, profitLossTool, trialBalanceTool,
-                       cashFlowTool, arAgingTool, apAgingTool)
+                .tools(tools)
                 .build();
+    }
+
+    private Object unwrapProxy(Object bean) {
+        if (AopUtils.isAopProxy(bean) && bean instanceof Advised advised) {
+            try {
+                return advised.getTargetSource().getTarget();
+            } catch (Exception e) {
+                log.warn("[AssistantAgentConfig] Could not unwrap proxy for {}: {}",
+                        bean.getClass().getSimpleName(), e.getMessage());
+            }
+        }
+        return bean;
     }
 }

@@ -16,8 +16,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.tribuo.Example;
+import org.tribuo.MutableDataset;
+import org.tribuo.Trainer;
 import org.tribuo.anomaly.Event;
 import org.tribuo.classification.Label;
+import org.tribuo.clustering.ClusterID;
 import org.tribuo.regression.Regressor;
 
 import java.util.List;
@@ -46,14 +49,17 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class ModelTuningServiceTest {
 
-    @Mock private SyntheticDataOrchestrator orchestrator;
-    @Mock private SyntheticFeatureStore     featureStore;
-    @Mock private DataMixer                 dataMixer;
-    @Mock private ModelRegistry             modelRegistry;
-    @Mock private DataPhaseTracker          phaseTracker;
-    @Mock private CrossValidationTuner      cvTuner;
-    @Mock private SyntheticDataBundle       bundle;
-    @Mock private AIModelRegistry           registryEntry;
+    @Mock private SyntheticDataOrchestrator      orchestrator;
+    @Mock private SyntheticFeatureStore          featureStore;
+    @Mock private DataMixer                      dataMixer;
+    @Mock private ModelRegistry                  modelRegistry;
+    @Mock private DataPhaseTracker               phaseTracker;
+    @Mock private CrossValidationTuner           cvTuner;
+    @Mock private Trainer<ClusterID>             kMeansTrainer;
+    @Mock private SyntheticDataBundle            bundle;
+    @Mock private AIModelRegistry                registryEntry;
+    @SuppressWarnings("rawtypes")
+    @Mock private MutableDataset                 emptyClusterDataset;
 
     private ModelTuningService service;
 
@@ -63,7 +69,7 @@ class ModelTuningServiceTest {
     @BeforeEach
     void setUp() {
         service = new ModelTuningService(
-                orchestrator, featureStore, dataMixer, modelRegistry, phaseTracker, cvTuner);
+                orchestrator, featureStore, dataMixer, modelRegistry, phaseTracker, cvTuner, kMeansTrainer);
 
         // Common stubs
         when(orchestrator.generateBundle(any())).thenReturn(bundle);
@@ -72,6 +78,10 @@ class ModelTuningServiceTest {
         when(registryEntry.getModelVersion()).thenReturn(1);
         when(modelRegistry.registerModel(any(), any(), any(), any())).thenReturn(registryEntry);
         when(modelRegistry.promoteToActive(any())).thenReturn(registryEntry);
+        // K-Means uses MutableDataset directly — always stub to 0 size → skip
+        //noinspection unchecked,rawtypes
+        when(featureStore.buildSegmentationDataset(any())).thenReturn((MutableDataset) emptyClusterDataset);
+        when(emptyClusterDataset.size()).thenReturn(0);
     }
 
     // ── generateBundle delegated ───────────────────────────────────────────
@@ -155,7 +165,7 @@ class ModelTuningServiceTest {
 
     // ── Helpers ───────────────────────────────────────────────────────────
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private void stubAllFeatureStores(List<Example<Label>> labels,
                                       List<Example<Regressor>> regressors,
                                       List<Example<Event>> events,
@@ -169,6 +179,9 @@ class ModelTuningServiceTest {
         when(featureStore.buildPaymentDistressExamples(any())).thenReturn(labels);
         when(featureStore.buildRepPerformancePredictorExamples(any())).thenReturn(labels);
         when(featureStore.buildDataQualityExamples(any())).thenReturn(labels);
+        // K-Means uses a MutableDataset directly — stub to empty (size < 10 → skip)
+        when(featureStore.buildSegmentationDataset(any())).thenReturn((MutableDataset) emptyClusterDataset);
+        when(emptyClusterDataset.size()).thenReturn(0);
     }
 
     @SuppressWarnings("unchecked")

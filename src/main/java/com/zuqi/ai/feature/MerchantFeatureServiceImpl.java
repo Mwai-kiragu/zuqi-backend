@@ -352,7 +352,12 @@ public class MerchantFeatureServiceImpl implements MerchantFeatureService {
     }
 
     private String computeVerificationStatus(Customer customer) {
-        return customer.getKycStatus() != null ? customer.getKycStatus().name() : "PENDING";
+        if (customer.getKycStatus() == null) return "UNVERIFIED";
+        return switch (customer.getKycStatus()) {
+            case APPROVED  -> "VERIFIED";
+            case SUBMITTED -> "PENDING";
+            default        -> "UNVERIFIED"; // PENDING, REJECTED
+        };
     }
 
     private String computeGeographicCluster(Customer customer) {

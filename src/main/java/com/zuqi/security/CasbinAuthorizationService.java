@@ -1,18 +1,22 @@
 package com.zuqi.security;
 
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.casbin.jcasbin.main.Enforcer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
-@Slf4j
 public class CasbinAuthorizationService {
 
+    private static final Logger log = LoggerFactory.getLogger(CasbinAuthorizationService.class);
+
     private final Enforcer enforcer;
+
+    public CasbinAuthorizationService(Enforcer enforcer) {
+        this.enforcer = enforcer;
+    }
 
     public boolean enforce(String subject, String object, String action) {
         boolean allowed = enforcer.enforce(subject, object, action);

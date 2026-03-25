@@ -5,10 +5,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.tribuo.Example;
 import org.tribuo.Model;
 import org.tribuo.MutableDataset;
 import org.tribuo.Trainer;
-import org.tribuo.anomaly.AnomalyFactory;
 import org.tribuo.anomaly.Event;
 import org.tribuo.classification.Label;
 import org.tribuo.classification.LabelFactory;
@@ -17,6 +17,7 @@ import org.tribuo.provenance.SimpleDataSourceProvenance;
 import org.tribuo.regression.Regressor;
 import org.tribuo.regression.RegressionFactory;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -219,18 +220,16 @@ class CrossValidationTunerTest {
         return ds;
     }
 
-    private static MutableDataset<Event> buildAnomalyDataset(int n) {
-        AnomalyFactory factory = new AnomalyFactory();
-        SimpleDataSourceProvenance prov = new SimpleDataSourceProvenance("test", factory);
-        MutableDataset<Event> ds = new MutableDataset<>(prov, factory);
+    private static List<org.tribuo.Example<Event>> buildAnomalyDataset(int n) {
+        List<org.tribuo.Example<Event>> examples = new ArrayList<>();
         for (int i = 0; i < n; i++) {
             Event event = new Event((i % 5 == 0) ? Event.EventType.ANOMALOUS : Event.EventType.EXPECTED);
             ArrayExample<Event> ex = new ArrayExample<>(
                     event,
                     new String[]{"f1", "f2"},
                     new double[]{i * 0.1, i * 0.2});
-            ds.add(ex);
+            examples.add(ex);
         }
-        return ds;
+        return examples;
     }
 }

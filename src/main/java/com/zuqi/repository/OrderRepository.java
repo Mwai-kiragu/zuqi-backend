@@ -39,6 +39,12 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
             @Param("status") OrderStatus status,
             Pageable pageable);
 
+    /** Cash-flow forecast: pending receivables (confirmed but not yet fully paid). */
+    @Query("SELECT o FROM Order o WHERE o.distributor.id = :distributorId " +
+           "AND o.status IN ('CONFIRMED', 'PROCESSING', 'READY_FOR_DELIVERY', 'OUT_FOR_DELIVERY') " +
+           "AND (o.paidAmount IS NULL OR o.totalAmount > o.paidAmount)")
+    List<Order> findPendingReceivablesByDistributor(@Param("distributorId") UUID distributorId);
+
     @Query("SELECT o FROM Order o WHERE o.distributor.id = :distributorId AND o.merchant.id = :merchantId")
     Page<Order> findByDistributorIdAndMerchantId(
             @Param("distributorId") UUID distributorId,
@@ -280,4 +286,18 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
                                         @Param("startDate") LocalDateTime startDate,
                                         @Param("endDate") LocalDateTime endDate,
                                         Pageable pageable);
+
+    // AI feature queries (Phase 2 plan — Section 1.4)
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.merchant.id = :merchantId AND o.createdAt > :after")
+    long countByMerchantIdAndCreatedAtAfter(@Param("merchantId") UUID merchantId,
+                                            @Param("after") LocalDateTime after);
+
+    @Query("SELECT o FROM Order o WHERE o.merchant.id = :customerId AND o.distributor.id = :distributorId")
+    List<Order> findByCustomerIdAndDistributorId(@Param("customerId") UUID customerId,
+                                                 @Param("distributorId") UUID distributorId);
+
+    // AI Phase 3 — cash flow feature queries
+    @Query("SELECT o FROM Order o WHERE o.distributor.id = :distributorId " +
+           "AND o.status IN ('PENDING', 'CONFIRMED', 'PROCESSING')")
+    List<Order> findPendingOrdersByDistributorId(@Param("distributorId") UUID distributorId);
 }

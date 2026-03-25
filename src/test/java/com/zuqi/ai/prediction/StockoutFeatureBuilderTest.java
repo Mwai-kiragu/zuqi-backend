@@ -37,12 +37,12 @@ class StockoutFeatureBuilderTest {
     @Test
     void buildExample_hasTwelveFeatures() {
         ArrayExample<Label> example = builder.buildExample(typicalInventory());
-        assertThat(example.size()).isEqualTo(12);
+        assertThat(example.size()).isEqualTo(13);
     }
 
     @Test
     void getFeatureCount_returns12() {
-        assertThat(builder.getFeatureCount()).isEqualTo(12);
+        assertThat(builder.getFeatureCount()).isEqualTo(13);
     }
 
     // ── Label assignment ──────────────────────────────────────────────────
@@ -86,7 +86,8 @@ class StockoutFeatureBuilderTest {
                 StockoutFeatureBuilder.FEAT_MANUAL_ADJ_COUNT_7D,
                 StockoutFeatureBuilder.FEAT_MONTH_OF_YEAR,
                 StockoutFeatureBuilder.FEAT_DAY_OF_WEEK,
-                StockoutFeatureBuilder.FEAT_IS_PAYDAY_WEEK
+                StockoutFeatureBuilder.FEAT_IS_PAYDAY_WEEK,
+                StockoutFeatureBuilder.FEAT_PREDICTED_DEMAND_7D
         );
     }
 

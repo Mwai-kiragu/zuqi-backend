@@ -58,6 +58,14 @@ public class RoleAwareToolProvider {
     private final PosSalesTool              posSalesTool;
     private final StockTransferTool         stockTransferTool;
     private final HelpTool                  helpTool;
+    // Phase 7 tools
+    private final ExpiryRiskTool            expiryRiskTool;
+    private final ReorderSuggestionTool     reorderSuggestionTool;
+    private final CustomerSegmentTool       customerSegmentTool;
+    private final CustomerHealthTool        customerHealthTool;
+    private final ChurnRiskTool             churnRiskTool;
+    private final SupplierRiskTool          supplierRiskTool;
+    private final PriceTrendTool            priceTrendTool;
     private final BalanceSheetTool          balanceSheetTool;
     private final ProfitLossTool            profitLossTool;
     private final TrialBalanceTool          trialBalanceTool;
@@ -74,17 +82,20 @@ public class RoleAwareToolProvider {
 
             case "SALES_REP" ->
                     List.of(salesTrendTool, merchantMetricsTool, invoiceTool,
-                            deliveryMetricsTool, demandForecastSummaryTool, helpTool);
+                            deliveryMetricsTool, demandForecastSummaryTool,
+                            churnRiskTool, customerHealthTool, helpTool);
 
             case "WAREHOUSE_MANAGER" ->
                     List.of(inventoryHealthTool, anomalyAlertsTool, demandForecastSummaryTool,
-                            stockTransferTool, procurementTool, posSalesTool, helpTool);
+                            stockTransferTool, procurementTool, posSalesTool,
+                            expiryRiskTool, reorderSuggestionTool, helpTool);
 
             case "FINANCE" ->
                     List.of(paymentPerformanceTool, creditSummaryTool, salesTrendTool,
                             invoiceTool, expensesTool, fundsTransferTool,
                             balanceSheetTool, profitLossTool, trialBalanceTool,
-                            cashFlowTool, arAgingTool, apAgingTool, helpTool);
+                            cashFlowTool, arAgingTool, apAgingTool,
+                            supplierRiskTool, priceTrendTool, helpTool);
 
             case "MERCHANT_ADMIN" ->
                     List.of(salesTrendTool, inventoryHealthTool, paymentPerformanceTool,
@@ -106,6 +117,11 @@ public class RoleAwareToolProvider {
                 invoiceTool, expensesTool, procurementTool,
                 fundsTransferTool, posSalesTool, stockTransferTool,
                 balanceSheetTool, profitLossTool, trialBalanceTool,
-                cashFlowTool, arAgingTool, apAgingTool, helpTool);
+                cashFlowTool, arAgingTool, apAgingTool,
+                // Phase 7 tools
+                expiryRiskTool, reorderSuggestionTool,
+                customerSegmentTool, customerHealthTool, churnRiskTool,
+                supplierRiskTool, priceTrendTool,
+                helpTool);
     }
 }

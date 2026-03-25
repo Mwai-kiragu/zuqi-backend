@@ -1,6 +1,15 @@
 package com.zuqi.ai.pipeline;
 
+import com.zuqi.ai.cashflow.CashFlowTrainingPipeline;
+import com.zuqi.ai.crm.ChurnTrainingPipeline;
+import com.zuqi.ai.crm.ClvTrainingPipeline;
+import com.zuqi.ai.crm.SegmentationTrainingPipeline;
+import com.zuqi.ai.crm.VisitTrainingPipeline;
+import com.zuqi.ai.demand.ExpiryRiskTrainingPipeline;
 import com.zuqi.ai.model.ModelRegistry;
+import com.zuqi.ai.prediction.RepPerformanceTrainingPipeline;
+import com.zuqi.ai.pricing.PricingTrainingPipeline;
+import com.zuqi.ai.recon.ReconTrainingPipeline;
 import com.zuqi.ai.synthetic.DataMixer;
 import com.zuqi.ai.synthetic.DataPhaseTracker;
 import com.zuqi.ai.synthetic.SyntheticDataBundle;
@@ -27,9 +36,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -53,6 +64,8 @@ import java.util.stream.Collectors;
  *   <li>{@code payment_distress_classifier}  — XGBoost classification</li>
  *   <li>{@code rep_performance_predictor}    — XGBoost classification</li>
  *   <li>{@code data_quality_detector}        — XGBoost classification</li>
+ *   <li>{@code bank_recon_matcher}          — XGBoost classification (Model #11)</li>
+ *   <li>{@code cash_flow_predictor}         — XGBoost regression (Model #12)</li>
  * </ul>
  *
  * <h3>Pipeline per model</h3>
@@ -83,6 +96,15 @@ public class ModelTrainingService {
     private final Trainer<Label>        classificationTrainer;
     private final Trainer<Regressor>    regressionTrainer;
     private final Trainer<Event>        anomalyTrainer;
+    private final ReconTrainingPipeline              reconTrainingPipeline;
+    private final CashFlowTrainingPipeline           cashFlowTrainingPipeline;
+    private final ExpiryRiskTrainingPipeline         expiryRiskTrainingPipeline;
+    private final SegmentationTrainingPipeline       segmentationTrainingPipeline;
+    private final ClvTrainingPipeline                clvTrainingPipeline;
+    private final ChurnTrainingPipeline              churnTrainingPipeline;
+    private final VisitTrainingPipeline              visitTrainingPipeline;
+    private final PricingTrainingPipeline            pricingTrainingPipeline;
+    private final RepPerformanceTrainingPipeline     repPerformanceTrainingPipeline;
 
     @Autowired
     public ModelTrainingService(
@@ -92,14 +114,32 @@ public class ModelTrainingService {
             DataPhaseTracker phaseTracker,
             @Qualifier("xgBoostClassificationTrainer") Trainer<Label> classificationTrainer,
             @Qualifier("xgBoostRegressionTrainer")    Trainer<Regressor> regressionTrainer,
-            @Qualifier("xgBoostAnomalyTrainer")       Trainer<Event> anomalyTrainer) {
-        this.featureStore           = featureStore;
-        this.dataMixer              = dataMixer;
-        this.modelRegistry          = modelRegistry;
-        this.phaseTracker           = phaseTracker;
-        this.classificationTrainer  = classificationTrainer;
-        this.regressionTrainer      = regressionTrainer;
-        this.anomalyTrainer         = anomalyTrainer;
+            @Qualifier("xgBoostAnomalyTrainer")       Trainer<Event> anomalyTrainer,
+            ReconTrainingPipeline reconTrainingPipeline,
+            CashFlowTrainingPipeline cashFlowTrainingPipeline,
+            ExpiryRiskTrainingPipeline expiryRiskTrainingPipeline,
+            SegmentationTrainingPipeline segmentationTrainingPipeline,
+            ClvTrainingPipeline clvTrainingPipeline,
+            ChurnTrainingPipeline churnTrainingPipeline,
+            VisitTrainingPipeline visitTrainingPipeline,
+            PricingTrainingPipeline pricingTrainingPipeline,
+            RepPerformanceTrainingPipeline repPerformanceTrainingPipeline) {
+        this.featureStore                   = featureStore;
+        this.dataMixer                      = dataMixer;
+        this.modelRegistry                  = modelRegistry;
+        this.phaseTracker                   = phaseTracker;
+        this.classificationTrainer          = classificationTrainer;
+        this.regressionTrainer              = regressionTrainer;
+        this.anomalyTrainer                 = anomalyTrainer;
+        this.reconTrainingPipeline          = reconTrainingPipeline;
+        this.cashFlowTrainingPipeline       = cashFlowTrainingPipeline;
+        this.expiryRiskTrainingPipeline     = expiryRiskTrainingPipeline;
+        this.segmentationTrainingPipeline   = segmentationTrainingPipeline;
+        this.clvTrainingPipeline            = clvTrainingPipeline;
+        this.churnTrainingPipeline          = churnTrainingPipeline;
+        this.visitTrainingPipeline          = visitTrainingPipeline;
+        this.pricingTrainingPipeline        = pricingTrainingPipeline;
+        this.repPerformanceTrainingPipeline = repPerformanceTrainingPipeline;
     }
 
     // ── Public API ───────────────────────────────────────────────────────────
@@ -115,6 +155,33 @@ public class ModelTrainingService {
      * @param distributorId distributor scope (null = global)
      * @return summary of trained model IDs, example counts, and any errors
      */
+    /**
+     * Train only the models whose names are in {@code modelFilter}.
+     * Pass an empty/null set to train all models (delegates to the full overload).
+     */
+    public TrainingResult trainAllModels(SyntheticDataBundle bundle, UUID distributorId,
+                                         Set<String> modelFilter) {
+        if (modelFilter == null || modelFilter.isEmpty()) {
+            return trainAllModels(bundle, distributorId);
+        }
+        // Temporarily delegate to the full method but guard each block via shouldTrain().
+        // We use an inner flag rather than duplicating the entire method.
+        this.activeFilter = Collections.unmodifiableSet(modelFilter);
+        try {
+            return trainAllModels(bundle, distributorId);
+        } finally {
+            this.activeFilter = Collections.emptySet();
+        }
+    }
+
+    // Thread-local would be cleaner for concurrent use, but training is already sequential.
+    private volatile Set<String> activeFilter = Collections.emptySet();
+
+    /** Returns true if the model should be trained given the current filter. */
+    private boolean shouldTrain(String modelName) {
+        return activeFilter.isEmpty() || activeFilter.contains(modelName);
+    }
+
     public TrainingResult trainAllModels(SyntheticDataBundle bundle, UUID distributorId) {
         long startMs = System.currentTimeMillis();
         log.info("[ModelTrainingService] Starting training — distributor={}", distributorId);
@@ -125,6 +192,9 @@ public class ModelTrainingService {
 
         // ── credit_classifier ──────────────────────────────────────────────
         try {
+            if (!shouldTrain(DataPhaseTracker.MODEL_CREDIT_CLASSIFIER)) {
+                log.debug("[ModelTrainingService] Skipping {} (filtered)", DataPhaseTracker.MODEL_CREDIT_CLASSIFIER);
+            } else {
             List<Example<Label>> synthetic = featureStore.buildCreditClassifierExamples(bundle);
             List<Example<Label>> mixed = dataMixer.buildTrainingDataset(
                     DataPhaseTracker.MODEL_CREDIT_CLASSIFIER, distributorId,
@@ -151,6 +221,7 @@ public class ModelTrainingService {
                     phaseTracker.evaluatePhase(DataPhaseTracker.MODEL_CREDIT_CLASSIFIER, distributorId);
                 }
             }
+            } // end shouldTrain guard
         } catch (Exception e) {
             log.error("[ModelTrainingService] {} failed: {}",
                     DataPhaseTracker.MODEL_CREDIT_CLASSIFIER, e.getMessage(), e);
@@ -159,6 +230,9 @@ public class ModelTrainingService {
 
         // ── credit_limit_regressor ─────────────────────────────────────────
         try {
+            if (!shouldTrain(DataPhaseTracker.MODEL_CREDIT_LIMIT_REGRESSOR)) {
+                log.debug("[ModelTrainingService] Skipping {} (filtered)", DataPhaseTracker.MODEL_CREDIT_LIMIT_REGRESSOR);
+            } else {
             List<Example<Regressor>> synthetic = featureStore.buildCreditLimitRegressorExamples(bundle);
             List<Example<Regressor>> mixed = dataMixer.buildTrainingDataset(
                     DataPhaseTracker.MODEL_CREDIT_LIMIT_REGRESSOR, distributorId,
@@ -178,6 +252,7 @@ public class ModelTrainingService {
                         distributorId, 0, mixed.size());
                 phaseTracker.evaluatePhase(DataPhaseTracker.MODEL_CREDIT_LIMIT_REGRESSOR, distributorId);
             }
+            } // end shouldTrain guard
         } catch (Exception e) {
             log.error("[ModelTrainingService] {} failed: {}",
                     DataPhaseTracker.MODEL_CREDIT_LIMIT_REGRESSOR, e.getMessage(), e);
@@ -186,6 +261,9 @@ public class ModelTrainingService {
 
         // ── shrinkage_detector ────────────────────────────────────────────
         try {
+            if (!shouldTrain(DataPhaseTracker.MODEL_SHRINKAGE_DETECTOR)) {
+                log.debug("[ModelTrainingService] Skipping {} (filtered)", DataPhaseTracker.MODEL_SHRINKAGE_DETECTOR);
+            } else {
             List<Example<Event>> synthetic = featureStore.buildShrinkageDetectorExamples(bundle);
             List<Example<Event>> mixed = dataMixer.buildTrainingDataset(
                     DataPhaseTracker.MODEL_SHRINKAGE_DETECTOR, distributorId,
@@ -211,6 +289,7 @@ public class ModelTrainingService {
                         distributorId, 0, mixed.size());
                 phaseTracker.evaluatePhase(DataPhaseTracker.MODEL_SHRINKAGE_DETECTOR, distributorId);
             }
+            } // end shouldTrain guard
         } catch (Exception e) {
             log.error("[ModelTrainingService] {} failed: {}",
                     DataPhaseTracker.MODEL_SHRINKAGE_DETECTOR, e.getMessage(), e);
@@ -219,6 +298,9 @@ public class ModelTrainingService {
 
         // ── payment_anomaly_detector ──────────────────────────────────────
         try {
+            if (!shouldTrain(DataPhaseTracker.MODEL_PAYMENT_ANOMALY_DETECTOR)) {
+                log.debug("[ModelTrainingService] Skipping {} (filtered)", DataPhaseTracker.MODEL_PAYMENT_ANOMALY_DETECTOR);
+            } else {
             List<Example<Event>> synthetic = featureStore.buildPaymentAnomalyExamples(bundle);
             List<Example<Event>> mixed = dataMixer.buildTrainingDataset(
                     DataPhaseTracker.MODEL_PAYMENT_ANOMALY_DETECTOR, distributorId,
@@ -244,6 +326,7 @@ public class ModelTrainingService {
                         distributorId, 0, mixed.size());
                 phaseTracker.evaluatePhase(DataPhaseTracker.MODEL_PAYMENT_ANOMALY_DETECTOR, distributorId);
             }
+            } // end shouldTrain guard
         } catch (Exception e) {
             log.error("[ModelTrainingService] {} failed: {}",
                     DataPhaseTracker.MODEL_PAYMENT_ANOMALY_DETECTOR, e.getMessage(), e);
@@ -252,6 +335,9 @@ public class ModelTrainingService {
 
         // ── demand_forecaster ─────────────────────────────────────────────
         try {
+            if (!shouldTrain(DataPhaseTracker.MODEL_DEMAND_FORECASTER)) {
+                log.debug("[ModelTrainingService] Skipping {} (filtered)", DataPhaseTracker.MODEL_DEMAND_FORECASTER);
+            } else {
             List<Example<Regressor>> synthetic = featureStore.buildDemandForecasterExamples(bundle);
             List<Example<Regressor>> mixed = dataMixer.buildTrainingDataset(
                     DataPhaseTracker.MODEL_DEMAND_FORECASTER, distributorId,
@@ -271,6 +357,7 @@ public class ModelTrainingService {
                         distributorId, 0, mixed.size());
                 phaseTracker.evaluatePhase(DataPhaseTracker.MODEL_DEMAND_FORECASTER, distributorId);
             }
+            } // end shouldTrain guard
         } catch (Exception e) {
             log.error("[ModelTrainingService] {} failed: {}",
                     DataPhaseTracker.MODEL_DEMAND_FORECASTER, e.getMessage(), e);
@@ -279,6 +366,9 @@ public class ModelTrainingService {
 
         // ── stockout_predictor ────────────────────────────────────────────
         try {
+            if (!shouldTrain(DataPhaseTracker.MODEL_STOCKOUT_PREDICTOR)) {
+                log.debug("[ModelTrainingService] Skipping {} (filtered)", DataPhaseTracker.MODEL_STOCKOUT_PREDICTOR);
+            } else {
             List<Example<Label>> synthetic = featureStore.buildStockoutPredictorExamples(bundle);
             List<Example<Label>> mixed = dataMixer.buildTrainingDataset(
                     DataPhaseTracker.MODEL_STOCKOUT_PREDICTOR, distributorId,
@@ -301,6 +391,7 @@ public class ModelTrainingService {
                         distributorId, 0, mixed.size());
                 phaseTracker.evaluatePhase(DataPhaseTracker.MODEL_STOCKOUT_PREDICTOR, distributorId);
             }
+            } // end shouldTrain guard
         } catch (Exception e) {
             log.error("[ModelTrainingService] {} failed: {}",
                     DataPhaseTracker.MODEL_STOCKOUT_PREDICTOR, e.getMessage(), e);
@@ -309,28 +400,24 @@ public class ModelTrainingService {
 
         // ── rep_performance_predictor ─────────────────────────────────────
         try {
-            List<Example<Label>> synthetic = featureStore.buildRepPerformancePredictorExamples(bundle);
-            List<Example<Label>> mixed = dataMixer.buildTrainingDataset(
-                    DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, distributorId,
-                    List.of(), synthetic);
-
-            if (mixed.size() < MIN_CLASSIFICATION_EXAMPLES) {
-                log.warn("[ModelTrainingService] {} — too few examples ({}), skipping",
-                        DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, mixed.size());
-            } else if (isSingleClass(mixed)) {
-                log.warn("[ModelTrainingService] {} — single-class dataset, skipping",
-                        DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR);
+            if (!shouldTrain(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR)) {
+                log.debug("[ModelTrainingService] Skipping {} (filtered)", DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR);
             } else {
-                MutableDataset<Label> ds = toClassificationDataset(mixed);
-                Model<Label> model = classificationTrainer.train(ds);
-                UUID id = registerAndPromote(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR,
-                        "xgboost_classification", model, mixed.size(), 0, distributorId);
-                modelIds.put(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, id);
-                counts.put(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, mixed.size());
+            RepPerformanceTrainingPipeline.TrainingPipelineResult repResult =
+                    repPerformanceTrainingPipeline.runPipeline();
+            if (repResult.success() && repResult.passedQualityGate() && repResult.modelId() != null) {
+                modelIds.put(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, repResult.modelId());
+                counts.put(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, repResult.trainSize());
                 phaseTracker.updateCounts(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR,
-                        distributorId, 0, mixed.size());
+                        distributorId, 0, repResult.trainSize());
                 phaseTracker.evaluatePhase(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, distributorId);
+            } else {
+                String reason = repResult.errorMessage() != null ? repResult.errorMessage()
+                        : "Quality gate not passed (R²=" + String.format("%.3f", repResult.r2()) + ")";
+                log.warn("[ModelTrainingService] {} — {}", DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, reason);
+                errors.add(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR + ": " + reason);
             }
+            } // end shouldTrain guard
         } catch (Exception e) {
             log.error("[ModelTrainingService] {} failed: {}",
                     DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, e.getMessage(), e);
@@ -339,6 +426,9 @@ public class ModelTrainingService {
 
         // ── payment_distress_classifier ───────────────────────────────────
         try {
+            if (!shouldTrain(DataPhaseTracker.MODEL_PAYMENT_DISTRESS_CLASSIFIER)) {
+                log.debug("[ModelTrainingService] Skipping {} (filtered)", DataPhaseTracker.MODEL_PAYMENT_DISTRESS_CLASSIFIER);
+            } else {
             List<Example<Label>> synthetic = featureStore.buildPaymentDistressExamples(bundle);
             List<Example<Label>> mixed = dataMixer.buildTrainingDataset(
                     DataPhaseTracker.MODEL_PAYMENT_DISTRESS_CLASSIFIER, distributorId,
@@ -361,6 +451,7 @@ public class ModelTrainingService {
                         distributorId, 0, mixed.size());
                 phaseTracker.evaluatePhase(DataPhaseTracker.MODEL_PAYMENT_DISTRESS_CLASSIFIER, distributorId);
             }
+            } // end shouldTrain guard
         } catch (Exception e) {
             log.error("[ModelTrainingService] {} failed: {}",
                     DataPhaseTracker.MODEL_PAYMENT_DISTRESS_CLASSIFIER, e.getMessage(), e);
@@ -369,6 +460,9 @@ public class ModelTrainingService {
 
         // ── data_quality_detector ─────────────────────────────────────────
         try {
+            if (!shouldTrain(DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR)) {
+                log.debug("[ModelTrainingService] Skipping {} (filtered)", DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR);
+            } else {
             List<Example<Label>> synthetic = featureStore.buildDataQualityExamples(bundle);
             List<Example<Label>> mixed = dataMixer.buildTrainingDataset(
                     DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR, distributorId,
@@ -391,10 +485,179 @@ public class ModelTrainingService {
                         distributorId, 0, mixed.size());
                 phaseTracker.evaluatePhase(DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR, distributorId);
             }
+            } // end shouldTrain guard
         } catch (Exception e) {
             log.error("[ModelTrainingService] {} failed: {}",
                     DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR, e.getMessage(), e);
             errors.add(DataPhaseTracker.MODEL_DATA_QUALITY_DETECTOR + ": " + e.getMessage());
+        }
+
+        // ── expiry_risk_predictor (Model #10) ─────────────────────────────
+        try {
+            if (!shouldTrain(ExpiryRiskTrainingPipeline.MODEL_NAME)) {
+                log.debug("[ModelTrainingService] Skipping {} (filtered)", ExpiryRiskTrainingPipeline.MODEL_NAME);
+            } else {
+            ExpiryRiskTrainingPipeline.TrainingResult expiryResult = expiryRiskTrainingPipeline.runPipeline();
+            if (expiryResult.success()) {
+                modelIds.put(ExpiryRiskTrainingPipeline.MODEL_NAME, expiryResult.modelId());
+                counts.put(ExpiryRiskTrainingPipeline.MODEL_NAME, 0);
+            } else {
+                log.warn("[ModelTrainingService] {} — {}", ExpiryRiskTrainingPipeline.MODEL_NAME,
+                        expiryResult.errorMessage());
+                errors.add(ExpiryRiskTrainingPipeline.MODEL_NAME + ": " + expiryResult.errorMessage());
+            }
+            } // end shouldTrain guard
+        } catch (Exception e) {
+            log.error("[ModelTrainingService] {} failed: {}", ExpiryRiskTrainingPipeline.MODEL_NAME,
+                    e.getMessage(), e);
+            errors.add(ExpiryRiskTrainingPipeline.MODEL_NAME + ": " + e.getMessage());
+        }
+
+        // ── customer_segmenter (K-Means) ──────────────────────────────────
+        try {
+            if (!shouldTrain(SegmentationTrainingPipeline.MODEL_NAME)) {
+                log.debug("[ModelTrainingService] Skipping {} (filtered)", SegmentationTrainingPipeline.MODEL_NAME);
+            } else {
+            SegmentationTrainingPipeline.TrainingResult segResult = segmentationTrainingPipeline.runPipeline();
+            if (segResult.success()) {
+                modelIds.put(SegmentationTrainingPipeline.MODEL_NAME, segResult.modelId());
+                counts.put(SegmentationTrainingPipeline.MODEL_NAME, 0);
+            } else {
+                log.warn("[ModelTrainingService] {} — {}", SegmentationTrainingPipeline.MODEL_NAME,
+                        segResult.errorMessage());
+                errors.add(SegmentationTrainingPipeline.MODEL_NAME + ": " + segResult.errorMessage());
+            }
+            } // end shouldTrain guard
+        } catch (Exception e) {
+            log.error("[ModelTrainingService] {} failed: {}", SegmentationTrainingPipeline.MODEL_NAME,
+                    e.getMessage(), e);
+            errors.add(SegmentationTrainingPipeline.MODEL_NAME + ": " + e.getMessage());
+        }
+
+        // ── customer_clv_predictor ────────────────────────────────────────
+        try {
+            if (!shouldTrain(ClvTrainingPipeline.MODEL_NAME)) {
+                log.debug("[ModelTrainingService] Skipping {} (filtered)", ClvTrainingPipeline.MODEL_NAME);
+            } else {
+            ClvTrainingPipeline.TrainingResult clvResult = clvTrainingPipeline.runPipeline();
+            if (clvResult.success()) {
+                modelIds.put(ClvTrainingPipeline.MODEL_NAME, clvResult.modelId());
+                counts.put(ClvTrainingPipeline.MODEL_NAME, 0);
+            } else {
+                log.warn("[ModelTrainingService] {} — {}", ClvTrainingPipeline.MODEL_NAME,
+                        clvResult.errorMessage());
+                errors.add(ClvTrainingPipeline.MODEL_NAME + ": " + clvResult.errorMessage());
+            }
+            } // end shouldTrain guard
+        } catch (Exception e) {
+            log.error("[ModelTrainingService] {} failed: {}", ClvTrainingPipeline.MODEL_NAME,
+                    e.getMessage(), e);
+            errors.add(ClvTrainingPipeline.MODEL_NAME + ": " + e.getMessage());
+        }
+
+        // ── churn_predictor ───────────────────────────────────────────────
+        try {
+            if (!shouldTrain(ChurnTrainingPipeline.MODEL_NAME)) {
+                log.debug("[ModelTrainingService] Skipping {} (filtered)", ChurnTrainingPipeline.MODEL_NAME);
+            } else {
+            ChurnTrainingPipeline.TrainingResult churnResult = churnTrainingPipeline.runPipeline();
+            if (churnResult.success()) {
+                modelIds.put(ChurnTrainingPipeline.MODEL_NAME, churnResult.modelId());
+                counts.put(ChurnTrainingPipeline.MODEL_NAME, 0);
+            } else {
+                log.warn("[ModelTrainingService] {} — {}", ChurnTrainingPipeline.MODEL_NAME,
+                        churnResult.errorMessage());
+                errors.add(ChurnTrainingPipeline.MODEL_NAME + ": " + churnResult.errorMessage());
+            }
+            } // end shouldTrain guard
+        } catch (Exception e) {
+            log.error("[ModelTrainingService] {} failed: {}", ChurnTrainingPipeline.MODEL_NAME,
+                    e.getMessage(), e);
+            errors.add(ChurnTrainingPipeline.MODEL_NAME + ": " + e.getMessage());
+        }
+
+        // ── visit_optimizer ───────────────────────────────────────────────
+        try {
+            if (!shouldTrain(VisitTrainingPipeline.MODEL_NAME)) {
+                log.debug("[ModelTrainingService] Skipping {} (filtered)", VisitTrainingPipeline.MODEL_NAME);
+            } else {
+            VisitTrainingPipeline.TrainingResult visitResult = visitTrainingPipeline.runPipeline();
+            if (visitResult.success()) {
+                modelIds.put(VisitTrainingPipeline.MODEL_NAME, visitResult.modelId());
+                counts.put(VisitTrainingPipeline.MODEL_NAME, 0);
+            } else {
+                log.warn("[ModelTrainingService] {} — {}", VisitTrainingPipeline.MODEL_NAME,
+                        visitResult.errorMessage());
+                errors.add(VisitTrainingPipeline.MODEL_NAME + ": " + visitResult.errorMessage());
+            }
+            } // end shouldTrain guard
+        } catch (Exception e) {
+            log.error("[ModelTrainingService] {} failed: {}", VisitTrainingPipeline.MODEL_NAME,
+                    e.getMessage(), e);
+            errors.add(VisitTrainingPipeline.MODEL_NAME + ": " + e.getMessage());
+        }
+
+        // ── smart_pricing_recommender ─────────────────────────────────────
+        try {
+            if (!shouldTrain(PricingTrainingPipeline.MODEL_NAME)) {
+                log.debug("[ModelTrainingService] Skipping {} (filtered)", PricingTrainingPipeline.MODEL_NAME);
+            } else {
+            PricingTrainingPipeline.TrainingResult pricingResult = pricingTrainingPipeline.runPipeline();
+            if (pricingResult.success()) {
+                modelIds.put(PricingTrainingPipeline.MODEL_NAME, pricingResult.modelId());
+                counts.put(PricingTrainingPipeline.MODEL_NAME, 0);
+            } else {
+                log.warn("[ModelTrainingService] {} — {}", PricingTrainingPipeline.MODEL_NAME,
+                        pricingResult.errorMessage());
+                errors.add(PricingTrainingPipeline.MODEL_NAME + ": " + pricingResult.errorMessage());
+            }
+            } // end shouldTrain guard
+        } catch (Exception e) {
+            log.error("[ModelTrainingService] {} failed: {}", PricingTrainingPipeline.MODEL_NAME,
+                    e.getMessage(), e);
+            errors.add(PricingTrainingPipeline.MODEL_NAME + ": " + e.getMessage());
+        }
+
+        // ── bank_recon_matcher (Model #11) ────────────────────────────────
+        try {
+            if (!shouldTrain(ReconTrainingPipeline.MODEL_NAME)) {
+                log.debug("[ModelTrainingService] Skipping {} (filtered)", ReconTrainingPipeline.MODEL_NAME);
+            } else {
+            ReconTrainingPipeline.TrainingResult reconResult = reconTrainingPipeline.runPipeline();
+            if (reconResult.success()) {
+                modelIds.put(ReconTrainingPipeline.MODEL_NAME, reconResult.modelId());
+                counts.put(ReconTrainingPipeline.MODEL_NAME, 0);
+            } else {
+                log.warn("[ModelTrainingService] {} — {}", ReconTrainingPipeline.MODEL_NAME,
+                        reconResult.errorMessage());
+                errors.add(ReconTrainingPipeline.MODEL_NAME + ": " + reconResult.errorMessage());
+            }
+            } // end shouldTrain guard
+        } catch (Exception e) {
+            log.error("[ModelTrainingService] {} failed: {}", ReconTrainingPipeline.MODEL_NAME,
+                    e.getMessage(), e);
+            errors.add(ReconTrainingPipeline.MODEL_NAME + ": " + e.getMessage());
+        }
+
+        // ── cash_flow_predictor (Model #12) ───────────────────────────────
+        try {
+            if (!shouldTrain(CashFlowTrainingPipeline.MODEL_NAME)) {
+                log.debug("[ModelTrainingService] Skipping {} (filtered)", CashFlowTrainingPipeline.MODEL_NAME);
+            } else {
+            CashFlowTrainingPipeline.TrainingResult cfResult = cashFlowTrainingPipeline.runPipeline();
+            if (cfResult.success()) {
+                modelIds.put(CashFlowTrainingPipeline.MODEL_NAME, cfResult.modelId());
+                counts.put(CashFlowTrainingPipeline.MODEL_NAME, 0);
+            } else {
+                log.warn("[ModelTrainingService] {} — {}", CashFlowTrainingPipeline.MODEL_NAME,
+                        cfResult.errorMessage());
+                errors.add(CashFlowTrainingPipeline.MODEL_NAME + ": " + cfResult.errorMessage());
+            }
+            } // end shouldTrain guard
+        } catch (Exception e) {
+            log.error("[ModelTrainingService] {} failed: {}", CashFlowTrainingPipeline.MODEL_NAME,
+                    e.getMessage(), e);
+            errors.add(CashFlowTrainingPipeline.MODEL_NAME + ": " + e.getMessage());
         }
 
         long durationMs = System.currentTimeMillis() - startMs;

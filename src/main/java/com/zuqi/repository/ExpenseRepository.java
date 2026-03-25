@@ -139,4 +139,13 @@ public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
             @Param("merchantId") UUID merchantId,
             @Param("from") LocalDate from,
             @Param("to") LocalDate to);
+
+    // AI Phase 3 — cash flow feature queries
+    @Query("SELECT e FROM Expense e WHERE e.distributorId = :distributorId " +
+           "AND e.expenseDate >= :from AND e.expenseDate <= :to " +
+           "AND e.status IN ('APPROVED', 'PAID')")
+    java.util.List<Expense> findByDistributorIdAndDateBetween(
+            @Param("distributorId") UUID distributorId,
+            @Param("from") LocalDate from,
+            @Param("to") LocalDate to);
 }
