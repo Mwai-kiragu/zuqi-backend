@@ -21,6 +21,7 @@ import java.io.ObjectOutputStream;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -75,10 +76,11 @@ public class ReconTrainingPipeline {
                         "Insufficient training examples: " + examples.size());
             }
 
-            // Step 3: Split 80/20
+            // Step 3: Shuffle then split 80/20 (prevents single-class test set)
+            Collections.shuffle(examples, new Random(42L));
             int trainSize = (int) (examples.size() * 0.8);
-            List<LabelledReconExample> trainExamples = examples.subList(0, trainSize);
-            List<LabelledReconExample> testExamples = examples.subList(trainSize, examples.size());
+            List<LabelledReconExample> trainExamples = new ArrayList<>(examples.subList(0, trainSize));
+            List<LabelledReconExample> testExamples = new ArrayList<>(examples.subList(trainSize, examples.size()));
 
             // Step 4: Hyperparameter tuning + Train
             Dataset<Label> trainDataset = featureBuilder.buildDataset(trainExamples);

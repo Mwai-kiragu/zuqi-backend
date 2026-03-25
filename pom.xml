@@ -269,6 +269,9 @@
                             <artifactId>lombok</artifactId>
                         </exclude>
                     </excludes>
+                    <!-- XGBoost training for 15 models on 500-merchant bundles requires
+                         significant heap. 4 GB max with 1 GB initial avoids GC thrashing. -->
+                    <jvmArguments>-Xms1g -Xmx4g -XX:+UseG1GC</jvmArguments>
                 </configuration>
             </plugin>
             <plugin>

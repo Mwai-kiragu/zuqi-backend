@@ -12,13 +12,15 @@ import org.springframework.transaction.annotation.Transactional;
 import org.tribuo.Dataset;
 import org.tribuo.Model;
 import org.tribuo.Trainer;
-import org.tribuo.regression.Regressor;
+import org.tribuo.classification.Label;
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.UUID;
 
 /**
@@ -26,12 +28,11 @@ import java.util.UUID;
  *
  * Pipeline:
  * 1. Generate synthetic batches (500)
- * 2. Build feature dataset
+ * 2. Build feature dataset with binary labels (HIGH_RISK / LOW_RISK)
  * 3. Split 80/20
- * 4. Train XGBoost regressor
- * 5. Evaluate RMSE (gate: RMSE < 0.20 on probability scale)
- * 6. Compute residual percentiles
- * 7. Promote to ACTIVE
+ * 4. Tune and train XGBoost classifier
+ * 5. Evaluate AUC-ROC (gate: AUC >= 0.70)
+ * 6. Promote to ACTIVE
  */
 @Service
 @RequiredArgsConstructor
@@ -42,11 +43,11 @@ public class ExpiryRiskTrainingPipeline {
     private final ExpiryRiskFeatureBuilder featureBuilder;
     private final ModelEvaluator modelEvaluator;
     private final ModelRegistry modelRegistry;
-    private final Trainer<Regressor> xgBoostRegressionTrainer;
+    private final Trainer<Label> xgBoostClassificationTrainer;
     private final XGBoostHyperparameterTuner hyperparameterTuner;
 
     public static final String MODEL_NAME = "expiry_risk_predictor";
-    private static final double RMSE_GATE = 0.20;
+    private static final double AUC_GATE = 0.70;
 
     @Transactional
     public TrainingResult runPipeline() {
@@ -58,7 +59,7 @@ public class ExpiryRiskTrainingPipeline {
             List<SyntheticExpiryBatchGenerator.SyntheticExpiryBatch> batches =
                     batchGenerator.generateBatches(500);
 
-            // Step 2: Build feature examples
+            // Step 2: Build labelled examples (HIGH_RISK / LOW_RISK)
             List<ExpiryRiskFeatureBuilder.LabelledExpiryExample> examples = new ArrayList<>();
             for (var batch : batches) {
                 ExpiryFeatures features = new ExpiryFeatures(
@@ -73,44 +74,42 @@ public class ExpiryRiskTrainingPipeline {
                         features, batch.sellThroughProbability()));
             }
 
-            // Step 3: Split 80/20
+            // Step 3: Shuffle then split 80/20 (prevents single-class test set)
+            Collections.shuffle(examples, new Random(42L));
             int trainSize = (int) (examples.size() * 0.8);
             List<ExpiryRiskFeatureBuilder.LabelledExpiryExample> trainExamples =
-                    examples.subList(0, trainSize);
+                    new ArrayList<>(examples.subList(0, trainSize));
             List<ExpiryRiskFeatureBuilder.LabelledExpiryExample> testExamples =
-                    examples.subList(trainSize, examples.size());
+                    new ArrayList<>(examples.subList(trainSize, examples.size()));
 
             // Step 4: Hyperparameter tuning + Train
-            Dataset<Regressor> trainDataset = featureBuilder.buildDataset(trainExamples);
-            XGBoostHyperparameterTuner.TunedModel<Regressor> tunedModel =
-                    hyperparameterTuner.tuneAndTrainRegressor(trainDataset);
-            Model<Regressor> model = tunedModel.model();
+            Dataset<Label> trainDataset = featureBuilder.buildClassificationDataset(trainExamples);
+            XGBoostHyperparameterTuner.TunedModel<Label> tunedModel =
+                    hyperparameterTuner.tuneAndTrainClassifier(trainDataset, ExpiryRiskFeatureBuilder.LABEL_HIGH_RISK);
+            Model<Label> model = tunedModel.model();
             XGBoostHyperparameterTuner.TuningResult tuning = tunedModel.tuning();
             log.info("Training complete on {} examples (rounds={} eta={} maxDepth={})",
                     trainSize, tuning.bestNumRounds(), tuning.bestEta(), tuning.bestMaxDepth());
 
             // Step 5: Evaluate
-            Dataset<Regressor> testDataset = featureBuilder.buildDataset(testExamples);
-            ModelEvaluator.RegressorEvaluationResult eval =
-                    modelEvaluator.evaluateRegressor(model, testDataset);
+            Dataset<Label> testDataset = featureBuilder.buildClassificationDataset(testExamples);
+            ModelEvaluator.ClassifierEvaluationResult eval =
+                    modelEvaluator.evaluateClassifier(model, testDataset, ExpiryRiskFeatureBuilder.LABEL_HIGH_RISK);
 
-            boolean passed = eval.rmse() < RMSE_GATE;
-            log.info("{} RMSE={} (gate={})",
-                    passed ? "PASSED" : "FAILED", String.format("%.4f", eval.rmse()), RMSE_GATE);
+            boolean passed = eval.aucRoc() >= AUC_GATE;
+            log.info("{} AUC={} (gate={})",
+                    passed ? "PASSED" : "FAILED", String.format("%.4f", eval.aucRoc()), AUC_GATE);
 
             if (!passed) {
-                return new TrainingResult(false, eval.rmse(), null, "Failed RMSE gate");
+                return new TrainingResult(false, eval.aucRoc(), null, "Failed AUC gate");
             }
 
-            // Step 6: Compute residual percentiles
-            double[] residuals = computeResidualPercentiles(model, testExamples);
-
-            // Step 7: Promote
-            UUID modelId = promoteModel(model, eval, trainSize, residuals, tuning);
+            // Step 6: Promote
+            UUID modelId = promoteModel(model, eval, trainSize, tuning);
 
             long duration = System.currentTimeMillis() - start;
             log.info("=== Expiry Risk Pipeline complete in {}ms, modelId={} ===", duration, modelId);
-            return new TrainingResult(true, eval.rmse(), modelId, null);
+            return new TrainingResult(true, eval.aucRoc(), modelId, null);
 
         } catch (Exception e) {
             log.error("Expiry risk training pipeline failed: {}", e.getMessage(), e);
@@ -118,26 +117,9 @@ public class ExpiryRiskTrainingPipeline {
         }
     }
 
-    private double[] computeResidualPercentiles(
-            Model<Regressor> model,
-            List<ExpiryRiskFeatureBuilder.LabelledExpiryExample> testExamples) {
-
-        List<Double> residuals = new ArrayList<>();
-        for (var le : testExamples) {
-            var ex = featureBuilder.buildExample(le.features());
-            double predicted = model.predict(ex).getOutput().getValues()[0];
-            residuals.add(le.sellThroughProbability() - predicted);
-        }
-        residuals.sort(Double::compareTo);
-        int p10 = (int) (residuals.size() * 0.10);
-        int p90 = Math.min((int) (residuals.size() * 0.90), residuals.size() - 1);
-        return new double[]{residuals.get(p10), residuals.get(p90)};
-    }
-
-    private UUID promoteModel(Model<Regressor> model,
-                               ModelEvaluator.RegressorEvaluationResult eval,
+    private UUID promoteModel(Model<Label> model,
+                               ModelEvaluator.ClassifierEvaluationResult eval,
                                int trainingSize,
-                               double[] residuals,
                                XGBoostHyperparameterTuner.TuningResult tuning) throws Exception {
 
         byte[] modelBytes;
@@ -148,25 +130,26 @@ public class ExpiryRiskTrainingPipeline {
         }
 
         Map<String, Object> hyperparameters = new HashMap<>();
-        hyperparameters.put("algorithm", "xgboost_regression");
+        hyperparameters.put("algorithm", "xgboost_classification");
+        hyperparameters.put("positive_label", ExpiryRiskFeatureBuilder.LABEL_HIGH_RISK);
         hyperparameters.put("tuned_num_rounds", tuning.bestNumRounds());
         hyperparameters.put("tuned_eta", tuning.bestEta());
         hyperparameters.put("tuned_max_depth", tuning.bestMaxDepth());
-        hyperparameters.put("tuning_cv_rmse", tuning.bestScore());
+        hyperparameters.put("tuning_cv_auc", tuning.bestScore());
 
         com.zuqi.domain.ai.AIModelRegistry registry = modelRegistry.registerModel(
-                MODEL_NAME, "xgboost_regression", hyperparameters, "training_pipeline");
+                MODEL_NAME, "xgboost_classification", hyperparameters, "training_pipeline");
 
         Map<String, Object> metrics = new HashMap<>();
-        metrics.put("rmse", eval.rmse());
-        metrics.put("r2", eval.r2());
-        metrics.put("mae", eval.mae());
+        metrics.put("auc_roc", eval.aucRoc());
+        metrics.put("accuracy", eval.accuracy());
+        metrics.put("precision", eval.precision());
+        metrics.put("recall", eval.recall());
+        metrics.put("f1", eval.f1Score());
         metrics.put("training_size", trainingSize);
-        metrics.put("lower_residual", residuals[0]);
-        metrics.put("upper_residual", residuals[1]);
 
         modelRegistry.updateModelAfterTraining(registry.getId(), metrics, modelBytes,
-                java.util.Map.of("feature_count", 8));
+                Map.of("feature_count", featureBuilder.getFeatureCount()));
 
         modelRegistry.promoteToActive(registry.getId());
 
@@ -175,7 +158,7 @@ public class ExpiryRiskTrainingPipeline {
 
     public record TrainingResult(
             boolean success,
-            double rmse,
+            double aucRoc,
             UUID modelId,
             String errorMessage
     ) {}

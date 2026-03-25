@@ -1,5 +1,6 @@
 package com.zuqi.ai.model.tuning;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zuqi.ai.synthetic.SyntheticDataConfig;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -49,10 +51,13 @@ public class TuningAsyncService {
      * @param jobId         caller-assigned job UUID (pre-created for polling)
      * @param distributorId distributor scope
      * @param config        synthetic data config used to build the training bundle
+     * @param modelFilter   if non-empty, only tune these model names; empty = all models
      */
     @Async
-    public void tuneAsync(UUID jobId, UUID distributorId, SyntheticDataConfig config) {
-        log.info("[TuningAsync] Job {} starting for distributor={}", jobId, distributorId);
+    public void tuneAsync(UUID jobId, UUID distributorId, SyntheticDataConfig config,
+                           Set<String> modelFilter) {
+        log.info("[TuningAsync] Job {} starting for distributor={} filter={}", jobId, distributorId,
+                modelFilter.isEmpty() ? "all" : modelFilter);
 
         TuningJobStatus running = new TuningJobStatus(
                 jobId, distributorId, "RUNNING", List.of(), null,
@@ -62,7 +67,7 @@ public class TuningAsyncService {
 
         try {
             ModelTuningService.TuningRunResult result =
-                    tuningService.tuneAllModels(distributorId, config);
+                    tuningService.tuneAllModels(distributorId, config, modelFilter);
 
             TuningJobStatus done = new TuningJobStatus(
                     jobId, distributorId, result.success() ? "COMPLETED" : "COMPLETED_WITH_ERRORS",
@@ -125,7 +130,8 @@ public class TuningAsyncService {
             jobs.put(jobId, status); // re-populate in-memory cache
             return status;
         } catch (Exception e) {
-            log.warn("[TuningAsync] Failed to load job {} status from Redis: {}", jobId, e.getMessage());
+            log.error("[TuningAsync] Failed to deserialize job {} status from Redis — status will appear UNKNOWN. Cause: {}",
+                    jobId, e.getMessage(), e);
             return null;
         }
     }
@@ -144,11 +150,11 @@ public class TuningAsyncService {
      * @param durationMs    elapsed time when finished (0 while RUNNING)
      */
     public record TuningJobStatus(
-            UUID               jobId,
-            UUID               distributorId,
-            String             status,
-            List<TuningResult> results,
-            String             error,
-            long               startedAt,
-            long               durationMs) {}
+            @JsonProperty("jobId")         UUID               jobId,
+            @JsonProperty("distributorId") UUID               distributorId,
+            @JsonProperty("status")        String             status,
+            @JsonProperty("results")       List<TuningResult> results,
+            @JsonProperty("error")         String             error,
+            @JsonProperty("startedAt")     long               startedAt,
+            @JsonProperty("durationMs")    long               durationMs) {}
 }

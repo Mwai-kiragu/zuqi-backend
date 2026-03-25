@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -47,27 +48,36 @@ public class SyntheticGenerationService {
      */
     @Async
     public void generateAsync(UUID runId, SyntheticDataConfig config) {
-        log.info("[SyntheticGen] Async run {} starting (merchants={}, months={}, seed={})",
-                runId, config.merchantCount(), config.historyMonths(), config.randomSeed());
+        generateAsync(runId, config, Set.of());
+    }
+
+    @Async
+    public void generateAsync(UUID runId, SyntheticDataConfig config, Set<String> modelFilter) {
+        log.info("[SyntheticGen] Async run {} starting (merchants={}, months={}, seed={}, filter={})",
+                runId, config.merchantCount(), config.historyMonths(), config.randomSeed(),
+                modelFilter.isEmpty() ? "ALL" : modelFilter);
 
         long startMs = System.currentTimeMillis();
         try {
             SyntheticDataBundle bundle = orchestrator.generateBundle(config);
-            long durationMs = System.currentTimeMillis() - startMs;
-            orchestrator.completeRun(runId, bundle, durationMs);
-            log.info("[SyntheticGen] Async run {} COMPLETED in {} ms — counts: {}",
-                    runId, durationMs, bundle.getRecordCounts());
+            log.info("[SyntheticGen] Bundle generated in {} ms — counts: {}",
+                    System.currentTimeMillis() - startMs, bundle.getRecordCounts());
 
             // Phase 1.5.14: train models from the generated bundle
             try {
                 ModelTrainingService.TrainingResult tr =
-                        modelTrainer.trainAllModels(bundle, config.distributorId());
+                        modelTrainer.trainAllModels(bundle, config.distributorId(), modelFilter);
                 log.info("[SyntheticGen] Model training complete — trained={}, errors={}",
                         tr.trainedModelIds().size(), tr.errors().size());
             } catch (Exception e) {
                 log.warn("[SyntheticGen] Model training non-fatal error for run {}: {}",
                         runId, e.getMessage(), e);
             }
+
+            long durationMs = System.currentTimeMillis() - startMs;
+            orchestrator.completeRun(runId, bundle, durationMs);
+            log.info("[SyntheticGen] Async run {} COMPLETED in {} ms (includes model training)",
+                    runId, durationMs);
         } catch (Exception e) {
             long durationMs = System.currentTimeMillis() - startMs;
             orchestrator.failRun(runId, e.getMessage(), durationMs);

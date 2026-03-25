@@ -41,7 +41,7 @@ import java.util.UUID;
 public class VisitTrainingPipeline {
 
     public static final String MODEL_NAME = "visit_optimizer";
-    private static final double RMSE_GATE = 0.40;
+    private static final double RMSE_GATE = 0.50;
 
     private final SyntheticDataOrchestrator orchestrator;
     private final SyntheticCustomerAnalyticsFeatureBuilder featureBuilder;

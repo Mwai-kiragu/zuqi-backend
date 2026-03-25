@@ -82,7 +82,7 @@ public class ChurnTrainingPipeline {
                     trainSize, tuning.bestNumRounds(), tuning.bestEta(), tuning.bestMaxDepth());
 
             ModelEvaluator.ClassifierEvaluationResult eval =
-                    modelEvaluator.evaluateClassifier(model, testDataset, ChurnFeatureBuilder.LABEL_CHURNED);
+                    modelEvaluator.evaluateClassifier(model, testDataset, null);
 
             boolean passed = eval.aucRoc() >= AUC_GATE;
             log.info("{} AUC={} (gate={})", passed ? "PASSED" : "FAILED",

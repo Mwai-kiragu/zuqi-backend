@@ -6,7 +6,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.tribuo.Example;
 import org.tribuo.MutableDataset;
+import org.tribuo.classification.Label;
+import org.tribuo.classification.LabelFactory;
 import org.tribuo.impl.ArrayExample;
+import org.tribuo.provenance.SimpleDataSourceProvenance;
 import org.tribuo.regression.RegressionFactory;
 import org.tribuo.regression.Regressor;
 
@@ -64,20 +67,8 @@ public class ExpiryRiskFeatureBuilder {
      * @param sellThrough   Actual sell-through probability (0.0–1.0)
      */
     public Example<Regressor> buildLabelledExample(ExpiryFeatures features, double sellThrough) {
-        double[] values = {
-                Math.max(0.0, features.daysToExpiry()),
-                Math.max(0.0, features.currentStockQty()),
-                Math.max(0.0, features.avgDailySalesRate()),
-                Math.min(999.0, Math.max(0.0, features.projectedDaysToSell())),
-                Math.max(0.0, features.similarSkuVelocity()),
-                Math.max(0.0, features.warehouseTurnoverRate()),
-                Math.min(1.0, Math.max(0.0, features.priceSensitivityScore())),
-                Math.min(1.0, Math.max(0.0, features.batchAgeRatio()))
-        };
-
         Regressor target = new Regressor("sell_through", sellThrough);
-        ArrayExample<Regressor> example = new ArrayExample<>(target, FEATURE_NAMES, values);
-        return example;
+        return new ArrayExample<>(target, FEATURE_NAMES, extractValues(features));
     }
 
     /**
@@ -98,4 +89,49 @@ public class ExpiryRiskFeatureBuilder {
     }
 
     public record LabelledExpiryExample(ExpiryFeatures features, double sellThroughProbability) {}
+
+    // ── Classification variants (HIGH_RISK / LOW_RISK) ────────────────────
+
+    public static final String LABEL_HIGH_RISK = "HIGH_RISK";
+    public static final String LABEL_LOW_RISK  = "LOW_RISK";
+    private static final double HIGH_RISK_THRESHOLD = 0.5;
+    private static final LabelFactory LABEL_FACTORY = new LabelFactory();
+
+    /**
+     * Build a classification example for inference (no target label).
+     */
+    public Example<Label> buildClassificationExample(ExpiryFeatures features) {
+        double[] values = extractValues(features);
+        ArrayExample<Label> example = new ArrayExample<>(new Label(LABEL_HIGH_RISK), FEATURE_NAMES, values);
+        return example;
+    }
+
+    /**
+     * Build a labelled classification dataset from examples.
+     * Examples with sellThroughProbability &lt; 0.5 are labelled HIGH_RISK, otherwise LOW_RISK.
+     */
+    public MutableDataset<Label> buildClassificationDataset(List<LabelledExpiryExample> labelledExamples) {
+        MutableDataset<Label> dataset = new MutableDataset<>(
+                new SimpleDataSourceProvenance("ExpiryRiskClassification", LABEL_FACTORY),
+                LABEL_FACTORY);
+        for (LabelledExpiryExample le : labelledExamples) {
+            String labelStr = le.sellThroughProbability() < HIGH_RISK_THRESHOLD ? LABEL_HIGH_RISK : LABEL_LOW_RISK;
+            double[] values = extractValues(le.features());
+            dataset.add(new ArrayExample<>(new Label(labelStr), FEATURE_NAMES, values));
+        }
+        return dataset;
+    }
+
+    private double[] extractValues(ExpiryFeatures features) {
+        return new double[]{
+                Math.max(0.0, features.daysToExpiry()),
+                Math.max(0.0, features.currentStockQty()),
+                Math.max(0.0, features.avgDailySalesRate()),
+                Math.min(999.0, Math.max(0.0, features.projectedDaysToSell())),
+                Math.max(0.0, features.similarSkuVelocity()),
+                Math.max(0.0, features.warehouseTurnoverRate()),
+                Math.min(1.0, Math.max(0.0, features.priceSensitivityScore())),
+                Math.min(1.0, Math.max(0.0, features.batchAgeRatio()))
+        };
+    }
 }

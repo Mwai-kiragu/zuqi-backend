@@ -139,17 +139,24 @@ trigger_seed() {
 
 # ── Poll run status ───────────────────────────────────────────────────────
 
+# Global flag: set to 1 if seed COMPLETED, 0 otherwise
+SEED_COMPLETED=0
+
 poll_status() {
     local jwt="$1"
     local run_id="$2"
     local status_url="${BASE_URL}/v1/ai/admin/seed-synthetic/${run_id}/status"
 
-    log "Polling run status (every 15s)..."
+    # Seeding now includes full model training (~12–18 min for 500 merchants).
+    # 80 polls × 15s = 20 min — enough headroom.
+    log "Polling run status (every 15s, max 20 min)..."
     local attempts=0
     while true; do
         attempts=$((attempts + 1))
-        if [[ ${attempts} -gt 40 ]]; then
-            warn "Timed out waiting for run to complete. Check backend logs."
+        if [[ ${attempts} -gt 80 ]]; then
+            warn "Timed out waiting for run to complete after 20 min. Check backend logs."
+            warn "Tuning will NOT be triggered — seeding may still be running."
+            SEED_COMPLETED=0
             break
         fi
 
@@ -162,13 +169,15 @@ poll_status() {
             status=$(echo "${status_response}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('status','UNKNOWN'))" 2>/dev/null || echo "UNKNOWN")
         fi
 
-        log "  Run ${run_id}: ${status}"
+        log "  Run ${run_id}: ${status} (poll ${attempts}/80)"
 
         if [[ "${status}" == "COMPLETED" ]]; then
             log "Generation and model training COMPLETED."
+            SEED_COMPLETED=1
             break
         elif [[ "${status}" == "FAILED" ]]; then
             warn "Run FAILED. Check backend logs for details."
+            SEED_COMPLETED=0
             break
         fi
 
@@ -225,8 +234,8 @@ poll_tuning_status() {
     local job_id="$2"
     local status_url="${BASE_URL}/v1/ai/admin/tune/${job_id}/status"
 
-    log "Polling tuning status (every 20s)..."
-    local attempts=0
+    log "Polling tuning status (every 20s, max 40 min)..."
+    local attempts=0 unknown_streak=0
     while true; do
         attempts=$((attempts + 1))
         if [[ ${attempts} -gt 120 ]]; then
@@ -243,7 +252,7 @@ poll_tuning_status() {
             status=$(echo "${status_response}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('status','UNKNOWN'))" 2>/dev/null || echo "UNKNOWN")
         fi
 
-        log "  Tuning job ${job_id}: ${status}"
+        log "  Tuning job ${job_id}: ${status} (poll ${attempts}/120)"
 
         if [[ "${status}" == "COMPLETED" || "${status}" == "COMPLETED_WITH_ERRORS" ]]; then
             log "Hyperparameter tuning finished with status: ${status}."
@@ -251,6 +260,17 @@ poll_tuning_status() {
         elif [[ "${status}" == "FAILED" ]]; then
             warn "Tuning job FAILED. Check backend logs for details."
             break
+        elif [[ "${status}" == "UNKNOWN" ]]; then
+            unknown_streak=$((unknown_streak + 1))
+            warn "  UNKNOWN response (streak=${unknown_streak}/10) — backend may be GC pausing under load, retrying..."
+            if [[ ${unknown_streak} -ge 10 ]]; then
+                warn "Status lost (10 consecutive UNKNOWN responses). Backend may have crashed."
+                warn "Check backend logs. The tuning may still be running or may have completed."
+                warn "Query DB: SELECT model_type,status,updated_at FROM ai_model_registry ORDER BY updated_at DESC LIMIT 20;"
+                break
+            fi
+        else
+            unknown_streak=0
         fi
 
         sleep 20
@@ -271,12 +291,19 @@ main() {
     jwt=$(get_token)
     trigger_seed "${jwt}"
 
-    log "Starting hyperparameter tuning after seed..."
-    trigger_tuning "${jwt}"
+    if [[ "${SEED_COMPLETED}" -eq 1 ]]; then
+        log "Seed COMPLETED — starting hyperparameter tuning..."
+        trigger_tuning "${jwt}"
+    else
+        warn "Seed did not complete — skipping tuning to avoid overloading the JVM."
+        warn "Re-run this script once seeding finishes, or trigger tuning manually:"
+        warn "  curl -X POST ${TUNE_ENDPOINT} -H 'Authorization: Bearer <token>'"
+    fi
 
     log ""
-    log "When training completes, all 17 models will be ACTIVE"
+    log "When training completes, 15 models will be ACTIVE"
     log "in the ai_model_registry table and ready for inference."
+    log "(customer_health_scorer and reorder_optimizer are rules-based — no training needed)"
     log "======================================================"
 }
 

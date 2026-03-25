@@ -94,7 +94,7 @@ public class XGBoostHyperparameterTuner {
     public TunedModel<Label> tuneAndTrainClassifier(Dataset<Label> dataset, String positiveLabel) {
         TuningResult tuning = tuneClassifier(dataset, positiveLabel);
         XGBoostClassificationTrainer trainer =
-                new XGBoostClassificationTrainer(tuning.bestNumRounds(), tuning.bestParams());
+                new XGBoostClassificationTrainer(tuning.bestNumRounds());
         Model<Label> model = trainer.train(dataset);
         log.info("[HyperparamTuner] Final classifier trained: rounds={} eta={} maxDepth={}",
                 tuning.bestNumRounds(), tuning.bestEta(), tuning.bestMaxDepth());
@@ -124,7 +124,7 @@ public class XGBoostHyperparameterTuner {
         for (int rounds : ROUNDS_GRID) {
             for (double eta : ETA_GRID) {
                 for (int depth : DEPTH_GRID) {
-                    Map<String, Object> params = buildParams(eta, depth);
+                    Map<String, Object> params = buildRegressorParams(eta, depth);
                     double cvRmse = crossValidateRegressor(folds, rounds, params);
                     log.debug("[HyperparamTuner] rounds={} eta={} depth={} → cvRMSE={}",
                             rounds, eta, depth, String.format("%.4f", cvRmse));
@@ -138,7 +138,7 @@ public class XGBoostHyperparameterTuner {
             }
         }
 
-        Map<String, Object> bestParams = buildParams(bestEta, bestDepth);
+        Map<String, Object> bestParams = buildRegressorParams(bestEta, bestDepth);
         log.info("[HyperparamTuner] Best regression config: rounds={} eta={} maxDepth={} cvRMSE={}",
                 bestRounds, bestEta, bestDepth, String.format("%.4f", bestScore));
         return new TuningResult(bestRounds, bestEta, bestDepth, bestScore, "rmse", bestParams);
@@ -168,7 +168,7 @@ public class XGBoostHyperparameterTuner {
         for (int rounds : ROUNDS_GRID) {
             for (double eta : ETA_GRID) {
                 for (int depth : DEPTH_GRID) {
-                    Map<String, Object> params = buildParams(eta, depth);
+                    Map<String, Object> params = buildClassifierParams(eta, depth);
                     double cvAuc = crossValidateClassifier(folds, rounds, params, positiveLabel);
                     log.debug("[HyperparamTuner] rounds={} eta={} depth={} → cvAUC={}",
                             rounds, eta, depth, String.format("%.4f", cvAuc));
@@ -182,7 +182,7 @@ public class XGBoostHyperparameterTuner {
             }
         }
 
-        Map<String, Object> bestParams = buildParams(bestEta, bestDepth);
+        Map<String, Object> bestParams = buildClassifierParams(bestEta, bestDepth);
         log.info("[HyperparamTuner] Best classification config: rounds={} eta={} maxDepth={} cvAUC={}",
                 bestRounds, bestEta, bestDepth, String.format("%.4f", bestScore));
         return new TuningResult(bestRounds, bestEta, bestDepth, bestScore, "auc_roc", bestParams);
@@ -213,7 +213,7 @@ public class XGBoostHyperparameterTuner {
                     count++;
                 }
             } catch (Exception e) {
-                log.debug("[HyperparamTuner] Regression CV fold {} failed: {}", i, e.getMessage());
+                log.warn("[HyperparamTuner] Regression CV fold {} failed: {}", i, e.getMessage());
             }
         }
 
@@ -239,7 +239,7 @@ public class XGBoostHyperparameterTuner {
 
             try {
                 XGBoostClassificationTrainer trainer =
-                        new XGBoostClassificationTrainer(rounds, params);
+                        new XGBoostClassificationTrainer(rounds);
                 Model<Label> model = trainer.train(trainFold);
                 LabelEvaluation eval = evaluator.evaluate(model, testFold);
 
@@ -259,7 +259,7 @@ public class XGBoostHyperparameterTuner {
                     count++;
                 }
             } catch (Exception e) {
-                log.debug("[HyperparamTuner] Classification CV fold {} failed: {}", i, e.getMessage());
+                log.warn("[HyperparamTuner] Classification CV fold {} failed: {}", i, e.getMessage());
             }
         }
 
@@ -330,8 +330,19 @@ public class XGBoostHyperparameterTuner {
         return seen.size();
     }
 
-    private Map<String, Object> buildParams(double eta, int maxDepth) {
+    private Map<String, Object> buildRegressorParams(double eta, int maxDepth) {
         Map<String, Object> params = new HashMap<>();
+        params.put("objective", "reg:squarederror");
+        params.put("eta", eta);
+        params.put("max_depth", maxDepth);
+        params.put("subsample", 0.8);
+        params.put("colsample_bytree", 0.8);
+        return params;
+    }
+
+    private Map<String, Object> buildClassifierParams(double eta, int maxDepth) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("objective", "binary:logistic");
         params.put("eta", eta);
         params.put("max_depth", maxDepth);
         params.put("subsample", 0.8);
