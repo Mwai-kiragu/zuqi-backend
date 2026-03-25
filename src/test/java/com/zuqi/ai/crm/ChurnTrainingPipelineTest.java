@@ -122,7 +122,7 @@ class ChurnTrainingPipelineTest {
                         "test", new org.tribuo.classification.LabelFactory()),
                 new org.tribuo.classification.LabelFactory());
         when(churnFeatureBuilder.buildDataset(any())).thenReturn(emptyDataset);
-        when(churnFeatureBuilder.getFeatureCount()).thenReturn(10);
+        when(churnFeatureBuilder.getFeatureCount()).thenReturn(9);
 
         @SuppressWarnings("unchecked")
         Model<Label> mockModel = mock(Model.class);

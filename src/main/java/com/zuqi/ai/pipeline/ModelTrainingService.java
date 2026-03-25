@@ -7,6 +7,7 @@ import com.zuqi.ai.crm.SegmentationTrainingPipeline;
 import com.zuqi.ai.crm.VisitTrainingPipeline;
 import com.zuqi.ai.demand.ExpiryRiskTrainingPipeline;
 import com.zuqi.ai.model.ModelRegistry;
+import com.zuqi.ai.prediction.RepPerformanceTrainingPipeline;
 import com.zuqi.ai.pricing.PricingTrainingPipeline;
 import com.zuqi.ai.recon.ReconTrainingPipeline;
 import com.zuqi.ai.synthetic.DataMixer;
@@ -93,14 +94,15 @@ public class ModelTrainingService {
     private final Trainer<Label>        classificationTrainer;
     private final Trainer<Regressor>    regressionTrainer;
     private final Trainer<Event>        anomalyTrainer;
-    private final ReconTrainingPipeline         reconTrainingPipeline;
-    private final CashFlowTrainingPipeline      cashFlowTrainingPipeline;
-    private final ExpiryRiskTrainingPipeline    expiryRiskTrainingPipeline;
-    private final SegmentationTrainingPipeline  segmentationTrainingPipeline;
-    private final ClvTrainingPipeline           clvTrainingPipeline;
-    private final ChurnTrainingPipeline         churnTrainingPipeline;
-    private final VisitTrainingPipeline         visitTrainingPipeline;
-    private final PricingTrainingPipeline       pricingTrainingPipeline;
+    private final ReconTrainingPipeline              reconTrainingPipeline;
+    private final CashFlowTrainingPipeline           cashFlowTrainingPipeline;
+    private final ExpiryRiskTrainingPipeline         expiryRiskTrainingPipeline;
+    private final SegmentationTrainingPipeline       segmentationTrainingPipeline;
+    private final ClvTrainingPipeline                clvTrainingPipeline;
+    private final ChurnTrainingPipeline              churnTrainingPipeline;
+    private final VisitTrainingPipeline              visitTrainingPipeline;
+    private final PricingTrainingPipeline            pricingTrainingPipeline;
+    private final RepPerformanceTrainingPipeline     repPerformanceTrainingPipeline;
 
     @Autowired
     public ModelTrainingService(
@@ -118,7 +120,8 @@ public class ModelTrainingService {
             ClvTrainingPipeline clvTrainingPipeline,
             ChurnTrainingPipeline churnTrainingPipeline,
             VisitTrainingPipeline visitTrainingPipeline,
-            PricingTrainingPipeline pricingTrainingPipeline) {
+            PricingTrainingPipeline pricingTrainingPipeline,
+            RepPerformanceTrainingPipeline repPerformanceTrainingPipeline) {
         this.featureStore                   = featureStore;
         this.dataMixer                      = dataMixer;
         this.modelRegistry                  = modelRegistry;
@@ -134,6 +137,7 @@ public class ModelTrainingService {
         this.churnTrainingPipeline          = churnTrainingPipeline;
         this.visitTrainingPipeline          = visitTrainingPipeline;
         this.pricingTrainingPipeline        = pricingTrainingPipeline;
+        this.repPerformanceTrainingPipeline = repPerformanceTrainingPipeline;
     }
 
     // ── Public API ───────────────────────────────────────────────────────────
@@ -342,28 +346,22 @@ public class ModelTrainingService {
         }
 
         // ── rep_performance_predictor ─────────────────────────────────────
+        // Delegates to RepPerformanceTrainingPipeline which generates 400 synthetic
+        // snapshots and trains an XGBoost regressor (score 0–100) with quality gate R²≥0.70.
         try {
-            List<Example<Label>> synthetic = featureStore.buildRepPerformancePredictorExamples(bundle);
-            List<Example<Label>> mixed = dataMixer.buildTrainingDataset(
-                    DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, distributorId,
-                    List.of(), synthetic);
-
-            if (mixed.size() < MIN_CLASSIFICATION_EXAMPLES) {
-                log.warn("[ModelTrainingService] {} — too few examples ({}), skipping",
-                        DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, mixed.size());
-            } else if (isSingleClass(mixed)) {
-                log.warn("[ModelTrainingService] {} — single-class dataset, skipping",
-                        DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR);
-            } else {
-                MutableDataset<Label> ds = toClassificationDataset(mixed);
-                Model<Label> model = classificationTrainer.train(ds);
-                UUID id = registerAndPromote(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR,
-                        "xgboost_classification", model, mixed.size(), 0, distributorId);
-                modelIds.put(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, id);
-                counts.put(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, mixed.size());
+            RepPerformanceTrainingPipeline.TrainingPipelineResult repResult =
+                    repPerformanceTrainingPipeline.runPipeline();
+            if (repResult.success() && repResult.passedQualityGate() && repResult.modelId() != null) {
+                modelIds.put(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, repResult.modelId());
+                counts.put(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, repResult.trainSize());
                 phaseTracker.updateCounts(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR,
-                        distributorId, 0, mixed.size());
+                        distributorId, 0, repResult.trainSize());
                 phaseTracker.evaluatePhase(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, distributorId);
+            } else {
+                String reason = repResult.errorMessage() != null ? repResult.errorMessage()
+                        : "Quality gate not passed (R²=" + String.format("%.3f", repResult.r2()) + ")";
+                log.warn("[ModelTrainingService] {} — {}", DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR, reason);
+                errors.add(DataPhaseTracker.MODEL_REP_PERFORMANCE_PREDICTOR + ": " + reason);
             }
         } catch (Exception e) {
             log.error("[ModelTrainingService] {} failed: {}",

@@ -27,9 +27,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -159,7 +161,9 @@ public class ModelTuningService {
                 return;
             }
 
-            MutableDataset<Label> dataset = toClassificationDataset(mixed, modelName);
+            // Oversample minority class so XGBoost doesn't ignore it
+            List<Example<Label>> balanced = oversampleMinorityClass(mixed, modelName);
+            MutableDataset<Label> dataset = toClassificationDataset(balanced, modelName);
             CrossValidationTuner.BestConfig<Label> best = cvTuner.tuneClassifier(
                     modelName, candidates, dataset);
 
@@ -229,7 +233,8 @@ public class ModelTuningService {
                     modelName, distributorId, List.of(), examples);
 
             // LibSVMAnomalyTrainer (one-class SVM) only accepts EXPECTED events at training
-            // time. ANOMALOUS examples are only used at evaluation time.
+            // time. CV tuner receives ALL examples so test folds contain ANOMALOUS examples
+            // for meaningful F1 evaluation. The final model is still trained on EXPECTED only.
             List<Example<Event>> trainingExamples = mixed.stream()
                     .filter(ex -> ex.getOutput().getType() == Event.EventType.EXPECTED)
                     .collect(Collectors.toList());
@@ -240,11 +245,13 @@ public class ModelTuningService {
                 return;
             }
 
-            MutableDataset<Event> dataset = toAnomalyDataset(trainingExamples, modelName + "_tuning");
+            // Pass ALL examples to CV so test folds include ANOMALOUS events
             CrossValidationTuner.BestConfig<Event> best = cvTuner.tuneAnomalyDetector(
-                    modelName, candidates, dataset);
+                    modelName, candidates, mixed);
 
-            Model<Event> finalModel = best.config().trainer().train(dataset);
+            // Final model trained on EXPECTED-only (LibSVM requirement)
+            MutableDataset<Event> finalTrainDataset = toAnomalyDataset(trainingExamples, modelName + "_tuning");
+            Model<Event> finalModel = best.config().trainer().train(finalTrainDataset);
             UUID modelId = registerAndPromote(modelName, "libsvm_anomaly",
                     finalModel, best.config().hyperparameters(),
                     mixed.size(), 0, distributorId, best.metricValue(), best.metricName());
@@ -322,13 +329,47 @@ public class ModelTuningService {
         modelRegistry.promoteToActive(entry.getId());
         modelRegistry.updateHyperparameters(entry.getId(), hparams);
 
-        log.info("[Tuning] Registered and promoted {} ({}={:.4f}, id={})",
+        log.info("[Tuning] Registered and promoted {} ({}={}, id={})",
                 modelName, metricName, metricValue, entry.getId());
         return entry.getId();
     }
 
     private int safeFeatureCount(Model<?> model) {
         try { return model.getFeatureIDMap().size(); } catch (Exception e) { return 0; }
+    }
+
+    /**
+     * Oversample the minority class by random repetition until the majority:minority
+     * ratio is at most 3:1. This prevents XGBoost from ignoring rare classes entirely.
+     * No oversampling is applied when the dataset is already balanced (ratio ≤ 3).
+     */
+    private List<Example<Label>> oversampleMinorityClass(List<Example<Label>> examples, String modelName) {
+        Map<String, List<Example<Label>>> byClass = examples.stream()
+                .collect(Collectors.groupingBy(ex -> ex.getOutput().getLabel()));
+
+        if (byClass.size() != 2) return examples; // only for binary classifiers
+
+        List<Example<Label>> majority = byClass.values().stream()
+                .max((a, b) -> Integer.compare(a.size(), b.size())).orElse(List.of());
+        List<Example<Label>> minority = byClass.values().stream()
+                .min((a, b) -> Integer.compare(a.size(), b.size())).orElse(List.of());
+
+        double ratio = (double) majority.size() / minority.size();
+        if (ratio <= 3.0) return examples;
+
+        int targetSize = majority.size() / 3; // target: 3:1 majority:minority
+        int toAdd      = Math.max(0, targetSize - minority.size());
+
+        log.info("[Tuning] {} — class imbalance ratio={}, oversampling minority '{}' by {} examples",
+                modelName, String.format("%.1f", ratio), minority.get(0).getOutput().getLabel(), toAdd);
+
+        List<Example<Label>> result = new ArrayList<>(examples);
+        Random rng = new Random(42L);
+        for (int i = 0; i < toAdd; i++) {
+            result.add(minority.get(rng.nextInt(minority.size())));
+        }
+        Collections.shuffle(result, rng);
+        return result;
     }
 
     private boolean isSingleClass(List<Example<Label>> examples) {

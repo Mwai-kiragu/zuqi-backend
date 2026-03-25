@@ -16,6 +16,10 @@ import java.util.List;
  * for CLV (Customer Lifetime Value) prediction.
  *
  * <p>12 features used to predict {@code revenue12m} (predicted 12-month revenue).
+ * Note: {@code revenue_12m} is intentionally excluded from the feature vector — it IS
+ * the prediction target, so including it would be target leakage. It is replaced by
+ * {@code avg_monthly_revenue} (lifetime revenue / tenure months), which provides a
+ * related but non-leaking rate signal.
  */
 @Component
 @RequiredArgsConstructor
@@ -29,7 +33,7 @@ public class ClvFeatureBuilder {
             "lifetime_revenue",
             "revenue_3m",
             "revenue_6m",
-            "revenue_12m",
+            "avg_monthly_revenue",
             "order_frequency_per_week",
             "avg_order_value",
             "revenue_trend_slope",
@@ -79,12 +83,14 @@ public class ClvFeatureBuilder {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private double[] featureValues(CustomerAnalyticsFeatures f) {
+        int tenure = Math.max(1, f.tenureMonths()); // avoid division by zero
+        double avgMonthlyRevenue = Math.max(0.0, f.lifetimeRevenue()) / tenure;
         return new double[]{
                 (double) Math.max(0, f.tenureMonths()),
                 Math.max(0.0, f.lifetimeRevenue()),
                 Math.max(0.0, f.revenue3m()),
                 Math.max(0.0, f.revenue6m()),
-                Math.max(0.0, f.revenue12m()),
+                avgMonthlyRevenue,
                 Math.max(0.0, f.orderFrequencyPerWeek()),
                 Math.max(0.0, f.avgOrderValue()),
                 f.revenueTrendSlope(),

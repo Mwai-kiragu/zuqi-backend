@@ -1,5 +1,6 @@
 package com.zuqi.api.controller;
 
+import com.zuqi.ai.prediction.StockoutPredictor;
 import com.zuqi.api.dto.ApiResponse;
 import com.zuqi.api.dto.common.DeactivateRequest;
 import com.zuqi.api.dto.inventory.*;
@@ -31,6 +32,7 @@ import java.util.UUID;
 public class InventoryController {
 
     private final InventoryService inventoryService;
+    private final StockoutPredictor stockoutPredictor;
 
     @GetMapping
     @Operation(summary = "Get stock with optional filters", description = "Get all stock, optionally filtered by distributor and/or warehouse")
@@ -39,7 +41,20 @@ public class InventoryController {
             @Parameter(description = "Warehouse ID (optional)") @RequestParam(required = false) UUID warehouseId,
             @PageableDefault(size = 20) Pageable pageable) {
         Page<StockResponse> stock = inventoryService.getStock(distributorId, warehouseId, pageable);
+        enrichWithAiPredictions(stock);
         return ResponseEntity.ok(ApiResponse.success(stock));
+    }
+
+    private void enrichWithAiPredictions(Page<StockResponse> page) {
+        page.getContent().forEach(item -> {
+            if (item.getWarehouseId() != null && item.getProductId() != null) {
+                StockoutPredictor.StockoutResult result =
+                        stockoutPredictor.predict(item.getWarehouseId(), item.getProductId());
+                item.setAiRiskScore(result.riskScore());
+                item.setAiDaysUntilStockout(result.daysUntilStockout());
+                item.setAiDemand7d(result.demand7d());
+            }
+        });
     }
 
     @GetMapping("/warehouse/{warehouseId}")

@@ -2,6 +2,7 @@ package com.zuqi.ai.pricing;
 
 import com.zuqi.ai.model.ModelRegistry;
 import com.zuqi.ai.pipeline.ModelEvaluator;
+import com.zuqi.ai.pipeline.XGBoostHyperparameterTuner;
 import com.zuqi.ai.synthetic.SyntheticDataBundle;
 import com.zuqi.ai.synthetic.SyntheticDataOrchestrator;
 import com.zuqi.ai.synthetic.SyntheticPricingFeatureBuilder;
@@ -33,6 +34,7 @@ class PricingTrainingPipelineTest {
     @Mock ModelEvaluator modelEvaluator;
     @Mock ModelRegistry modelRegistry;
     @Mock Trainer<Regressor> xgBoostRegressionTrainer;
+    @Mock XGBoostHyperparameterTuner hyperparameterTuner;
 
     @InjectMocks
     PricingTrainingPipeline pipeline;
@@ -72,12 +74,16 @@ class PricingTrainingPipelineTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void rmseGateFailure_returnsFailure() throws Exception {
         MutableDataset<Regressor> dataset = buildMinimalDataset();
         when(syntheticFeatureBuilder.buildDataset(any(), any(UUID.class))).thenReturn(dataset);
 
         org.tribuo.Model<Regressor> mockModel = mock(org.tribuo.Model.class);
-        when(xgBoostRegressionTrainer.train(any())).thenReturn(mockModel);
+        XGBoostHyperparameterTuner.TuningResult tuning =
+                new XGBoostHyperparameterTuner.TuningResult(50, 0.1, 4, 999.0, "rmse", java.util.Map.of());
+        when(hyperparameterTuner.tuneAndTrainRegressor(any()))
+                .thenReturn(new XGBoostHyperparameterTuner.TunedModel<>(mockModel, tuning));
 
         ModelEvaluator.RegressorEvaluationResult badEval =
                 ModelEvaluator.RegressorEvaluationResult.builder()

@@ -55,4 +55,13 @@ public class Role {
     public boolean isRole(RoleName roleName) {
         return name != null && name.equals(roleName.name());
     }
+
+    // Explicit getters to satisfy IDE/LSP when Lombok processing is unavailable
+    public String getName() {
+        return name;
+    }
+
+    public Set<Permission> getPermissions() {
+        return permissions;
+    }
 }

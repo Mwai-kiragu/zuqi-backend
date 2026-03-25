@@ -16,13 +16,19 @@ import com.zuqi.domain.payment.PaymentMethod;
 import com.zuqi.domain.payment.PaymentStatus;
 import com.zuqi.domain.product.Product;
 import com.zuqi.domain.user.User;
+import com.zuqi.api.dto.customer.CustomerRequest;
+import com.zuqi.domain.customer.CustomerCategory;
 import com.zuqi.repository.*;
 import com.zuqi.repository.CustomerRepository;
+import com.zuqi.service.ActivityLogService;
+import com.zuqi.service.EmailService;
 import com.zuqi.service.InvoiceService;
+import com.zuqi.service.impl.CustomerServiceImpl;
 import com.zuqi.service.impl.InventoryServiceImpl;
 import com.zuqi.service.impl.MerchantServiceImpl;
 import com.zuqi.service.impl.OrderServiceImpl;
 import com.zuqi.service.impl.PaymentServiceImpl;
+import com.zuqi.ai.feature.FeatureStore;
 import com.zuqi.util.SecurityUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -110,16 +116,34 @@ class EventPublishingTest {
     private MerchantCategoryRepository categoryRepository;
 
     @MockitoBean
+    private CustomerCategoryRepository customerCategoryRepository;
+
+    @MockitoBean
+    private CreditScoreRepository creditScoreRepository;
+
+    @MockitoBean
     private StockMovementRepository stockMovementRepository;
 
     @MockitoBean
     private InvoiceService invoiceService;
 
     @MockitoBean
+    private ActivityLogService activityLogService;
+
+    @MockitoBean
+    private EmailService emailService;
+
+    @MockitoBean
+    private FeatureStore featureStore;
+
+    @MockitoBean
     private SecurityUtils securityUtils;
 
     @Autowired
     private PaymentServiceImpl paymentService;
+
+    @Autowired
+    private CustomerServiceImpl customerService;
 
     @Autowired
     private InventoryServiceImpl inventoryService;
@@ -316,13 +340,20 @@ class EventPublishingTest {
 
     @Test
     void shouldPublishMerchantCreatedEventWhenMerchantCreated() {
-        // Given
+        // Given — create a Customer (field-sales retail outlet) which publishes MerchantCreatedEvent
+        when(customerRepository.existsByPhone(anyString())).thenReturn(false);
+        when(customerRepository.existsByEmail(anyString())).thenReturn(false);
         when(distributorRepository.findById(distributorId)).thenReturn(Optional.of(distributor));
-        when(merchantRepository.existsByName(anyString())).thenReturn(false);
-        when(merchantRepository.save(any(Merchant.class))).thenReturn(merchant);
+        when(customerRepository.save(any(Customer.class))).thenReturn(customer);
+
+        CustomerRequest request = CustomerRequest.builder()
+                .businessName("Test Duka")
+                .phone("+254700000001")
+                .distributorId(distributorId)
+                .build();
 
         // When
-        merchantService.createMerchant(createMerchantRequest());
+        customerService.createCustomer(request);
 
         // Then
         verify(merchantEventHandler, timeout(1000).times(1))

@@ -20,11 +20,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.ObjectOutputStream;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
-import java.util.HashMap;
 
 /**
  * Training pipeline for the visit frequency optimizer.
@@ -69,22 +69,32 @@ public class VisitTrainingPipeline {
                 CustomerAnalyticsFeatures f = featureBuilder.computeFeatures(m, bundle, asOf);
                 List<SyntheticOrder> orders = bundle.getOrdersForMerchant(m.syntheticId());
 
+                // Count historical orders per day-of-week for this merchant
+                Map<Integer, Long> ordersByDow = new HashMap<>();
+                for (SyntheticOrder o : orders) {
+                    if (o.orderDate() == null) continue;
+                    int dow = o.orderDate().getDayOfWeek().getValue();
+                    ordersByDow.merge(dow, 1L, (a, b) -> a + b);
+                }
+
                 for (SyntheticOrder order : orders) {
                     if (order.orderDate() == null) continue;
                     int orderDayOfWeek = order.orderDate().getDayOfWeek().getValue(); // 1=Mon…7=Sun
+                    double countOnThisDay = ordersByDow.getOrDefault(orderDayOfWeek, 0L).doubleValue();
 
                     // Positive example: actual order day
                     examples.add(new VisitFeatureBuilder.LabelledVisitExample(
-                            f, orderDayOfWeek, 1.0, false, false, 1.0));
+                            f, orderDayOfWeek, countOnThisDay, false, false, 1.0));
 
-                    // Negative example: random other day
+                    // Negative example: random other day with its own historical count
                     int negativeDayOfWeek;
                     do {
                         negativeDayOfWeek = 1 + rng.nextInt(7);
                     } while (negativeDayOfWeek == orderDayOfWeek);
+                    double countOnNegDay = ordersByDow.getOrDefault(negativeDayOfWeek, 0L).doubleValue();
 
                     examples.add(new VisitFeatureBuilder.LabelledVisitExample(
-                            f, negativeDayOfWeek, 0.0, false, false, 0.0));
+                            f, negativeDayOfWeek, countOnNegDay, false, false, 0.0));
                 }
             }
 

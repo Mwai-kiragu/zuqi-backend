@@ -25,10 +25,11 @@ DISTRIBUTOR_ID="${3:-a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11}"
 
 SEED_ENDPOINT="${BASE_URL}/v1/ai/admin/seed-synthetic/${DISTRIBUTOR_ID}"
 HEALTH_ENDPOINT="${BASE_URL}/actuator/health"
+TUNE_ENDPOINT="${BASE_URL}/v1/ai/admin/tune/${DISTRIBUTOR_ID}"
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
-log()  { echo "[seed-models] $*"; }
+log()  { echo "[seed-models] $*" >&2; }
 warn() { echo "[seed-models] WARN: $*" >&2; }
 die()  { echo "[seed-models] ERROR: $*" >&2; exit 1; }
 
@@ -72,13 +73,18 @@ get_token() {
 
     local token
     if command -v jq &>/dev/null; then
-        token=$(echo "${login_response}" | jq -r '.data.access_token // empty')
+        token=$(echo "${login_response}" | jq -r '.data.access_token // .data.accessToken // empty')
     else
-        token=$(echo "${login_response}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('access_token',''))" 2>/dev/null || true)
+        token=$(echo "${login_response}" | python3 -c "import sys,json; d=json.load(sys.stdin); data=d.get('data',{}); print(data.get('access_token') or data.get('accessToken') or '')" 2>/dev/null || true)
     fi
 
     if [[ -z "${token}" ]]; then
         die "Could not extract access token from login response. Pass a JWT token as the second argument."
+    fi
+
+    # Basic sanity check to avoid sending log lines as headers
+    if [[ "${token}" =~ [[:space:]] ]]; then
+        die "Access token contains whitespace; aborting to avoid malformed Authorization header."
     fi
 
     log "Login successful."
@@ -99,7 +105,7 @@ trigger_seed() {
         -H "Authorization: Bearer ${jwt}" \
         -w "\n%{http_code}" \
         "${SEED_ENDPOINT}" \
-        -d '{"merchantCount": 500, "historyMonths": 12, "seed": 42}' 2>&1) || true
+        -d '{"merchantCount": 500, "historyMonths": 12, "randomSeed": 42}' 2>&1) || true
 
     http_code=$(echo "${response}" | tail -n1)
     lines=$(echo "${response}" | wc -l | tr -d ' ')
@@ -170,6 +176,87 @@ poll_status() {
     done
 }
 
+# ── Hyperparameter tuning trigger + poll ───────────────────────────────────
+
+trigger_tuning() {
+    local jwt="$1"
+    log "Triggering hyperparameter tuning at ${TUNE_ENDPOINT}..."
+
+    local response http_code body lines
+
+    response=$(curl -s \
+        -X POST \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer ${jwt}" \
+        -w "\n%{http_code}" \
+        "${TUNE_ENDPOINT}" 2>&1) || true
+
+    http_code=$(echo "${response}" | tail -n1)
+    lines=$(echo "${response}" | wc -l | tr -d ' ')
+    body=$(echo "${response}" | head -n $((lines - 1)))
+
+    if [[ "${http_code}" =~ ^2 ]]; then
+        log "Tuning triggered successfully (HTTP ${http_code})."
+        if command -v jq &>/dev/null; then
+            echo "${body}" | jq '.' 2>/dev/null || echo "${body}"
+        else
+            echo "${body}"
+        fi
+
+        local job_id
+        if command -v jq &>/dev/null; then
+            job_id=$(echo "${body}" | jq -r '.data.jobId // empty' 2>/dev/null || true)
+        else
+            job_id=$(echo "${body}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('jobId',''))" 2>/dev/null || true)
+        fi
+
+        if [[ -n "${job_id}" ]]; then
+            poll_tuning_status "${jwt}" "${job_id}"
+        fi
+    else
+        warn "Unexpected response (HTTP ${http_code}) from tuning endpoint:"
+        echo "${body}"
+        warn "Tuning request failed. Check backend logs."
+    fi
+}
+
+poll_tuning_status() {
+    local jwt="$1"
+    local job_id="$2"
+    local status_url="${BASE_URL}/v1/ai/admin/tune/${job_id}/status"
+
+    log "Polling tuning status (every 20s)..."
+    local attempts=0
+    while true; do
+        attempts=$((attempts + 1))
+        if [[ ${attempts} -gt 120 ]]; then
+            warn "Timed out waiting for tuning to complete (40 min). Check backend logs."
+            break
+        fi
+
+        local status_response status
+        status_response=$(curl -sf "${status_url}" -H "Authorization: Bearer ${jwt}" 2>/dev/null || echo '{}')
+
+        if command -v jq &>/dev/null; then
+            status=$(echo "${status_response}" | jq -r '.data.status // "UNKNOWN"' 2>/dev/null || echo "UNKNOWN")
+        else
+            status=$(echo "${status_response}" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('data',{}).get('status','UNKNOWN'))" 2>/dev/null || echo "UNKNOWN")
+        fi
+
+        log "  Tuning job ${job_id}: ${status}"
+
+        if [[ "${status}" == "COMPLETED" || "${status}" == "COMPLETED_WITH_ERRORS" ]]; then
+            log "Hyperparameter tuning finished with status: ${status}."
+            break
+        elif [[ "${status}" == "FAILED" ]]; then
+            warn "Tuning job FAILED. Check backend logs for details."
+            break
+        fi
+
+        sleep 20
+    done
+}
+
 # ── Main ──────────────────────────────────────────────────────────────────
 
 main() {
@@ -184,8 +271,11 @@ main() {
     jwt=$(get_token)
     trigger_seed "${jwt}"
 
+    log "Starting hyperparameter tuning after seed..."
+    trigger_tuning "${jwt}"
+
     log ""
-    log "When training completes, all 9 models will be ACTIVE"
+    log "When training completes, all 17 models will be ACTIVE"
     log "in the ai_model_registry table and ready for inference."
     log "======================================================"
 }

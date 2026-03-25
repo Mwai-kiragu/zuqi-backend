@@ -2,6 +2,7 @@ package com.zuqi.ai.demand;
 
 import com.zuqi.ai.model.ModelRegistry;
 import com.zuqi.ai.pipeline.ModelEvaluator;
+import com.zuqi.ai.pipeline.XGBoostHyperparameterTuner;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -9,7 +10,6 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.tribuo.Dataset;
 import org.tribuo.Model;
-import org.tribuo.Trainer;
 import org.tribuo.regression.Regressor;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,8 +27,8 @@ class ExpiryRiskTrainingPipelineIntegrationTest {
     @Autowired
     private ExpiryRiskTrainingPipeline pipeline;
 
-    @MockitoBean(name = "xgBoostRegressionTrainer")
-    private Trainer<Regressor> xgBoostRegressionTrainer;
+    @MockitoBean
+    private XGBoostHyperparameterTuner hyperparameterTuner;
 
     @MockitoBean
     private ModelEvaluator modelEvaluator;
@@ -42,12 +42,13 @@ class ExpiryRiskTrainingPipelineIntegrationTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void runPipeline_withFailingRmseGate_returnsFailure_andNeverPromotes() {
-        @SuppressWarnings("unchecked")
         Model<Regressor> mockModel = mock(Model.class);
-        @SuppressWarnings("unchecked")
-        Dataset<Regressor> anyDataset = any(Dataset.class);
-        when(xgBoostRegressionTrainer.train(anyDataset)).thenReturn(mockModel);
+        XGBoostHyperparameterTuner.TuningResult tuning =
+                new XGBoostHyperparameterTuner.TuningResult(50, 0.1, 4, 0.35, "rmse", java.util.Map.of());
+        when(hyperparameterTuner.tuneAndTrainRegressor(any()))
+                .thenReturn(new XGBoostHyperparameterTuner.TunedModel<>(mockModel, tuning));
 
         ModelEvaluator.RegressorEvaluationResult badEval =
                 ModelEvaluator.RegressorEvaluationResult.builder()
@@ -69,7 +70,7 @@ class ExpiryRiskTrainingPipelineIntegrationTest {
 
     @Test
     void runPipeline_withTrainerException_returnsFailure() {
-        when(xgBoostRegressionTrainer.train(any()))
+        when(hyperparameterTuner.tuneAndTrainRegressor(any()))
                 .thenThrow(new RuntimeException("XGBoost training error"));
 
         ExpiryRiskTrainingPipeline.TrainingResult result = pipeline.runPipeline();

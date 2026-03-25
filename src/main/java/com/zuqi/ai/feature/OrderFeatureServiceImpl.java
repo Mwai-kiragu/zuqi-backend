@@ -80,7 +80,7 @@ public class OrderFeatureServiceImpl implements OrderFeatureService {
                 .isChristmasSeason(isChristmasSeason(asOfDate.toLocalDate()))
                 // Merchant context
                 .merchantCategory(getMerchantCategoryEncoded(merchant))
-                .merchantSizeTier(computeMerchantSizeTier(merchantOrders))
+                .merchantSizeTier(computeMerchantSizeTier(merchantOrders, asOfDate))
                 .merchantCreditStatus(computeMerchantCreditStatus(merchantId, asOfDate))
                 .merchantTenureDays(computeMerchantTenureDays(merchant, asOfDate))
                 // SKU context
@@ -234,14 +234,14 @@ public class OrderFeatureServiceImpl implements OrderFeatureService {
         return merchant.getCategory().getName();
     }
 
-    private String computeMerchantSizeTier(List<Order> orders) {
+    private String computeMerchantSizeTier(List<Order> orders, LocalDateTime asOfDate) {
         if (orders.isEmpty()) {
             return "SMALL";
         }
 
         // Classify by total order count in last 12 weeks
         long recentOrderCount = orders.stream()
-                .filter(o -> o.getCreatedAt().isAfter(LocalDateTime.now().minusWeeks(12)))
+                .filter(o -> o.getCreatedAt().isAfter(asOfDate.minusWeeks(12)))
                 .count();
 
         if (recentOrderCount >= 20) {

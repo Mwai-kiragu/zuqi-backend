@@ -378,7 +378,7 @@ class MerchantFeatureServiceTest {
         assertThat(features.businessCategoryEncoded()).isEqualTo("Retail");
         assertThat(features.relationshipTenureDays()).isEqualTo(100);
         assertThat(features.geographicCluster()).isEqualTo("Nairobi");
-        assertThat(features.verificationStatus()).isEqualTo("PENDING");
+        assertThat(features.verificationStatus()).isEqualTo("UNVERIFIED");
     }
 
     @Test

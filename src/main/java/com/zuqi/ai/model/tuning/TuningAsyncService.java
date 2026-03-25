@@ -1,11 +1,15 @@
 package com.zuqi.ai.model.tuning;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zuqi.ai.synthetic.SyntheticDataConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -28,7 +32,12 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequiredArgsConstructor
 public class TuningAsyncService {
 
-    private final ModelTuningService tuningService;
+    private static final String REDIS_KEY_PREFIX = "tuning:job:";
+    private static final Duration REDIS_TTL      = Duration.ofHours(24);
+
+    private final ModelTuningService          tuningService;
+    private final RedisTemplate<String, Object> redisTemplate;
+    private final ObjectMapper                objectMapper;
 
     private final ConcurrentHashMap<UUID, TuningJobStatus> jobs = new ConcurrentHashMap<>();
 
@@ -45,18 +54,22 @@ public class TuningAsyncService {
     public void tuneAsync(UUID jobId, UUID distributorId, SyntheticDataConfig config) {
         log.info("[TuningAsync] Job {} starting for distributor={}", jobId, distributorId);
 
-        jobs.put(jobId, new TuningJobStatus(
+        TuningJobStatus running = new TuningJobStatus(
                 jobId, distributorId, "RUNNING", List.of(), null,
-                Instant.now().toEpochMilli(), 0L));
+                Instant.now().toEpochMilli(), 0L);
+        jobs.put(jobId, running);
+        persistToRedis(jobId, running);
 
         try {
             ModelTuningService.TuningRunResult result =
                     tuningService.tuneAllModels(distributorId, config);
 
-            jobs.put(jobId, new TuningJobStatus(
+            TuningJobStatus done = new TuningJobStatus(
                     jobId, distributorId, result.success() ? "COMPLETED" : "COMPLETED_WITH_ERRORS",
                     result.results(), result.errors().isEmpty() ? null : String.join("; ", result.errors()),
-                    jobs.get(jobId).startedAt(), result.durationMs()));
+                    jobs.get(jobId).startedAt(), result.durationMs());
+            jobs.put(jobId, done);
+            persistToRedis(jobId, done);
 
             log.info("[TuningAsync] Job {} {} in {}ms — tuned={}",
                     jobId, result.success() ? "COMPLETED" : "COMPLETED_WITH_ERRORS",
@@ -66,9 +79,11 @@ public class TuningAsyncService {
             long startedAt = jobs.getOrDefault(jobId,
                     new TuningJobStatus(jobId, distributorId, "FAILED",
                             List.of(), null, Instant.now().toEpochMilli(), 0L)).startedAt();
-            jobs.put(jobId, new TuningJobStatus(
+            TuningJobStatus failed = new TuningJobStatus(
                     jobId, distributorId, "FAILED", List.of(), e.getMessage(),
-                    startedAt, Instant.now().toEpochMilli() - startedAt));
+                    startedAt, Instant.now().toEpochMilli() - startedAt);
+            jobs.put(jobId, failed);
+            persistToRedis(jobId, failed);
 
             log.error("[TuningAsync] Job {} FAILED: {}", jobId, e.getMessage(), e);
         }
@@ -83,7 +98,36 @@ public class TuningAsyncService {
      * @return current status, or {@code null} if the job is unknown
      */
     public TuningJobStatus getStatus(UUID jobId) {
-        return jobs.get(jobId);
+        TuningJobStatus inMemory = jobs.get(jobId);
+        if (inMemory != null) return inMemory;
+        return loadFromRedis(jobId);
+    }
+
+    // ── Redis persistence ─────────────────────────────────────────────────
+
+    private void persistToRedis(UUID jobId, TuningJobStatus status) {
+        try {
+            String key = REDIS_KEY_PREFIX + jobId;
+            redisTemplate.opsForValue().set(key, objectMapper.writeValueAsString(status), REDIS_TTL);
+        } catch (Exception e) {
+            log.warn("[TuningAsync] Failed to persist job {} status to Redis: {}", jobId, e.getMessage());
+        }
+    }
+
+    private TuningJobStatus loadFromRedis(UUID jobId) {
+        try {
+            String key = REDIS_KEY_PREFIX + jobId;
+            Object raw = redisTemplate.opsForValue().get(key);
+            if (raw == null) return null;
+            String json = raw instanceof String s ? s : objectMapper.writeValueAsString(raw);
+            TuningJobStatus status = objectMapper.readValue(json,
+                    new TypeReference<TuningJobStatus>() {});
+            jobs.put(jobId, status); // re-populate in-memory cache
+            return status;
+        } catch (Exception e) {
+            log.warn("[TuningAsync] Failed to load job {} status from Redis: {}", jobId, e.getMessage());
+            return null;
+        }
     }
 
     // ── Status record ─────────────────────────────────────────────────────

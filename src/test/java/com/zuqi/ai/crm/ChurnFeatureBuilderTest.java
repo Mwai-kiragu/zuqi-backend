@@ -30,8 +30,8 @@ class ChurnFeatureBuilderTest {
     }
 
     @Test
-    void getFeatureCount_returns10() {
-        assertThat(builder.getFeatureCount()).isEqualTo(10);
+    void getFeatureCount_returns9() {
+        assertThat(builder.getFeatureCount()).isEqualTo(9);
     }
 
     @Test
@@ -39,7 +39,7 @@ class ChurnFeatureBuilderTest {
         Example<Label> example = builder.buildExample(sample(5));
 
         assertThat(example).isNotNull();
-        assertThat(example.size()).isEqualTo(10);
+        assertThat(example.size()).isEqualTo(9);
     }
 
     @Test
@@ -86,7 +86,7 @@ class ChurnFeatureBuilderTest {
                 5, 0.0, 0, "retail", 6.0, 12.0
         );
         Example<Label> example = builder.buildExample(f);
-        // 10 features should be present
-        assertThat(example.size()).isEqualTo(10);
+        // 9 features should be present
+        assertThat(example.size()).isEqualTo(9);
     }
 }

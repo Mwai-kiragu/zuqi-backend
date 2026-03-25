@@ -157,8 +157,9 @@ p, FINANCE, /v1/reports/:id, GET
 p, FINANCE, /v1/credit, GET
 p, FINANCE, /v1/credit/:id, GET
 
-# AI System Health - SUPER_ADMIN + DISTRIBUTOR_ADMIN (read)
+# AI System Health - SUPER_ADMIN + MERCHANT_ADMIN (full) + DISTRIBUTOR_ADMIN (read)
 p, SUPER_ADMIN, /v1/ai/system/*, .*
+p, MERCHANT_ADMIN, /v1/ai/system/*, .*
 p, DISTRIBUTOR_ADMIN, /v1/ai/system/health, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/system/models, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/system/models/:name, GET

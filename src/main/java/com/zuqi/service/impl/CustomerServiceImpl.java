@@ -10,6 +10,7 @@ import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.DuplicateResourceException;
 import com.zuqi.exception.ResourceNotFoundException;
+import com.zuqi.repository.CreditScoreRepository;
 import com.zuqi.repository.CustomerCategoryRepository;
 import com.zuqi.repository.CustomerRepository;
 import com.zuqi.repository.DistributorRepository;
@@ -30,8 +31,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -49,22 +53,28 @@ public class CustomerServiceImpl implements CustomerService {
     private final ApplicationEventPublisher eventPublisher;
     private final FeatureStore featureStore;
     private final EmailService emailService;
+    private final CreditScoreRepository creditScoreRepository;
 
     @Override
     @Transactional(readOnly = true)
     public Page<CustomerResponse> getAllCustomers(Pageable pageable) {
         log.debug("Fetching all customers");
         UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        Page<CustomerResponse> page;
         if (merchantId != null) {
-            return customerRepository.findByDistributorMerchantIdAndActiveTrue(merchantId, pageable)
+            page = customerRepository.findByDistributorMerchantIdAndActiveTrue(merchantId, pageable)
                     .map(CustomerResponse::fromEntity);
+        } else {
+            UUID distributorId = securityUtils.getDistributorIdForFiltering();
+            if (distributorId != null) {
+                page = customerRepository.findByDistributorIdAndActiveTrue(distributorId, pageable)
+                        .map(CustomerResponse::fromEntity);
+            } else {
+                page = customerRepository.findByActiveTrue(pageable).map(CustomerResponse::fromEntity);
+            }
         }
-        UUID distributorId = securityUtils.getDistributorIdForFiltering();
-        if (distributorId != null) {
-            return customerRepository.findByDistributorIdAndActiveTrue(distributorId, pageable)
-                    .map(CustomerResponse::fromEntity);
-        }
-        return customerRepository.findByActiveTrue(pageable).map(CustomerResponse::fromEntity);
+        enrichWithAiScores(page);
+        return page;
     }
 
     @Override
@@ -86,15 +96,19 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     @Transactional(readOnly = true)
     public Page<CustomerResponse> getCustomersByDistributor(UUID distributorId, Pageable pageable) {
-        return customerRepository.findByDistributorIdAndActiveTrue(distributorId, pageable)
+        Page<CustomerResponse> page = customerRepository.findByDistributorIdAndActiveTrue(distributorId, pageable)
                 .map(CustomerResponse::fromEntity);
+        enrichWithAiScores(page);
+        return page;
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<CustomerResponse> getAllCustomersByDistributor(UUID distributorId, Pageable pageable) {
-        return customerRepository.findByDistributorId(distributorId, pageable)
+        Page<CustomerResponse> page = customerRepository.findByDistributorId(distributorId, pageable)
                 .map(CustomerResponse::fromEntity);
+        enrichWithAiScores(page);
+        return page;
     }
 
     @Override
@@ -436,6 +450,23 @@ public class CustomerServiceImpl implements CustomerService {
     @Transactional(readOnly = true)
     public List<String> getDistinctCities() {
         return customerRepository.findDistinctCities();
+    }
+
+    /**
+     * Batch-enriches a page of CustomerResponse objects with their latest AI credit score.
+     * Uses a single native query to avoid N+1 on large pages.
+     */
+    private void enrichWithAiScores(Page<CustomerResponse> page) {
+        if (page.isEmpty()) return;
+        List<UUID> ids = page.getContent().stream().map(CustomerResponse::getId).toList();
+        List<Object[]> rows = creditScoreRepository.findLatestScoresByMerchantIds(ids);
+        Map<UUID, BigDecimal> scoreMap = new HashMap<>();
+        for (Object[] row : rows) {
+            UUID mid = (UUID) row[0];
+            BigDecimal score = row[1] instanceof BigDecimal bd ? bd : new BigDecimal(row[1].toString());
+            scoreMap.put(mid, score);
+        }
+        page.getContent().forEach(c -> c.setAiScore(scoreMap.get(c.getId())));
     }
 
     private void publishCustomerCreatedEvent(Customer customer) {

@@ -2,6 +2,7 @@ package com.zuqi.api.controller;
 
 import com.zuqi.ai.demand.AutoPurchaseOrderService;
 import com.zuqi.ai.demand.CashFlowForecastService;
+import com.zuqi.ai.demand.ExpiryRiskJob;
 import com.zuqi.api.dto.ApiResponse;
 import com.zuqi.api.dto.CashFlowForecastEntry;
 import com.zuqi.domain.ai.ChurnPrediction;
@@ -30,6 +31,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -65,6 +67,7 @@ public class AiAnalyticsController {
     private final PricingRecommendationRepository  pricingRecommendationRepository;
     private final AutoPurchaseOrderService         autoPurchaseOrderService;
     private final CashFlowForecastService          cashFlowForecastService;
+    private final ExpiryRiskJob                    expiryRiskJob;
 
     // ── CASH FLOW FORECAST ────────────────────────────────────────────────────
 
@@ -142,6 +145,29 @@ public class AiAnalyticsController {
         List<ExpiryRiskScore> risks =
                 expiryRiskScoreRepository.findByDistributorIdAndWarehouseId(distributorId, warehouseId);
         return ResponseEntity.ok(ApiResponse.success(risks));
+    }
+
+    /**
+     * Manually trigger the expiry risk scoring job without waiting for the 5:30 AM cron.
+     */
+    @PostMapping("/expiry/run")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @Operation(
+            summary = "Trigger expiry risk scoring job now",
+            description = "Runs the nightly expiry risk job immediately for all distributors. Admin only."
+    )
+    public ResponseEntity<ApiResponse<Void>> runExpiryRiskJob() {
+        log.info("POST /v1/ai/analytics/expiry/run — manual trigger");
+        try {
+            expiryRiskJob.runExpiryRiskScoring();
+            long count = expiryRiskScoreRepository.count();
+            return ResponseEntity.ok(ApiResponse.success(
+                    "Expiry risk job completed. Total scores in DB: " + count));
+        } catch (Exception e) {
+            log.error("Manual expiry risk job failed: {}", e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("Expiry risk job failed: " + e.getMessage()));
+        }
     }
 
     // ── CRM: Segments ─────────────────────────────────────────────────────────
@@ -317,6 +343,7 @@ public class AiAnalyticsController {
 
     private ResponseEntity<ApiResponse<PricingRecommendation>> updatePricingStatus(
             UUID id, String status) {
+        if (id == null) return ResponseEntity.badRequest().build();
         return pricingRecommendationRepository.findById(id)
                 .map(rec -> {
                     rec.setStatus(status);

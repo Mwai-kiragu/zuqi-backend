@@ -15,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -106,7 +107,7 @@ public class HyperparameterTuningController {
      * Poll the status of a tuning job.
      *
      * @param jobId UUID returned by the POST endpoint
-     * @return 200 with current status, or 404 if the job is unknown
+     * @return 200 with current status; if the job is unknown returns 200 with status=UNKNOWN
      */
     @GetMapping("/{jobId}/status")
     @Operation(
@@ -120,9 +121,10 @@ public class HyperparameterTuningController {
 
         TuningAsyncService.TuningJobStatus job = tuningAsyncService.getStatus(jobId);
         if (job == null) {
-            return ResponseEntity
-                    .status(HttpStatus.NOT_FOUND)
-                    .body(ApiResponse.error("Tuning job not found: " + jobId));
+            // Return 200 with UNKNOWN so polling scripts don't fail on curl -sf
+            TuningStatusResponse unknown = new TuningStatusResponse(
+                    jobId, null, "UNKNOWN", List.of(), "Job not found (may be initializing or app restarted)", 0L, 0L);
+            return ResponseEntity.ok(ApiResponse.success(unknown));
         }
 
         TuningStatusResponse response = new TuningStatusResponse(
