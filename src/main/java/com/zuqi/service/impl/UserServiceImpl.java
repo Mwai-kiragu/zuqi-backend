@@ -325,7 +325,7 @@ public class UserServiceImpl implements UserService {
             }
             if (targetBranch == null) {
                 targetBranch = distributorBranchRepository
-                        .findByDistributorIdAndHeadquartersTrue(finalDistributorId)
+                        .findFirstByDistributorIdAndHeadquartersTrue(finalDistributorId)
                         .orElse(null);
             }
             if (targetBranch != null && !branchUserRepository.existsByBranchIdAndUserId(targetBranch.getId(), savedUser.getId())) {
@@ -343,9 +343,14 @@ public class UserServiceImpl implements UserService {
             }
         }
 
-        // Send welcome email with temporary password
+        // Send welcome email with temporary password — failure must not roll back the user creation
         if (sendWelcomeEmail) {
-            emailService.sendWelcomeEmail(savedUser, password);
+            try {
+                emailService.sendWelcomeEmail(savedUser, password);
+            } catch (Exception e) {
+                log.warn("Failed to send welcome email to {} — user was created successfully: {}",
+                        savedUser.getEmail(), e.getMessage());
+            }
         }
 
         return mapToUserResponse(savedUser);
