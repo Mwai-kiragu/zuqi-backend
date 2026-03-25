@@ -250,10 +250,20 @@ public class UserServiceImpl implements UserService {
                     .orElseThrow(() -> new ResourceNotFoundException("Distributor", "id", finalDistributorId.toString()));
         }
 
+        // Resolve merchantId: use explicit value, else inherit from creator if they are MERCHANT_ADMIN
+        UUID resolvedMerchantId = request.getMerchantId();
+        if (resolvedMerchantId == null) {
+            User creator = securityUtils.getCurrentUser();
+            if (creator != null && creator.getMerchantId() != null) {
+                resolvedMerchantId = creator.getMerchantId();
+            }
+        }
+
         // Validate merchant exists if provided
-        if (request.getMerchantId() != null) {
-            merchantRepository.findById(request.getMerchantId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", request.getMerchantId().toString()));
+        if (resolvedMerchantId != null) {
+            final UUID mid = resolvedMerchantId;
+            merchantRepository.findById(mid)
+                    .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", mid.toString()));
         }
 
         // Generate password if not provided
@@ -289,7 +299,7 @@ public class UserServiceImpl implements UserService {
                 .password(passwordEncoder.encode(password))
                 .roles(roles)
                 .distributorId(finalDistributorId)
-                .merchantId(request.getMerchantId())
+                .merchantId(resolvedMerchantId)
                 .userGroup(userGroup)
                 .active(true)
                 .emailVerified(false)

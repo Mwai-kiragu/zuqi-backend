@@ -38,8 +38,20 @@ public class DistributorController {
         boolean isMerchantAdmin = currentUser != null && currentUser.getRoles().stream()
                 .anyMatch(r -> r.isRole(RoleName.MERCHANT_ADMIN));
 
-        if (isMerchantAdmin && currentUser.getMerchantId() != null) {
-            distributors = distributorRepository.findByMerchantIdAndActiveTrue(currentUser.getMerchantId());
+        if (isMerchantAdmin) {
+            // Resolve merchantId: direct field first, fallback via user's own distributor
+            UUID merchantId = currentUser.getMerchantId();
+            if (merchantId == null && currentUser.getDistributorId() != null) {
+                merchantId = distributorRepository.findById(currentUser.getDistributorId())
+                        .map(d -> d.getMerchant() != null ? d.getMerchant().getId() : null)
+                        .orElse(null);
+            }
+            if (merchantId != null) {
+                distributors = distributorRepository.findByMerchantIdAndActiveTrue(merchantId);
+            } else {
+                // MERCHANT_ADMIN with no merchant association — return empty list rather than leaking all data
+                distributors = List.of();
+            }
         } else {
             distributors = distributorRepository.findByActiveTrue();
         }
