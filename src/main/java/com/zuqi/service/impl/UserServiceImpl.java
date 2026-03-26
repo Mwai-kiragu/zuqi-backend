@@ -100,6 +100,17 @@ public class UserServiceImpl implements UserService {
             return getUsersByDistributor(distributorId, pageable, active, search);
         }
 
+        // Non-SUPER_ADMIN with no merchant/distributor scope — return only themselves
+        if (!securityUtils.isSuperAdmin()) {
+            UUID currentUserId = securityUtils.getCurrentUserId();
+            return userRepository.findById(currentUserId)
+                    .map(u -> {
+                        UserResponse resp = mapToUserResponse(u);
+                        return (Page<UserResponse>) new PageImpl<>(List.of(resp), pageable, 1L);
+                    })
+                    .orElse(Page.empty(pageable));
+        }
+
         // SUPER_ADMIN
         if (search != null && !search.isBlank()) {
             if (active != null) {
@@ -506,6 +517,9 @@ public class UserServiceImpl implements UserService {
         if (distributorId != null) {
             return userRepository.findByDistributorIdAndActiveFalse(distributorId, pageable)
                     .map(this::mapToUserResponse);
+        }
+        if (!securityUtils.isSuperAdmin()) {
+            return Page.empty(pageable);
         }
         return userRepository.findByActiveFalse(pageable)
                 .map(this::mapToUserResponse);

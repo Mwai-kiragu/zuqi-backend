@@ -1,6 +1,8 @@
 package com.zuqi.service.impl;
 
+import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
 import com.zuqi.api.dto.order.*;
+import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.inventory.Stock;
 import com.zuqi.domain.inventory.Warehouse;
@@ -19,11 +21,15 @@ import com.zuqi.ai.feature.FeatureStore;
 import com.zuqi.domain.credit.CreditLimit;
 import com.zuqi.domain.credit.CreditLimitStatus;
 import com.zuqi.repository.CreditLimitRepository;
+import com.zuqi.service.ApprovalService;
+import com.zuqi.service.ApprovalThresholdService;
 import com.zuqi.service.InvoiceService;
 import com.zuqi.service.OrderService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -55,11 +61,16 @@ public class OrderServiceImpl implements OrderService {
     private final StockRepository stockRepository;
     private final UserRepository userRepository;
     private final CreditLimitRepository creditLimitRepository;
+    private final InvoiceRepository invoiceRepository;
     private final SecurityUtils securityUtils;
     private final ActivityLogService activityLogService;
     private final InvoiceService invoiceService;
     private final ApplicationEventPublisher eventPublisher;
     private final FeatureStore featureStore;
+    private final ApprovalThresholdService approvalThresholdService;
+
+    @Lazy @Autowired
+    private ApprovalService approvalService;
 
     @Override
     public Page<OrderResponse> getAllOrders(Pageable pageable) {
@@ -243,6 +254,26 @@ public class OrderServiceImpl implements OrderService {
             order.setPaymentDueDate(LocalDate.now().plusDays(order.getPaymentTermsDays()));
         }
 
+        // Credit limit block: check Customer.creditLimit (built-in field, all order types)
+        if (merchant.getCreditLimit() != null && merchant.getCreditLimit().compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal unpaidBalance = invoiceRepository.sumUnpaidByCustomerId(merchant.getId());
+            if (unpaidBalance == null) unpaidBalance = BigDecimal.ZERO;
+            if (unpaidBalance.add(order.getTotalAmount()).compareTo(merchant.getCreditLimit()) > 0) {
+                throw new ValidationException(
+                    "Order exceeds credit limit for " + merchant.getBusinessName() +
+                    ". Limit: " + merchant.getCreditLimit() +
+                    ", Current outstanding: " + unpaidBalance +
+                    ", New order total: " + order.getTotalAmount());
+            }
+        }
+
+        // Approval routing for INITIATOR users
+        boolean needsApproval = securityUtils.currentUserHasWorkflowTier("INITIATOR");
+        if (needsApproval) {
+            order.setApprovalStatus("PENDING_APPROVAL");
+            order.setStatus(OrderStatus.PENDING);
+        }
+
         // Save order
         order = orderRepository.save(order);
 
@@ -263,13 +294,32 @@ public class OrderServiceImpl implements OrderService {
             deductStockForOrder(order);
         }
 
-        // Create and send invoice
-        try {
-            invoiceService.createInvoiceFromOrder(order);
-            log.info("Invoice created for order: {}", order.getOrderNumber());
-        } catch (Exception e) {
-            log.error("Failed to create invoice for order {}: {}", order.getOrderNumber(), e.getMessage());
-            // Don't fail the order creation if invoice creation fails
+        if (needsApproval) {
+            // Route through maker-checker — defer invoice creation to approval callback
+            int requiredApprovals = approvalThresholdService.getRequiredApprovals(
+                    distributor.getId(), ApprovalWorkflowType.SALES_ORDER, order.getTotalAmount());
+            try {
+                approvalService.createRequest(currentUser.getId(), CreateApprovalRequestDto.builder()
+                        .workflowType(ApprovalWorkflowType.SALES_ORDER)
+                        .entityType("ORDER")
+                        .entityId(order.getId())
+                        .entityName(order.getOrderNumber())
+                        .description("Sales Order " + order.getOrderNumber() + " — KES " + order.getTotalAmount())
+                        .requiredApprovals(requiredApprovals)
+                        .amount(order.getTotalAmount())
+                        .build());
+            } catch (Exception e) {
+                log.error("Failed to create approval request for order {}: {}", order.getOrderNumber(), e.getMessage());
+            }
+        } else {
+            // Standard flow: create invoice immediately
+            try {
+                invoiceService.createInvoiceFromOrder(order);
+                log.info("Invoice created for order: {}", order.getOrderNumber());
+            } catch (Exception e) {
+                log.error("Failed to create invoice for order {}: {}", order.getOrderNumber(), e.getMessage());
+                // Don't fail the order creation if invoice creation fails
+            }
         }
 
         // Invalidate demand feature cache for this merchant (order affects demand forecasting)

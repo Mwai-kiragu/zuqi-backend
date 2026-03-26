@@ -28,6 +28,7 @@ public class AccessControlServiceImpl implements AccessControlService {
     private final UserGroupRepository userGroupRepository;
     private final SecurityUtils securityUtils;
 
+
     // ─── UserType ─────────────────────────────────────────────────────────────
 
     @Override
@@ -79,11 +80,32 @@ public class AccessControlServiceImpl implements AccessControlService {
         ut.setName(request.getName());
         ut.setDescription(request.getDescription());
 
-        ut.getPermissions().clear();
         if (request.getPermissions() != null) {
-            request.getPermissions().stream()
+            // Build a map of incoming permissions keyed by module
+            java.util.Map<String, UserTypePermissionDto> incoming = request.getPermissions().stream()
+                    .collect(java.util.stream.Collectors.toMap(UserTypePermissionDto::getModule, d -> d));
+
+            // Update existing / remove stale
+            ut.getPermissions().removeIf(existing -> {
+                UserTypePermissionDto dto = incoming.remove(existing.getModule());
+                if (dto == null) {
+                    return true; // not in new set → orphanRemoval will delete it
+                }
+                // Still present — update flags in-place (no DELETE/INSERT)
+                existing.setCanCreate(dto.isCanCreate());
+                existing.setCanRead(dto.isCanRead());
+                existing.setCanUpdate(dto.isCanUpdate());
+                existing.setCanDelete(dto.isCanDelete());
+                existing.setCanApprove(dto.isCanApprove());
+                return false;
+            });
+
+            // Insert only truly new modules (remaining entries in map)
+            incoming.values().stream()
                     .map(dto -> buildPermission(dto, ut))
                     .forEach(ut.getPermissions()::add);
+        } else {
+            ut.getPermissions().clear();
         }
 
         return toUserTypeResponse(userTypeRepository.save(ut));

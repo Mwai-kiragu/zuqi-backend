@@ -28,6 +28,9 @@ public enum ApprovalWorkflowType {
     PURCHASE_ORDER,
     GOODS_RECEIPT_NOTE,
 
+    // Sales
+    SALES_ORDER,
+
     // Finance
     PAYMENT_APPROVAL,
     CREDIT_NOTE,
