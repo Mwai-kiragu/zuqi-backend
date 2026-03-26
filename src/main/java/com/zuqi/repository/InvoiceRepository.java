@@ -158,6 +158,11 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
     @Query("SELECT i.distributor.merchant.id FROM Invoice i WHERE i.invoiceNumber = :invoiceNumber")
     Optional<UUID> findMerchantIdByInvoiceNumber(@Param("invoiceNumber") String invoiceNumber);
 
+    /** Sum of outstanding invoice balance for a customer (credit limit check). */
+    @Query("SELECT COALESCE(SUM(i.totalAmount - i.paidAmount), 0) FROM Invoice i " +
+           "WHERE i.merchant.id = :customerId AND i.status NOT IN ('PAID', 'CANCELLED')")
+    BigDecimal sumUnpaidByCustomerId(@Param("customerId") UUID customerId);
+
     // AI Phase 3 — cash flow feature queries
 
     @Query("SELECT i FROM Invoice i WHERE i.distributor.id = :distributorId " +

@@ -5,6 +5,7 @@ import com.zuqi.domain.procurement.PurchaseRequisition;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -25,6 +26,10 @@ public interface PurchaseRequisitionRepository extends JpaRepository<PurchaseReq
 
     @Query("SELECT COUNT(pr) FROM PurchaseRequisition pr")
     long countAll();
+
+    @Modifying
+    @Query("UPDATE PurchaseRequisition pr SET pr.status = :status WHERE pr.id = :id")
+    void updateStatus(@Param("id") UUID id, @Param("status") PrStatus status);
 
     @Query("SELECT pr FROM PurchaseRequisition pr WHERE " +
             "(:distributorId IS NULL OR pr.distributorId = :distributorId) AND " +

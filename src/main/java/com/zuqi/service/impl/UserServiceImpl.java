@@ -100,6 +100,17 @@ public class UserServiceImpl implements UserService {
             return getUsersByDistributor(distributorId, pageable, active, search);
         }
 
+        // Non-SUPER_ADMIN with no merchant/distributor scope — return only themselves
+        if (!securityUtils.isSuperAdmin()) {
+            UUID currentUserId = securityUtils.getCurrentUserId();
+            return userRepository.findById(currentUserId)
+                    .map(u -> {
+                        UserResponse resp = mapToUserResponse(u);
+                        return (Page<UserResponse>) new PageImpl<>(List.of(resp), pageable, 1L);
+                    })
+                    .orElse(Page.empty(pageable));
+        }
+
         // SUPER_ADMIN
         if (search != null && !search.isBlank()) {
             if (active != null) {
@@ -250,10 +261,20 @@ public class UserServiceImpl implements UserService {
                     .orElseThrow(() -> new ResourceNotFoundException("Distributor", "id", finalDistributorId.toString()));
         }
 
+        // Resolve merchantId: use explicit value, else inherit from creator if they are MERCHANT_ADMIN
+        UUID resolvedMerchantId = request.getMerchantId();
+        if (resolvedMerchantId == null) {
+            User creator = securityUtils.getCurrentUser();
+            if (creator != null && creator.getMerchantId() != null) {
+                resolvedMerchantId = creator.getMerchantId();
+            }
+        }
+
         // Validate merchant exists if provided
-        if (request.getMerchantId() != null) {
-            merchantRepository.findById(request.getMerchantId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", request.getMerchantId().toString()));
+        if (resolvedMerchantId != null) {
+            final UUID mid = resolvedMerchantId;
+            merchantRepository.findById(mid)
+                    .orElseThrow(() -> new ResourceNotFoundException("Merchant", "id", mid.toString()));
         }
 
         // Generate password if not provided
@@ -289,7 +310,7 @@ public class UserServiceImpl implements UserService {
                 .password(passwordEncoder.encode(password))
                 .roles(roles)
                 .distributorId(finalDistributorId)
-                .merchantId(request.getMerchantId())
+                .merchantId(resolvedMerchantId)
                 .userGroup(userGroup)
                 .active(true)
                 .emailVerified(false)
@@ -315,7 +336,7 @@ public class UserServiceImpl implements UserService {
             }
             if (targetBranch == null) {
                 targetBranch = distributorBranchRepository
-                        .findByDistributorIdAndHeadquartersTrue(finalDistributorId)
+                        .findFirstByDistributorIdAndHeadquartersTrue(finalDistributorId)
                         .orElse(null);
             }
             if (targetBranch != null && !branchUserRepository.existsByBranchIdAndUserId(targetBranch.getId(), savedUser.getId())) {
@@ -333,9 +354,14 @@ public class UserServiceImpl implements UserService {
             }
         }
 
-        // Send welcome email with temporary password
+        // Send welcome email with temporary password — failure must not roll back the user creation
         if (sendWelcomeEmail) {
-            emailService.sendWelcomeEmail(savedUser, password);
+            try {
+                emailService.sendWelcomeEmail(savedUser, password);
+            } catch (Exception e) {
+                log.warn("Failed to send welcome email to {} — user was created successfully: {}",
+                        savedUser.getEmail(), e.getMessage());
+            }
         }
 
         return mapToUserResponse(savedUser);
@@ -491,6 +517,9 @@ public class UserServiceImpl implements UserService {
         if (distributorId != null) {
             return userRepository.findByDistributorIdAndActiveFalse(distributorId, pageable)
                     .map(this::mapToUserResponse);
+        }
+        if (!securityUtils.isSuperAdmin()) {
+            return Page.empty(pageable);
         }
         return userRepository.findByActiveFalse(pageable)
                 .map(this::mapToUserResponse);

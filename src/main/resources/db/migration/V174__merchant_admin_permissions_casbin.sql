@@ -1,0 +1,7 @@
+-- MERCHANT_ADMIN read access to permissions and roles endpoints
+INSERT INTO casbin_rule (ptype, v0, v1, v2) SELECT 'p', 'MERCHANT_ADMIN', '/v1/permissions', 'GET' WHERE NOT EXISTS (SELECT 1 FROM casbin_rule WHERE ptype='p' AND v0='MERCHANT_ADMIN' AND v1='/v1/permissions' AND v2='GET');
+INSERT INTO casbin_rule (ptype, v0, v1, v2) SELECT 'p', 'MERCHANT_ADMIN', '/v1/permissions/modules', 'GET' WHERE NOT EXISTS (SELECT 1 FROM casbin_rule WHERE ptype='p' AND v0='MERCHANT_ADMIN' AND v1='/v1/permissions/modules' AND v2='GET');
+INSERT INTO casbin_rule (ptype, v0, v1, v2) SELECT 'p', 'MERCHANT_ADMIN', '/v1/permissions/:id', 'GET' WHERE NOT EXISTS (SELECT 1 FROM casbin_rule WHERE ptype='p' AND v0='MERCHANT_ADMIN' AND v1='/v1/permissions/:id' AND v2='GET');
+INSERT INTO casbin_rule (ptype, v0, v1, v2) SELECT 'p', 'MERCHANT_ADMIN', '/v1/permissions/module/:module', 'GET' WHERE NOT EXISTS (SELECT 1 FROM casbin_rule WHERE ptype='p' AND v0='MERCHANT_ADMIN' AND v1='/v1/permissions/module/:module' AND v2='GET');
+INSERT INTO casbin_rule (ptype, v0, v1, v2) SELECT 'p', 'MERCHANT_ADMIN', '/v1/permissions/name/:name', 'GET' WHERE NOT EXISTS (SELECT 1 FROM casbin_rule WHERE ptype='p' AND v0='MERCHANT_ADMIN' AND v1='/v1/permissions/name/:name' AND v2='GET');
+INSERT INTO casbin_rule (ptype, v0, v1, v2) SELECT 'p', 'MERCHANT_ADMIN', '/v1/roles/:id/permissions', 'GET' WHERE NOT EXISTS (SELECT 1 FROM casbin_rule WHERE ptype='p' AND v0='MERCHANT_ADMIN' AND v1='/v1/roles/:id/permissions' AND v2='GET');

@@ -1,11 +1,13 @@
 package com.zuqi.service.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
 import com.zuqi.api.dto.procurement.ProcurementItemDto;
 import com.zuqi.api.dto.procurement.PurchaseOrderRequest;
 import com.zuqi.api.dto.procurement.PurchaseOrderResponse;
 import com.zuqi.api.dto.procurement.PurchaseRequisitionRequest;
 import com.zuqi.api.dto.procurement.PurchaseRequisitionResponse;
+import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.procurement.PoStatus;
 import com.zuqi.domain.procurement.PrStatus;
 import com.zuqi.domain.procurement.PurchaseOrder;
@@ -17,6 +19,8 @@ import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.PurchaseOrderRepository;
 import com.zuqi.repository.PurchaseRequisitionRepository;
 import com.zuqi.repository.SupplierRepository;
+import com.zuqi.service.ApprovalService;
+import com.zuqi.service.ApprovalThresholdService;
 import com.zuqi.service.ProcurementService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -44,6 +48,8 @@ public class ProcurementServiceImpl implements ProcurementService {
     private final DistributorRepository distributorRepository;
     private final SecurityUtils securityUtils;
     private final ObjectMapper objectMapper;
+    private final ApprovalThresholdService approvalThresholdService;
+    private final ApprovalService approvalService;
 
     private String generatePrNumber() {
         long count = prRepository.countAll();
@@ -123,6 +129,23 @@ public class ProcurementServiceImpl implements ProcurementService {
         pr.setStatus(PrStatus.SUBMITTED);
         pr.setSubmittedAt(LocalDateTime.now());
         PurchaseRequisition savedSub = prRepository.save(pr);
+
+        // Route through configurable approval thresholds
+        BigDecimal totalAmount = savedSub.getEstimatedTotalAmount() != null
+                ? savedSub.getEstimatedTotalAmount() : BigDecimal.ZERO;
+        int requiredApprovals = approvalThresholdService.getRequiredApprovals(
+                savedSub.getDistributorId(), ApprovalWorkflowType.PURCHASE_REQUISITION, totalAmount);
+
+        approvalService.createRequest(currentUser.getId(), CreateApprovalRequestDto.builder()
+                .workflowType(ApprovalWorkflowType.PURCHASE_REQUISITION)
+                .entityType("PURCHASE_REQUISITION")
+                .entityId(savedSub.getId())
+                .entityName(savedSub.getPrNumber())
+                .description("Purchase Requisition " + savedSub.getPrNumber() + " — KES " + totalAmount)
+                .requiredApprovals(requiredApprovals)
+                .amount(totalAmount)
+                .build());
+
         return PurchaseRequisitionResponse.fromEntity(savedSub, resolveDistributorName(savedSub.getDistributorId()));
     }
 

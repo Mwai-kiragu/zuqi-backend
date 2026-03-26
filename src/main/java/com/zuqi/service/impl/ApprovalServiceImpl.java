@@ -17,13 +17,18 @@ import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.domain.inventory.Stock;
 import com.zuqi.domain.inventory.StockMovement;
+import com.zuqi.domain.order.Order;
+import com.zuqi.domain.order.OrderStatus;
+import com.zuqi.domain.procurement.PrStatus;
 import com.zuqi.repository.ApprovalActionRepository;
 import com.zuqi.repository.ApprovalRequestRepository;
 import com.zuqi.repository.CustomerRepository;
+import com.zuqi.repository.OrderRepository;
 import com.zuqi.repository.PosShiftRepository;
 import com.zuqi.repository.PriceListRepository;
 import com.zuqi.repository.ProductRepository;
 import com.zuqi.repository.PromotionRepository;
+import com.zuqi.repository.PurchaseRequisitionRepository;
 import com.zuqi.repository.StockMovementRepository;
 import com.zuqi.repository.StockRepository;
 import com.zuqi.repository.SupplierRepository;
@@ -31,6 +36,9 @@ import com.zuqi.repository.UserRepository;
 import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.ApprovalService;
 import com.zuqi.service.EmailService;
+import com.zuqi.service.InvoiceService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -64,9 +72,14 @@ public class ApprovalServiceImpl implements ApprovalService {
     private final StockMovementRepository stockMovementRepository;
     private final StockRepository stockRepository;
     private final PosShiftRepository posShiftRepository;
+    private final PurchaseRequisitionRepository purchaseRequisitionRepository;
+    private final OrderRepository orderRepository;
     private final ActivityLogService activityLogService;
     private final EmailService emailService;
     private final EmailConfig emailConfig;
+
+    @Lazy @Autowired
+    private InvoiceService invoiceService;
 
     private final AtomicLong sequenceCounter = new AtomicLong(0);
 
@@ -210,6 +223,28 @@ public class ApprovalServiceImpl implements ApprovalService {
                 String reconcileStatus = "APPROVED".equals(status) ? "APPROVED" : "REJECTED";
                 posShiftRepository.updateReconciliationStatus(entityId, reconcileStatus,
                         approverId, java.time.LocalDateTime.now());
+            }
+            case "PURCHASE_REQUISITION" -> {
+                PrStatus prStatus = "APPROVED".equals(status) ? PrStatus.APPROVED : PrStatus.REJECTED;
+                purchaseRequisitionRepository.updateStatus(entityId, prStatus);
+            }
+            case "ORDER" -> {
+                orderRepository.findById(entityId).ifPresent(order -> {
+                    if ("APPROVED".equals(status)) {
+                        order.setApprovalStatus("APPROVED");
+                        order.setStatus(OrderStatus.CONFIRMED);
+                        orderRepository.save(order);
+                        try {
+                            invoiceService.createInvoiceFromOrder(order);
+                        } catch (Exception e) {
+                            log.warn("Failed to create invoice for approved order {}: {}", order.getOrderNumber(), e.getMessage());
+                        }
+                    } else {
+                        order.setApprovalStatus("REJECTED");
+                        order.setStatus(OrderStatus.CANCELLED);
+                        orderRepository.save(order);
+                    }
+                });
             }
             default -> { /* no-op for other entity types */ }
         }
