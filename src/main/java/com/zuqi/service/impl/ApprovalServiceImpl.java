@@ -35,6 +35,7 @@ import com.zuqi.repository.SupplierRepository;
 import com.zuqi.repository.UserRepository;
 import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.ApprovalService;
+import com.zuqi.service.ApprovalWorkflowConfigService;
 import com.zuqi.service.EmailService;
 import com.zuqi.service.InvoiceService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -77,6 +78,7 @@ public class ApprovalServiceImpl implements ApprovalService {
     private final ActivityLogService activityLogService;
     private final EmailService emailService;
     private final EmailConfig emailConfig;
+    private final ApprovalWorkflowConfigService approvalWorkflowConfigService;
 
     @Lazy @Autowired
     private InvoiceService invoiceService;
@@ -93,6 +95,15 @@ public class ApprovalServiceImpl implements ApprovalService {
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", requesterId.toString()));
 
         int requiredApprovals = dto.getRequiredApprovals() != null ? dto.getRequiredApprovals() : 1;
+
+        // Override with the merchant's configured workflow levels if available
+        if (dto.getWorkflowType() != null && requester.getDistributorId() != null) {
+            int configuredLevels = approvalWorkflowConfigService.countActiveLevels(
+                    requester.getDistributorId(), dto.getWorkflowType());
+            if (configuredLevels > 0) {
+                requiredApprovals = configuredLevels;
+            }
+        }
 
         ApprovalRequest request = ApprovalRequest.builder()
                 .requestNumber(generateRequestNumber(dto.getWorkflowType()))

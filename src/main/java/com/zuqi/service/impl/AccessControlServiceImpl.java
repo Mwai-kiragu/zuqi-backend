@@ -59,6 +59,7 @@ public class AccessControlServiceImpl implements AccessControlService {
                 .name(request.getName())
                 .description(request.getDescription())
                 .distributorId(distributorId)
+                .baseRole(request.getBaseRole())
                 .build();
 
         if (request.getPermissions() != null) {
@@ -79,6 +80,7 @@ public class AccessControlServiceImpl implements AccessControlService {
 
         ut.setName(request.getName());
         ut.setDescription(request.getDescription());
+        ut.setBaseRole(request.getBaseRole());
 
         if (request.getPermissions() != null) {
             // Build a map of incoming permissions keyed by module
@@ -234,6 +236,7 @@ public class AccessControlServiceImpl implements AccessControlService {
                 .name(ut.getName())
                 .description(ut.getDescription())
                 .distributorId(ut.getDistributorId())
+                .baseRole(ut.getBaseRole())
                 .permissions(perms)
                 .createdAt(ut.getCreatedAt())
                 .updatedAt(ut.getUpdatedAt())
@@ -248,6 +251,7 @@ public class AccessControlServiceImpl implements AccessControlService {
                 .distributorId(g.getDistributorId())
                 .userTypeId(g.getUserType() != null ? g.getUserType().getId() : null)
                 .userTypeName(g.getUserType() != null ? g.getUserType().getName() : null)
+                .userTypeBaseRole(g.getUserType() != null ? g.getUserType().getBaseRole() : null)
                 .workflowTier(g.getWorkflowTier())
                 .approvalLevel(g.getApprovalLevel())
                 .createdAt(g.getCreatedAt())
