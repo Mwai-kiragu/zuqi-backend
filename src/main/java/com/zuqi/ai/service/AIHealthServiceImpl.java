@@ -203,10 +203,10 @@ public class AIHealthServiceImpl implements AIHealthService {
 
     @Override
     public void triggerRetrainModel(String modelName) {
-        log.info("Retrain requested for model '{}' — launching full pipeline (models are co-trained)", modelName);
+        log.info("Retrain requested for model '{}'", modelName);
         SyntheticDataConfig config = SyntheticDataConfig.defaultConfig(null, 42L);
         AISyntheticRun run = syntheticDataOrchestrator.createRunRecord(null, config, "retrain-model:" + modelName);
-        syntheticGenerationService.generateAsync(run.getId(), config);
+        syntheticGenerationService.generateAsync(run.getId(), config, java.util.Set.of(modelName));
         log.info("Retrain-model '{}': async run {} enqueued", modelName, run.getId());
     }
 
