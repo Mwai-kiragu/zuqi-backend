@@ -14,6 +14,9 @@ public class UserTypeRequest {
 
     private String description;
 
+    /** System role this type maps to (e.g. SALES_REP, FINANCE). Drives Casbin authorization. */
+    private String baseRole;
+
     @Valid
     private List<UserTypePermissionDto> permissions;
 }

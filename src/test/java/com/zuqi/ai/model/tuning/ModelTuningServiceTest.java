@@ -16,22 +16,27 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.tribuo.Example;
+import org.tribuo.Model;
 import org.tribuo.MutableDataset;
 import org.tribuo.Trainer;
 import org.tribuo.anomaly.Event;
 import org.tribuo.classification.Label;
 import org.tribuo.clustering.ClusterID;
+import org.tribuo.impl.ArrayExample;
 import org.tribuo.regression.Regressor;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -55,6 +60,7 @@ class ModelTuningServiceTest {
     @Mock private ModelRegistry                  modelRegistry;
     @Mock private DataPhaseTracker               phaseTracker;
     @Mock private CrossValidationTuner           cvTuner;
+    @Mock private HoldoutValidator               holdoutValidator;
     @Mock private Trainer<ClusterID>             kMeansTrainer;
     @Mock private SyntheticDataBundle            bundle;
     @Mock private AIModelRegistry                registryEntry;
@@ -69,7 +75,8 @@ class ModelTuningServiceTest {
     @BeforeEach
     void setUp() {
         service = new ModelTuningService(
-                orchestrator, featureStore, dataMixer, modelRegistry, phaseTracker, cvTuner, kMeansTrainer);
+                orchestrator, featureStore, dataMixer, modelRegistry, phaseTracker,
+                cvTuner, holdoutValidator, kMeansTrainer);
 
         // Common stubs
         when(orchestrator.generateBundle(any())).thenReturn(bundle);
@@ -147,6 +154,97 @@ class ModelTuningServiceTest {
         assertThat(result.errors().get(0)).contains(DataPhaseTracker.MODEL_CREDIT_CLASSIFIER);
     }
 
+    // ── Holdout gate ──────────────────────────────────────────────────────
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void tuneClassifier_holdoutFails_skipsRegistryAndAddsError() {
+        // 20 examples with two classes — passes minimum-count and single-class checks.
+        // Use local variable + diamond so Java can infer the ArrayExample type parameter.
+        List<Example<Label>> labeledExamples = buildLabeledExamples(10);
+
+        when(featureStore.buildCreditClassifierExamples(any())).thenReturn(labeledExamples);
+        // doReturn avoids generic type inference issues with DataMixer's <T extends Output<T>> signature
+        doReturn(labeledExamples).when(dataMixer)
+                .buildTrainingDataset(anyString(), any(), anyList(), anyList());
+
+        HoldoutValidator.HoldoutSplit<Example<Label>> fakeSplit =
+                new HoldoutValidator.HoldoutSplit<>(
+                        labeledExamples.subList(0, 16), labeledExamples.subList(16, 20));
+        doReturn(fakeSplit).when(holdoutValidator).split(anyList());
+
+        // CV tuner → mock trainer → mock model (serializable so serialize() doesn't throw)
+        Trainer<Label> mockTrainer = (Trainer<Label>) org.mockito.Mockito.mock(Trainer.class);
+        Model<Label> mockModel = (Model<Label>) org.mockito.Mockito.mock(Model.class,
+                org.mockito.Mockito.withSettings().serializable());
+        doReturn(mockModel).when(mockTrainer).train(any());
+        CandidateConfig<Label> cfg = new CandidateConfig<>(mockTrainer, Map.of("num_rounds", 50));
+        CrossValidationTuner.BestConfig<Label> bestConfig =
+                new CrossValidationTuner.BestConfig<>(cfg, 0.72, "macro_f1", 5, 4);
+        when(cvTuner.tuneClassifier(anyString(), anyList(), any())).thenReturn(bestConfig);
+
+        // Holdout FAILS — gate should block registerAndPromote
+        when(holdoutValidator.validateClassifier(any(), anyList(), anyString()))
+                .thenReturn(new ValidationResult(false, "macro_f1", 0.42, 0.60));
+
+        stubRemainingModelsEmpty();
+
+        ModelTuningService.TuningRunResult result =
+                service.tuneAllModels(distributorId, dummyConfig(),
+                        Set.of(DataPhaseTracker.MODEL_CREDIT_CLASSIFIER));
+
+        // Registry must NOT have been called — promotion was blocked by the holdout gate
+        verify(modelRegistry, never()).registerModel(anyString(), anyString(), any(), anyString());
+        assertThat(result.results()).isEmpty();
+        assertThat(result.errors()).hasSize(1);
+        assertThat(result.errors().get(0)).contains(DataPhaseTracker.MODEL_CREDIT_CLASSIFIER);
+        assertThat(result.errors().get(0)).contains("holdout validation failed");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void tuneClassifier_holdoutSkipped_promotesModel() {
+        List<Example<Label>> labeledExamples = buildLabeledExamples(10);
+
+        when(featureStore.buildCreditClassifierExamples(any())).thenReturn(labeledExamples);
+        doReturn(labeledExamples).when(dataMixer)
+                .buildTrainingDataset(anyString(), any(), anyList(), anyList());
+
+        HoldoutValidator.HoldoutSplit<Example<Label>> fakeSplit =
+                new HoldoutValidator.HoldoutSplit<>(
+                        labeledExamples.subList(0, 16), labeledExamples.subList(16, 20));
+        doReturn(fakeSplit).when(holdoutValidator).split(anyList());
+
+        Trainer<Label> mockTrainer = (Trainer<Label>) org.mockito.Mockito.mock(Trainer.class);
+        Model<Label> mockModel = (Model<Label>) org.mockito.Mockito.mock(Model.class,
+                org.mockito.Mockito.withSettings().serializable());
+        doReturn(mockModel).when(mockTrainer).train(any());
+        CandidateConfig<Label> cfg = new CandidateConfig<>(mockTrainer, Map.of("num_rounds", 50));
+        CrossValidationTuner.BestConfig<Label> bestConfig =
+                new CrossValidationTuner.BestConfig<>(cfg, 0.80, "macro_f1", 5, 4);
+        when(cvTuner.tuneClassifier(anyString(), anyList(), any())).thenReturn(bestConfig);
+
+        // Holdout SKIPPED (too-small holdout) — treated as passing, model should be promoted
+        when(holdoutValidator.validateClassifier(any(), anyList(), anyString()))
+                .thenReturn(ValidationResult.skipped("macro_f1"));
+
+        when(registryEntry.getId()).thenReturn(modelId);
+        when(modelRegistry.registerModel(any(), any(), any(), any())).thenReturn(registryEntry);
+        when(modelRegistry.promoteToActive(any())).thenReturn(registryEntry);
+
+        stubRemainingModelsEmpty();
+
+        ModelTuningService.TuningRunResult result =
+                service.tuneAllModels(distributorId, dummyConfig(),
+                        Set.of(DataPhaseTracker.MODEL_CREDIT_CLASSIFIER));
+
+        verify(modelRegistry).registerModel(anyString(), anyString(), any(), anyString());
+        assertThat(result.results()).hasSize(1);
+        assertThat(result.results().get(0).modelName()).isEqualTo(DataPhaseTracker.MODEL_CREDIT_CLASSIFIER);
+        assertThat(result.results().get(0).holdoutPassed()).isTrue();
+        assertThat(result.errors()).isEmpty();
+    }
+
     // ── TuningRunResult record ────────────────────────────────────────────
 
     @Test
@@ -189,6 +287,35 @@ class ModelTuningServiceTest {
         // DataMixer returns empty for all calls → all models skip due to MIN_EXAMPLES
         when(dataMixer.buildTrainingDataset(anyString(), any(), anyList(), anyList()))
                 .thenReturn(List.of());
+    }
+
+    /**
+     * Builds {@code pairsOf2} × 2 labeled examples (equal HIGH/LOW split) using a local
+     * variable declaration so that {@code ArrayExample<>}'s diamond operator can infer Label.
+     */
+    private List<Example<Label>> buildLabeledExamples(int pairsOf2) {
+        List<Example<Label>> list = new ArrayList<>();
+        for (int i = 0; i < pairsOf2; i++) {
+            ArrayExample<Label> hi = new ArrayExample<>(
+                    new Label("HIGH"), new String[]{"f1", "f2"}, new double[]{i, i * 2.0});
+            ArrayExample<Label> lo = new ArrayExample<>(
+                    new Label("LOW"), new String[]{"f1", "f2"}, new double[]{i + 0.5, i});
+            list.add(hi);
+            list.add(lo);
+        }
+        return list;
+    }
+
+    /** Stubs all non-credit-classifier feature stores to return empty, causing those models to skip. */
+    private void stubRemainingModelsEmpty() {
+        when(featureStore.buildCreditLimitRegressorExamples(any())).thenReturn(List.of());
+        when(featureStore.buildDemandForecasterExamples(any())).thenReturn(List.of());
+        when(featureStore.buildStockoutPredictorExamples(any())).thenReturn(List.of());
+        when(featureStore.buildShrinkageDetectorExamples(any())).thenReturn(List.of());
+        when(featureStore.buildPaymentAnomalyExamples(any())).thenReturn(List.of());
+        when(featureStore.buildPaymentDistressExamples(any())).thenReturn(List.of());
+        when(featureStore.buildRepPerformancePredictorExamples(any())).thenReturn(List.of());
+        when(featureStore.buildDataQualityExamples(any())).thenReturn(List.of());
     }
 
     private SyntheticDataConfig dummyConfig() {

@@ -15,6 +15,7 @@ public class UserGroupResponse {
     private UUID distributorId;
     private UUID userTypeId;
     private String userTypeName;
+    private String userTypeBaseRole;
     private String workflowTier;
     private Integer approvalLevel;
     private LocalDateTime createdAt;

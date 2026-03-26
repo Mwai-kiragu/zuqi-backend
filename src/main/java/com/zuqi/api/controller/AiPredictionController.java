@@ -120,7 +120,7 @@ public class AiPredictionController {
         log.info("GET /v1/ai/prediction/rep-performance distributor={}", distributorId);
 
         try {
-            List<RepPerformancePredictor.RepPerformanceResult> results =
+            List<RepDisplayItem> results =
                     userRepository.findByDistributorIdAndActiveTrue(distributorId)
                             .stream()
                             .filter(u -> u.getRoles().stream()
@@ -129,13 +129,13 @@ public class AiPredictionController {
                                 RepPerformancePredictor.RepPerformanceResult r =
                                         repPerformancePredictor.predict(u.getId());
                                 predictionAlertService.evaluateRepPerformanceAndAlert(r, distributorId);
-                                return r;
+                                String name = u.getFirstName() + " " + u.getLastName();
+                                return toRepDisplayItem(r, name);
                             })
                             .toList();
 
             long atRisk = results.stream()
-                    .filter(r -> "AT_RISK".equals(r.performanceTier())
-                            || "CRITICAL".equals(r.performanceTier()))
+                    .filter(r -> "AT_RISK".equals(r.tier()) || "CRITICAL".equals(r.tier()))
                     .count();
 
             RepBatchResponse response = new RepBatchResponse(results.size(), (int) atRisk, results);
@@ -224,9 +224,26 @@ public class AiPredictionController {
         return (pct > 0 ? "+" : "") + String.format("%.0f%%", pct);
     }
 
+    /** All fields the frontend RepPerformancePrediction interface expects. */
+    public record RepDisplayItem(
+            UUID   salesRepId,
+            String salesRepName,
+            double predictedScore,   // 0-1 scale
+            Double actualScore,      // null if not available
+            String tier,
+            String trendDirection    // UP | DOWN | STABLE
+    ) {}
+
     public record RepBatchResponse(
             int  totalReps,
             int  atRiskCount,
-            List<RepPerformancePredictor.RepPerformanceResult> predictions
+            List<RepDisplayItem> predictions
     ) {}
+
+    private RepDisplayItem toRepDisplayItem(
+            RepPerformancePredictor.RepPerformanceResult r, String name) {
+        double score01 = r.performanceScore() / 100.0;
+        String trend = score01 >= 0.70 ? "UP" : score01 <= 0.40 ? "DOWN" : "STABLE";
+        return new RepDisplayItem(r.salesRepId(), name, score01, null, r.performanceTier(), trend);
+    }
 }

@@ -29,7 +29,7 @@ public class CreateUserRequest {
 
     private String password;
 
-    @NotBlank(message = "Role is required")
+    /** Role for Casbin authorization. Optional when userGroupId is provided and the UserType has a baseRole configured. */
     private String role;
 
     private UUID distributorId;

@@ -14,6 +14,7 @@ public class UserTypeResponse {
     private String name;
     private String description;
     private UUID distributorId;
+    private String baseRole;
     private List<UserTypePermissionDto> permissions;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

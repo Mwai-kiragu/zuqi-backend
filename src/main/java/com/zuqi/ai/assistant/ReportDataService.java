@@ -42,6 +42,13 @@ public class ReportDataService {
     private final CashFlowTool              cashFlowTool;
     private final ArAgingTool               arAgingTool;
     private final ApAgingTool               apAgingTool;
+    private final ExpiryRiskTool            expiryRiskTool;
+    private final ReorderSuggestionTool     reorderSuggestionTool;
+    private final ChurnRiskTool             churnRiskTool;
+    private final CustomerHealthTool        customerHealthTool;
+    private final SupplierRiskTool          supplierRiskTool;
+    private final PriceTrendTool            priceTrendTool;
+    private final CustomerSegmentTool       customerSegmentTool;
     private final ObjectMapper            objectMapper;
 
     public ReportDataResponse getReportData(UUID distributorId, ReportType type, int periodDays) {
@@ -106,6 +113,29 @@ public class ReportDataService {
             }
             case AP_AGING -> {
                 data.put("apAging",   parse(apAgingTool.getApAging(distId)));
+            }
+            case EXPIRY_RISK -> {
+                data.put("expiryRisks", parse(expiryRiskTool.getExpiryRisks(distId)));
+                data.put("inventory",   parse(inventoryHealthTool.getInventoryHealth(distId)));
+            }
+            case REORDER_SUGGESTIONS -> {
+                data.put("reorderSuggestions", parse(reorderSuggestionTool.getReorderSuggestions(distId)));
+                data.put("inventory",          parse(inventoryHealthTool.getInventoryHealth(distId)));
+            }
+            case CHURN_RISK -> {
+                data.put("churnRisk", parse(churnRiskTool.getChurnRisk(distId)));
+                data.put("merchants", parse(merchantMetricsTool.getMerchantMetrics(distId)));
+            }
+            case CUSTOMER_HEALTH -> {
+                data.put("customerHealth",   parse(customerHealthTool.getCustomerHealth(distId)));
+                data.put("customerSegments", parse(customerSegmentTool.getCustomerSegments(distId)));
+            }
+            case SUPPLIER_RISK -> {
+                data.put("supplierRisk", parse(supplierRiskTool.getSupplierRisk(distId)));
+            }
+            case PRICE_TRENDS -> {
+                data.put("priceTrends", parse(priceTrendTool.getPriceTrends(distId)));
+                data.put("supplierRisk", parse(supplierRiskTool.getSupplierRisk(distId)));
             }
         }
 

@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -28,6 +29,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/v1/inventory")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "Inventory", description = "Inventory management APIs")
 public class InventoryController {
 
@@ -48,11 +50,20 @@ public class InventoryController {
     private void enrichWithAiPredictions(Page<StockResponse> page) {
         page.getContent().forEach(item -> {
             if (item.getWarehouseId() != null && item.getProductId() != null) {
-                StockoutPredictor.StockoutResult result =
-                        stockoutPredictor.predict(item.getWarehouseId(), item.getProductId());
-                item.setAiRiskScore(result.riskScore());
-                item.setAiDaysUntilStockout(result.daysUntilStockout());
-                item.setAiDemand7d(result.demand7d());
+                try {
+                    StockoutPredictor.StockoutResult result =
+                            stockoutPredictor.predict(item.getWarehouseId(), item.getProductId());
+                    item.setAiRiskScore(result.riskScore());
+                    item.setAiDaysUntilStockout(result.daysUntilStockout());
+                    item.setAiDemand7d(result.demand7d());
+                } catch (Exception e) {
+                    // AI prediction is non-critical — log and continue with safe defaults
+                    log.warn("AI prediction failed for warehouse={} product={}: {}",
+                            item.getWarehouseId(), item.getProductId(), e.getMessage());
+                    item.setAiRiskScore(0.3);
+                    item.setAiDaysUntilStockout(30.0);
+                    item.setAiDemand7d(0.0);
+                }
             }
         });
     }
