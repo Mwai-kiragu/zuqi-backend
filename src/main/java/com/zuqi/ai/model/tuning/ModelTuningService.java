@@ -46,15 +46,28 @@ import java.util.stream.Collectors;
  * <ol>
  *   <li>Generate a deterministic synthetic bundle.</li>
  *   <li>Build Tribuo training examples via {@link SyntheticFeatureStore}.</li>
- *   <li>Run k-fold CV over the {@link HyperparameterGrid} via {@link CrossValidationTuner}.</li>
- *   <li>Re-train a final model with the best hyperparameters.</li>
- *   <li>Register, stamp data-phase metadata, and promote to ACTIVE.</li>
+ *   <li>Split examples 80 / 20 into a training partition and a held-out validation set.</li>
+ *   <li>Run k-fold CV over the {@link HyperparameterGrid} on the <em>training partition only</em>.</li>
+ *   <li>Re-train a final model on the training partition with the best hyperparameters.</li>
+ *   <li>Evaluate the final model on the holdout set via {@link HoldoutValidator}.</li>
+ *   <li>If the holdout metric clears the threshold, register, stamp data-phase metadata,
+ *       and promote to ACTIVE; otherwise log a warning and skip promotion.</li>
  *   <li>Persist best hyperparameters via {@link ModelRegistry#updateHyperparameters}.</li>
  * </ol>
+ *
+ * <h3>Holdout thresholds</h3>
+ * <ul>
+ *   <li>Classifiers:       macro-F1 ≥ {@value HoldoutValidator#MIN_CLASSIFIER_F1}</li>
+ *   <li>Regressors:        normalised RMSE ≤ {@value HoldoutValidator#MAX_REGRESSOR_NRMSE}</li>
+ *   <li>Anomaly detectors: anomaly F1 ≥ {@value HoldoutValidator#MIN_ANOMALY_F1}</li>
+ *   <li>K-Means (unsupervised): no holdout gate — always promoted.</li>
+ * </ul>
  *
  * <h3>Failure isolation</h3>
  * Tuning failures for individual models are caught, logged, and collected in the
  * {@link TuningRunResult} — they do not abort tuning for the remaining models.
+ * Holdout failures are also collected as errors so the operator is alerted and the
+ * previous ACTIVE version remains live.
  */
 @Service
 @Slf4j
@@ -67,6 +80,7 @@ public class ModelTuningService {
     private final ModelRegistry             modelRegistry;
     private final DataPhaseTracker          phaseTracker;
     private final CrossValidationTuner      cvTuner;
+    private final HoldoutValidator          holdoutValidator;
     private final Trainer<ClusterID>        kMeansTrainer;
 
     static final int MIN_CLASSIFICATION_EXAMPLES = 10;
@@ -230,19 +244,36 @@ public class ModelTuningService {
 
             // Oversample minority class so XGBoost doesn't ignore it
             List<Example<Label>> balanced = oversampleMinorityClass(mixed, modelName);
-            MutableDataset<Label> dataset = toClassificationDataset(balanced, modelName);
-            CrossValidationTuner.BestConfig<Label> best = cvTuner.tuneClassifier(
-                    modelName, candidates, dataset);
 
-            Model<Label> finalModel = best.config().trainer().train(dataset);
+            // Split 80/20 before CV — holdout is never seen during tuning or training
+            HoldoutValidator.HoldoutSplit<Example<Label>> split = holdoutValidator.split(balanced);
+            MutableDataset<Label> trainDataset = toClassificationDataset(split.train(), modelName);
+
+            CrossValidationTuner.BestConfig<Label> best = cvTuner.tuneClassifier(
+                    modelName, candidates, trainDataset);
+
+            Model<Label> finalModel = best.config().trainer().train(trainDataset);
+
+            ValidationResult holdout = holdoutValidator.validateClassifier(
+                    finalModel, split.holdout(), modelName);
+            if (!holdout.passed()) {
+                log.warn("[Tuning] {} — holdout FAILED ({} = {} < threshold {}), skipping promotion",
+                        modelName, holdout.metricName(), holdout.holdoutValue(), holdout.threshold());
+                errors.add(modelName + ": holdout validation failed ("
+                        + holdout.metricName() + "=" + holdout.holdoutValue()
+                        + " < " + holdout.threshold() + ")");
+                return;
+            }
+
             UUID modelId = registerAndPromote(modelName, "xgboost_classification",
                     finalModel, best.config().hyperparameters(),
-                    mixed.size(), 0, distributorId, best.metricValue(), best.metricName());
+                    mixed.size(), 0, distributorId, best.metricValue(), best.metricName(), holdout);
 
             results.add(new TuningResult(modelName, modelId,
                     best.config().hyperparameters(),
                     best.metricValue(), best.metricName(),
-                    best.candidatesEvaluated(), best.numFolds()));
+                    best.candidatesEvaluated(), best.numFolds(),
+                    holdout.metricName(), holdout.holdoutValue(), holdout.passed()));
 
         } catch (Exception e) {
             log.error("[Tuning] {} failed: {}", modelName, e.getMessage(), e);
@@ -267,19 +298,35 @@ public class ModelTuningService {
                 return;
             }
 
-            MutableDataset<Regressor> dataset = toRegressionDataset(mixed, modelName);
-            CrossValidationTuner.BestConfig<Regressor> best = cvTuner.tuneRegressor(
-                    modelName, candidates, dataset);
+            // Split 80/20 before CV — holdout is never seen during tuning or training
+            HoldoutValidator.HoldoutSplit<Example<Regressor>> split = holdoutValidator.split(mixed);
+            MutableDataset<Regressor> trainDataset = toRegressionDataset(split.train(), modelName);
 
-            Model<Regressor> finalModel = best.config().trainer().train(dataset);
+            CrossValidationTuner.BestConfig<Regressor> best = cvTuner.tuneRegressor(
+                    modelName, candidates, trainDataset);
+
+            Model<Regressor> finalModel = best.config().trainer().train(trainDataset);
+
+            ValidationResult holdout = holdoutValidator.validateRegressor(
+                    finalModel, split.holdout(), modelName);
+            if (!holdout.passed()) {
+                log.warn("[Tuning] {} — holdout FAILED ({} = {} > threshold {}), skipping promotion",
+                        modelName, holdout.metricName(), holdout.holdoutValue(), holdout.threshold());
+                errors.add(modelName + ": holdout validation failed ("
+                        + holdout.metricName() + "=" + holdout.holdoutValue()
+                        + " > " + holdout.threshold() + ")");
+                return;
+            }
+
             UUID modelId = registerAndPromote(modelName, "xgboost_regression",
                     finalModel, best.config().hyperparameters(),
-                    mixed.size(), 0, distributorId, best.metricValue(), best.metricName());
+                    mixed.size(), 0, distributorId, best.metricValue(), best.metricName(), holdout);
 
             results.add(new TuningResult(modelName, modelId,
                     best.config().hyperparameters(),
                     best.metricValue(), best.metricName(),
-                    best.candidatesEvaluated(), best.numFolds()));
+                    best.candidatesEvaluated(), best.numFolds(),
+                    holdout.metricName(), holdout.holdoutValue(), holdout.passed()));
 
         } catch (Exception e) {
             log.error("[Tuning] {} failed: {}", modelName, e.getMessage(), e);
@@ -299,34 +346,57 @@ public class ModelTuningService {
             List<Example<Event>> mixed = dataMixer.buildTrainingDataset(
                     modelName, distributorId, List.of(), examples);
 
-            // LibSVMAnomalyTrainer (one-class SVM) only accepts EXPECTED events at training
-            // time. CV tuner receives ALL examples so test folds contain ANOMALOUS examples
-            // for meaningful F1 evaluation. The final model is still trained on EXPECTED only.
-            List<Example<Event>> trainingExamples = mixed.stream()
-                    .filter(ex -> ex.getOutput().getType() == Event.EventType.EXPECTED)
-                    .collect(Collectors.toList());
-
-            if (trainingExamples.size() < MIN_ANOMALY_EXAMPLES) {
-                log.warn("[Tuning] {} — too few EXPECTED examples ({} total, {} expected), skipping",
-                        modelName, mixed.size(), trainingExamples.size());
+            if (mixed.size() < MIN_ANOMALY_EXAMPLES) {
+                log.warn("[Tuning] {} — too few examples ({}), skipping", modelName, mixed.size());
                 return;
             }
 
-            // Pass ALL examples to CV so test folds include ANOMALOUS events
+            // Split 80/20 before CV — holdout is never seen during tuning or training.
+            // LibSVMAnomalyTrainer (one-class SVM) only accepts EXPECTED events at training
+            // time. CV tuner receives ALL examples from the train split so test folds contain
+            // ANOMALOUS events for meaningful F1 evaluation. The final model is trained on
+            // EXPECTED-only examples from the train split.
+            HoldoutValidator.HoldoutSplit<Example<Event>> split = holdoutValidator.split(mixed);
+
+            List<Example<Event>> trainExpected = split.train().stream()
+                    .filter(ex -> ex.getOutput().getType() == Event.EventType.EXPECTED)
+                    .collect(Collectors.toList());
+
+            if (trainExpected.size() < MIN_ANOMALY_EXAMPLES) {
+                log.warn("[Tuning] {} — too few EXPECTED examples in train split ({} total, {} expected), skipping",
+                        modelName, mixed.size(), trainExpected.size());
+                return;
+            }
+
+            // Pass the full train split (EXPECTED + ANOMALOUS) to CV for F1 evaluation
             CrossValidationTuner.BestConfig<Event> best = cvTuner.tuneAnomalyDetector(
-                    modelName, candidates, mixed);
+                    modelName, candidates, split.train());
 
             // Final model trained on EXPECTED-only (LibSVM requirement)
-            MutableDataset<Event> finalTrainDataset = toAnomalyDataset(trainingExamples, modelName + "_tuning");
+            MutableDataset<Event> finalTrainDataset = toAnomalyDataset(trainExpected, modelName + "_tuning");
             Model<Event> finalModel = best.config().trainer().train(finalTrainDataset);
+
+            // Holdout set contains EXPECTED + ANOMALOUS for meaningful F1 evaluation
+            ValidationResult holdout = holdoutValidator.validateAnomalyDetector(
+                    finalModel, split.holdout(), modelName);
+            if (!holdout.passed()) {
+                log.warn("[Tuning] {} — holdout FAILED ({} = {} < threshold {}), skipping promotion",
+                        modelName, holdout.metricName(), holdout.holdoutValue(), holdout.threshold());
+                errors.add(modelName + ": holdout validation failed ("
+                        + holdout.metricName() + "=" + holdout.holdoutValue()
+                        + " < " + holdout.threshold() + ")");
+                return;
+            }
+
             UUID modelId = registerAndPromote(modelName, "libsvm_anomaly",
                     finalModel, best.config().hyperparameters(),
-                    mixed.size(), 0, distributorId, best.metricValue(), best.metricName());
+                    mixed.size(), 0, distributorId, best.metricValue(), best.metricName(), holdout);
 
             results.add(new TuningResult(modelName, modelId,
                     best.config().hyperparameters(),
                     best.metricValue(), best.metricName(),
-                    best.candidatesEvaluated(), best.numFolds()));
+                    best.candidatesEvaluated(), best.numFolds(),
+                    holdout.metricName(), holdout.holdoutValue(), holdout.passed()));
 
         } catch (Exception e) {
             log.error("[Tuning] {} failed: {}", modelName, e.getMessage(), e);
@@ -370,7 +440,8 @@ public class ModelTuningService {
                                      Map<String, Object> rawHyperparameters,
                                      int syntheticCount, int realCount,
                                      UUID distributorId,
-                                     double metricValue, String metricName) {
+                                     double metricValue, String metricName,
+                                     ValidationResult holdout) {
 
         Map<String, Object> hparams = new LinkedHashMap<>(rawHyperparameters);
         hparams.put("tuning_metric",       metricName);
@@ -382,13 +453,18 @@ public class ModelTuningService {
                 modelName, algorithm, hparams, "hyperparameter_tuner");
 
         int featureCount = safeFeatureCount(model);
-        Map<String, Object> metrics = Map.of(
-                "training_phase",     "SYNTHETIC",
-                "synthetic_records",  syntheticCount,
-                "real_records",       realCount,
-                "feature_count",      featureCount,
-                metricName,           metricValue
-        );
+        Map<String, Object> metrics = new LinkedHashMap<>();
+        metrics.put("training_phase",    "SYNTHETIC");
+        metrics.put("synthetic_records", syntheticCount);
+        metrics.put("real_records",      realCount);
+        metrics.put("feature_count",     featureCount);
+        metrics.put(metricName,          metricValue);
+        if (holdout != null && !holdout.wasSkipped()) {
+            metrics.put("holdout_" + holdout.metricName(), holdout.holdoutValue());
+            metrics.put("holdout_threshold",               holdout.threshold());
+            metrics.put("holdout_passed",                  holdout.passed());
+        }
+
         modelRegistry.updateModelAfterTraining(
                 entry.getId(), metrics, serialize(model), Map.of("feature_count", featureCount));
         modelRegistry.setDataPhaseMetadata(
@@ -396,8 +472,14 @@ public class ModelTuningService {
         modelRegistry.promoteToActive(entry.getId());
         modelRegistry.updateHyperparameters(entry.getId(), hparams);
 
-        log.info("[Tuning] Registered and promoted {} ({}={}, id={})",
-                modelName, metricName, metricValue, entry.getId());
+        if (holdout != null && !holdout.wasSkipped()) {
+            log.info("[Tuning] Registered and promoted {} ({}={}, holdout_{}={}, id={})",
+                    modelName, metricName, metricValue,
+                    holdout.metricName(), holdout.holdoutValue(), entry.getId());
+        } else {
+            log.info("[Tuning] Registered and promoted {} ({}={}, id={})",
+                    modelName, metricName, metricValue, entry.getId());
+        }
         return entry.getId();
     }
 
@@ -486,7 +568,7 @@ public class ModelTuningService {
 
             UUID modelId = registerAndPromote(modelName, "kmeans",
                     model, hparams, dataset.size(), 0,
-                    distributorId, (double) dataset.size(), "num_examples");
+                    distributorId, (double) dataset.size(), "num_examples", null);
 
             results.add(new TuningResult(modelName, modelId, hparams,
                     dataset.size(), "num_examples", 1, 0));
