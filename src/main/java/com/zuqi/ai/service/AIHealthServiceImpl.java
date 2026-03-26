@@ -106,16 +106,24 @@ public class AIHealthServiceImpl implements AIHealthService {
         List<AIModelRegistry> models = modelRegistryRepository.findByStatus(ModelStatus.ACTIVE);
 
         List<AIModelListResponse.ModelSummary> summaries = models.stream()
-                .map(model -> AIModelListResponse.ModelSummary.builder()
-                        .id(model.getId())
-                        .modelName(model.getModelName())
-                        .version(model.getModelVersion().toString())
-                        .status(model.getStatus())
-                        .modelType(model.getAlgorithm())
-                        .accuracy(extractMetric(model, "accuracy"))
-                        .trainedAt(model.getCreatedAt())
-                        .promotedAt(model.getPromotedAt())
-                        .build())
+                .map(model -> {
+                    String[] primary = primaryMetric(model.getModelName());
+                    String metricKey  = primary[0];
+                    String metricName = primary[1];
+                    Double metricValue = extractMetric(model, metricKey);
+                    return AIModelListResponse.ModelSummary.builder()
+                            .id(model.getId())
+                            .modelName(model.getModelName())
+                            .version(model.getModelVersion().toString())
+                            .status(model.getStatus())
+                            .modelType(model.getAlgorithm())
+                            .accuracy(extractMetric(model, "accuracy"))
+                            .primaryMetricName(metricName)
+                            .primaryMetricValue(metricValue)
+                            .trainedAt(model.getCreatedAt())
+                            .promotedAt(model.getPromotedAt())
+                            .build();
+                })
                 .toList();
 
         return AIModelListResponse.builder()
@@ -222,6 +230,33 @@ public class AIHealthServiceImpl implements AIHealthService {
             return ((Number) value).doubleValue();
         }
         return null;
+    }
+
+    /**
+     * Returns [metricKey, displayName] for the primary quality metric of each model.
+     * metricKey matches what the training pipeline stores in performance_metrics JSON.
+     */
+    private String[] primaryMetric(String modelName) {
+        return switch (modelName) {
+            case "credit_classifier",
+                 "stockout_predictor",
+                 "payment_distress_classifier",
+                 "data_quality_detector",
+                 "data_quality_classifier",
+                 "churn_predictor",
+                 "bank_recon_matcher",
+                 "expiry_risk_predictor"     -> new String[]{"auc_roc",  "AUC-ROC"};
+            case "shrinkage_detector",
+                 "payment_anomaly_detector"  -> new String[]{"f1",       "F1"};
+            case "cash_flow_predictor"       -> new String[]{"r2",       "R²"};
+            case "demand_forecaster",
+                 "credit_limit_regressor",
+                 "rep_performance_predictor",
+                 "customer_clv_predictor",
+                 "visit_optimizer",
+                 "smart_pricing_recommender" -> new String[]{"rmse",     "RMSE"};
+            default                          -> new String[]{"accuracy", "Accuracy"};
+        };
     }
 
     // ==================== Helper Methods ====================

@@ -25,6 +25,8 @@ public record AIModelListResponse(
             ModelStatus status,
             String modelType,
             Double accuracy,
+            String primaryMetricName,   // e.g. "auc_roc", "rmse", "r2"
+            Double primaryMetricValue,  // raw value from performance_metrics
             LocalDateTime trainedAt,
             LocalDateTime promotedAt
     ) {}
