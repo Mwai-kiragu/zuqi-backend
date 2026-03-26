@@ -164,7 +164,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         emailService.sendEmailVerificationOtpEmail(savedUser, otp);
 
         // Generate tokens
-        String accessToken = jwtService.generateAccessToken(savedUser);
+        String accessToken = jwtService.generateUserAccessToken(savedUser);
         String refreshToken = createRefreshToken(savedUser);
 
         return AuthenticationResponse.builder()
@@ -295,7 +295,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         emailService.sendEmailVerificationOtpEmail(savedUser, otp);
 
         // 6. Generate tokens
-        String accessToken = jwtService.generateAccessToken(savedUser);
+        String accessToken = jwtService.generateUserAccessToken(savedUser);
         String refreshToken = createRefreshToken(savedUser);
 
         return AuthenticationResponse.builder()
@@ -438,7 +438,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         emailService.sendEmailVerificationOtpEmail(savedUser, otp);
 
         // 9. Generate tokens
-        String accessToken = jwtService.generateAccessToken(savedUser);
+        String accessToken = jwtService.generateUserAccessToken(savedUser);
         String refreshToken = createRefreshToken(savedUser);
 
         return AuthenticationResponse.builder()
@@ -490,7 +490,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         }
 
         // Generate tokens
-        String accessToken = jwtService.generateAccessToken(user);
+        String accessToken = jwtService.generateUserAccessToken(user);
         String refreshToken = createRefreshToken(user);
 
         log.info("User authenticated successfully: {}", user.getEmail());
@@ -544,7 +544,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         refreshTokenRepository.save(storedToken);
 
         // Generate new tokens
-        String accessToken = jwtService.generateAccessToken(user);
+        String accessToken = jwtService.generateUserAccessToken(user);
         String newRefreshToken = createRefreshToken(user);
 
         return AuthenticationResponse.builder()
@@ -709,7 +709,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         log.info("Email verified successfully for: {}", user.getEmail());
 
         // Generate fresh tokens
-        String accessToken = jwtService.generateAccessToken(user);
+        String accessToken = jwtService.generateUserAccessToken(user);
         String refreshToken = createRefreshToken(user);
 
         return AuthenticationResponse.builder()

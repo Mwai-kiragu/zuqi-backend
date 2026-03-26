@@ -2,6 +2,7 @@ package com.zuqi.service.impl;
 
 import com.zuqi.api.dto.ft.*;
 import com.zuqi.domain.ft.*;
+import com.zuqi.domain.procurement.GrnStatus;
 import com.zuqi.domain.supplier.Supplier;
 import com.zuqi.domain.supplier.SupplierBill;
 import com.zuqi.exception.ResourceNotFoundException;
@@ -40,6 +41,7 @@ public class FundsTransferServiceImpl implements FundsTransferService {
     private final SupplierBillRepository supplierBillRepository;
     private final GlAutoPostingService glAutoPostingService;
     private final SupplierBillService supplierBillService;
+    private final GoodsReceiptNoteRepository grnRepository;
     private final SecurityUtils securityUtils;
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -354,6 +356,18 @@ public class FundsTransferServiceImpl implements FundsTransferService {
         if (ft.getStatus() != FundsTransferStatus.APPROVED) {
             throw new ValidationException("Only APPROVED transfers can be disbursed");
         }
+
+        // 3-way match check: if linked bill has a PO, require at least one CONFIRMED GRN
+        if (ft.getSupplierBill() != null && ft.getSupplierBill().getPurchaseOrder() != null) {
+            UUID poId = ft.getSupplierBill().getPurchaseOrder().getId();
+            boolean hasConfirmedGrn = grnRepository.findByPurchaseOrderId(poId)
+                    .stream().anyMatch(grn -> GrnStatus.CONFIRMED.equals(grn.getStatus()));
+            if (!hasConfirmedGrn) {
+                throw new ValidationException(
+                    "Payment cannot be disbursed: no confirmed Goods Receipt Note found for Purchase Order " + poId);
+            }
+        }
+
         ft.setStatus(FundsTransferStatus.DISBURSED);
         ft.setDisbursedAt(LocalDateTime.now());
         FundsTransfer saved = fundsTransferRepository.save(ft);

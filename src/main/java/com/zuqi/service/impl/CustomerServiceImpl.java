@@ -226,17 +226,20 @@ public class CustomerServiceImpl implements CustomerService {
         log.info("Customer created with ID: {}", saved.getId());
 
         if (needsApproval && currentUserId != null) {
+            boolean isCreditCustomer = saved.getCreditLimit() != null
+                    && saved.getCreditLimit().compareTo(BigDecimal.ZERO) > 0;
+            int requiredApprovals = isCreditCustomer ? 3 : 1;
             approvalService.createRequest(currentUserId, CreateApprovalRequestDto.builder()
                     .workflowType(ApprovalWorkflowType.CUSTOMER_KYC_APPROVAL)
                     .entityType("CUSTOMER")
                     .entityId(saved.getId())
                     .entityName(saved.getBusinessName())
-                    .description("New customer: " + saved.getBusinessName())
+                    .description("New " + (isCreditCustomer ? "credit" : "cash") + " customer: " + saved.getBusinessName())
                     .requestedValues(Map.of(
                             "businessName", saved.getBusinessName(),
                             "phone", saved.getPhone(),
                             "kraPin", Objects.toString(saved.getKraPin(), "")))
-                    .requiredApprovals(1)
+                    .requiredApprovals(requiredApprovals)
                     .build());
         }
 

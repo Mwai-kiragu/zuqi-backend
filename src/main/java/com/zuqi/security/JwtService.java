@@ -1,5 +1,6 @@
 package com.zuqi.security;
 
+import com.zuqi.domain.user.User;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Service;
 import javax.crypto.SecretKey;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
@@ -43,6 +45,44 @@ public class JwtService {
         return buildToken(extraClaims, userDetails, accessTokenExpiration);
     }
 
+    /** Preferred method — embeds userId, merchantId, distributorId, customerId, roles in token. */
+    public String generateUserAccessToken(User user) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", user.getId().toString());
+        if (user.getMerchantId() != null) claims.put("merchantId", user.getMerchantId().toString());
+        if (user.getDistributorId() != null) claims.put("distributorId", user.getDistributorId().toString());
+        if (user.getCustomerId() != null) claims.put("customerId", user.getCustomerId().toString());
+        if (user.getRoles() != null) {
+            claims.put("roles", user.getRoles().stream().map(r -> r.getName()).toList());
+        }
+        return buildToken(claims, user, accessTokenExpiration);
+    }
+
+    public UUID extractUserId(String token) {
+        String val = extractClaim(token, c -> c.get("userId", String.class));
+        return val != null ? UUID.fromString(val) : null;
+    }
+
+    public UUID extractMerchantId(String token) {
+        String val = extractClaim(token, c -> c.get("merchantId", String.class));
+        return val != null ? UUID.fromString(val) : null;
+    }
+
+    public UUID extractDistributorId(String token) {
+        String val = extractClaim(token, c -> c.get("distributorId", String.class));
+        return val != null ? UUID.fromString(val) : null;
+    }
+
+    public UUID extractCustomerId(String token) {
+        String val = extractClaim(token, c -> c.get("customerId", String.class));
+        return val != null ? UUID.fromString(val) : null;
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<String> extractRoles(String token) {
+        return extractClaim(token, c -> (List<String>) c.get("roles"));
+    }
+
     public String generateRefreshToken(UserDetails userDetails) {
         return buildToken(new HashMap<>(), userDetails, refreshTokenExpiration);
     }
@@ -68,6 +108,13 @@ public class JwtService {
         Map<String, Object> extraClaims = new HashMap<>();
         extraClaims.put("branchId", branchId.toString());
         extraClaims.put("isHq", isHeadquarters);
+        if (userDetails instanceof User user) {
+            extraClaims.put("userId", user.getId().toString());
+            if (user.getMerchantId() != null) extraClaims.put("merchantId", user.getMerchantId().toString());
+            if (user.getDistributorId() != null) extraClaims.put("distributorId", user.getDistributorId().toString());
+            if (user.getCustomerId() != null) extraClaims.put("customerId", user.getCustomerId().toString());
+            if (user.getRoles() != null) extraClaims.put("roles", user.getRoles().stream().map(r -> r.getName()).toList());
+        }
         return buildToken(extraClaims, userDetails, accessTokenExpiration);
     }
 

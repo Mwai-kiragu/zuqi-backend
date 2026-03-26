@@ -53,12 +53,27 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
 
                 if (jwtService.isTokenValid(jwt, userDetails)) {
-                    // Propagate active branch context from JWT claims onto the User principal
+                    // Propagate scope claims from JWT onto the User principal.
+                    // JWT is the authoritative source set at login — supplements stale DB fields.
                     if (userDetails instanceof User domainUser) {
                         UUID branchId = jwtService.extractBranchId(jwt);
                         boolean isHq = jwtService.extractIsHeadquarters(jwt);
                         domainUser.setActiveBranchId(branchId);
                         domainUser.setActiveBranchHeadquarters(isHq);
+
+                        // Override with JWT claims if DB fields are null (handles users created without full scope data)
+                        UUID jwtMerchantId = jwtService.extractMerchantId(jwt);
+                        if (domainUser.getMerchantId() == null && jwtMerchantId != null) {
+                            domainUser.setMerchantId(jwtMerchantId);
+                        }
+                        UUID jwtDistributorId = jwtService.extractDistributorId(jwt);
+                        if (domainUser.getDistributorId() == null && jwtDistributorId != null) {
+                            domainUser.setDistributorId(jwtDistributorId);
+                        }
+                        UUID jwtCustomerId = jwtService.extractCustomerId(jwt);
+                        if (domainUser.getCustomerId() == null && jwtCustomerId != null) {
+                            domainUser.setCustomerId(jwtCustomerId);
+                        }
                     }
                     UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
                             userDetails,
