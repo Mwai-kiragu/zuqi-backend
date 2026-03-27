@@ -315,6 +315,11 @@ public class UserServiceImpl implements UserService {
 
         // UserGroup already resolved above (with UserType fetch)
 
+        // Require merchantId when assigning MERCHANT_ADMIN role
+        if (roleName == RoleName.MERCHANT_ADMIN && resolvedMerchantId == null) {
+            throw new ValidationException("merchantId is required when creating a MERCHANT_ADMIN user");
+        }
+
         User user = User.builder()
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
@@ -327,6 +332,7 @@ public class UserServiceImpl implements UserService {
                 .userGroup(userGroup)
                 .active(true)
                 .emailVerified(false)
+                .mustChangePassword(sendWelcomeEmail)
                 .build();
 
         User savedUser = userRepository.save(user);
