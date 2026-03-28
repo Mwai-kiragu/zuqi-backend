@@ -45,6 +45,9 @@ public class OrderResponse {
     private BigDecimal deliveryLatitude;
     private BigDecimal deliveryLongitude;
     private String notes;
+    private UUID assignedDriverId;
+    private String assignedDriverName;
+    private LocalDateTime assignedAt;
     private List<OrderItemResponse> items;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -75,6 +78,9 @@ public class OrderResponse {
                 .deliveryLatitude(order.getDeliveryLatitude())
                 .deliveryLongitude(order.getDeliveryLongitude())
                 .notes(order.getNotes())
+                .assignedDriverId(order.getAssignedDriver() != null ? order.getAssignedDriver().getId() : null)
+                .assignedDriverName(order.getAssignedDriver() != null ? order.getAssignedDriver().getFirstName() + " " + order.getAssignedDriver().getLastName() : null)
+                .assignedAt(order.getAssignedAt())
                 .items(order.getItems() != null
                         ? order.getItems().stream().map(OrderItemResponse::fromEntity).toList()
                         : null)

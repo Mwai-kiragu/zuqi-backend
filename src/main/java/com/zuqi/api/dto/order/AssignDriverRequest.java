@@ -1,6 +1,5 @@
 package com.zuqi.api.dto.order;
 
-import com.zuqi.domain.order.OrderStatus;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,13 +12,10 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class StatusUpdateRequest {
+public class AssignDriverRequest {
 
-    @NotNull(message = "Status is required")
-    private OrderStatus status;
+    @NotNull(message = "Driver ID is required")
+    private UUID driverId;
 
     private String notes;
-
-    /** Optional: assign a driver when transitioning to OUT_FOR_DELIVERY */
-    private UUID driverId;
 }

@@ -178,4 +178,13 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
             @Param("distributorId") UUID distributorId,
             @Param("fromDate") LocalDate fromDate,
             @Param("toDate") LocalDate toDate);
+
+    @Query("SELECT i FROM Invoice i LEFT JOIN FETCH i.merchant WHERE i.distributor.id = :distributorId ORDER BY i.createdAt DESC")
+    List<Invoice> findAllByDistributorIdForExport(@Param("distributorId") UUID distributorId);
+
+    @Query("SELECT i FROM Invoice i LEFT JOIN FETCH i.merchant WHERE i.distributor.merchant.id = :merchantId ORDER BY i.createdAt DESC")
+    List<Invoice> findAllByDistributorMerchantIdForExport(@Param("merchantId") UUID merchantId);
+
+    @Query("SELECT i FROM Invoice i LEFT JOIN FETCH i.merchant ORDER BY i.createdAt DESC")
+    List<Invoice> findAllForExport();
 }

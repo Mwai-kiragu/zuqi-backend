@@ -127,6 +127,13 @@ public class Order {
     @Builder.Default
     private List<OrderStatusHistory> statusHistory = new ArrayList<>();
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_driver_id")
+    private User assignedDriver;
+
+    @Column(name = "assigned_at")
+    private LocalDateTime assignedAt;
+
     @Column(name = "approval_status", length = 30)
     @Builder.Default
     private String approvalStatus = "NOT_REQUIRED";

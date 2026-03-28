@@ -42,6 +42,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("SELECT u FROM User u JOIN u.roles r WHERE r.name = :roleName AND u.active = true")
     Page<User> findByRoleName(@Param("roleName") String roleName, Pageable pageable);
 
+    @Query("SELECT u FROM User u JOIN u.roles r WHERE u.distributorId = :distributorId AND r.name = 'DRIVER' AND u.active = true ORDER BY u.firstName ASC")
+    List<User> findActiveDriversByDistributorId(@Param("distributorId") UUID distributorId);
+
     @Modifying
     @Query("UPDATE User u SET u.lastLoginAt = :lastLoginAt WHERE u.id = :userId")
     void updateLastLoginAt(@Param("userId") UUID userId, @Param("lastLoginAt") LocalDateTime lastLoginAt);

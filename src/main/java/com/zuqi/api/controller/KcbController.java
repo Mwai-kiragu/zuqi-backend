@@ -108,7 +108,7 @@ public class KcbController {
 
     private UUID resolveMerchantId(UUID requestedId) {
         if (requestedId != null) return requestedId;
-        UUID fromContext = securityUtils.getCurrentUserMerchantId();
+        UUID fromContext = securityUtils.getEffectiveMerchantId();
         if (fromContext != null) return fromContext;
         throw new ValidationException("merchantId is required");
     }

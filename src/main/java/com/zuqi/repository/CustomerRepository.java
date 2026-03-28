@@ -117,4 +117,7 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID>, JpaSp
     @Modifying
     @Query("UPDATE Customer c SET c.approvalStatus = :status WHERE c.id = :id")
     void updateApprovalStatus(@Param("id") UUID id, @Param("status") String status);
+
+    // Non-paginated exports
+    List<Customer> findByDistributorMerchantId(UUID merchantId);
 }

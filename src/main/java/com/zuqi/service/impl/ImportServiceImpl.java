@@ -7,6 +7,7 @@ import com.zuqi.domain.product.Product;
 import com.zuqi.domain.product.ProductCategory;
 import com.zuqi.domain.supplier.Supplier;
 import com.zuqi.repository.*;
+import com.zuqi.service.EmailService;
 import com.zuqi.service.ImportService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +30,7 @@ public class ImportServiceImpl implements ImportService {
     private final ProductRepository productRepository;
     private final DistributorRepository distributorRepository;
     private final ProductCategoryRepository productCategoryRepository;
+    private final EmailService emailService;
 
     @Override
     @Transactional
@@ -88,6 +90,14 @@ public class ImportServiceImpl implements ImportService {
 
                     customerRepository.save(customer);
                     imported++;
+                    // Notify customer via email if they have an email address
+                    if (customer.getEmail() != null && !customer.getEmail().isBlank()) {
+                        try {
+                            emailService.sendCustomerOnboardingEmail(customer);
+                        } catch (Exception emailEx) {
+                            log.warn("Failed to send onboarding email to {}: {}", customer.getEmail(), emailEx.getMessage());
+                        }
+                    }
                 } catch (Exception e) {
                     errors.add(new RowError(rowNum, e.getMessage()));
                 }
@@ -267,6 +277,73 @@ public class ImportServiceImpl implements ImportService {
             }
         } catch (Exception e) {
             log.error("Error reading CSV file for product import: {}", e.getMessage());
+            errors.add(new RowError(0, "Failed to read file: " + e.getMessage()));
+        }
+
+        return new ImportResult(imported, errors.size(), errors);
+    }
+
+    @Override
+    @Transactional
+    public ImportResult importCategories(MultipartFile file, UUID distributorId) {
+        Distributor distributor = distributorRepository.findById(distributorId)
+                .orElseThrow(() -> new RuntimeException("Distributor not found: " + distributorId));
+        List<RowError> errors = new ArrayList<>();
+        int imported = 0;
+        int rowNum = 1;
+
+        try (CSVReader reader = new CSVReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
+            String[] headers = reader.readNext();
+            if (headers == null) return new ImportResult(0, 0, errors);
+
+            String[] row;
+            while ((row = reader.readNext()) != null) {
+                rowNum++;
+                try {
+                    if (row.length < 1) {
+                        errors.add(new RowError(rowNum, "Row has too few columns"));
+                        continue;
+                    }
+                    String name = trim(row, 0);
+                    String description = trim(row, 1);
+                    String parentName = trim(row, 2);
+
+                    if (name.isEmpty()) {
+                        errors.add(new RowError(rowNum, "name is required"));
+                        continue;
+                    }
+                    if (productCategoryRepository.existsByNameAndDistributorId(name, distributorId)) {
+                        errors.add(new RowError(rowNum, "Category '" + name + "' already exists"));
+                        continue;
+                    }
+
+                    ProductCategory parent = null;
+                    if (!parentName.isEmpty()) {
+                        parent = productCategoryRepository
+                                .findByNameAndDistributorId(parentName, distributorId)
+                                .orElse(null);
+                        if (parent == null) {
+                            errors.add(new RowError(rowNum, "Parent category '" + parentName + "' not found"));
+                            continue;
+                        }
+                    }
+
+                    ProductCategory category = ProductCategory.builder()
+                            .name(name)
+                            .description(description.isEmpty() ? null : description)
+                            .distributor(distributor)
+                            .parent(parent)
+                            .active(true)
+                            .build();
+
+                    productCategoryRepository.save(category);
+                    imported++;
+                } catch (Exception e) {
+                    errors.add(new RowError(rowNum, e.getMessage()));
+                }
+            }
+        } catch (Exception e) {
+            log.error("Error reading CSV file for category import: {}", e.getMessage());
             errors.add(new RowError(0, "Failed to read file: " + e.getMessage()));
         }
 

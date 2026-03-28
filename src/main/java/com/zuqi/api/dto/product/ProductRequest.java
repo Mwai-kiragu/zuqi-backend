@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Data
@@ -71,4 +72,19 @@ public class ProductRequest {
     /** Optional floor price — no sale or POS transaction may go below this */
     @DecimalMin(value = "0.0", message = "Floor price must be non-negative")
     private BigDecimal minSalePrice;
+
+    // ── Variation fields ──────────────────────────────────────────────────────
+
+    /** True when this product is a parent with size/colour variants. */
+    @Builder.Default
+    private boolean hasVariants = false;
+
+    /** Set on variant products only — UUID of the parent product. */
+    private UUID parentProductId;
+
+    /** Human-readable variant label, e.g. "Small", "Red - Large". */
+    private String variantName;
+
+    /** Attribute map for this variant, e.g. {"size":"Small","color":"Red"}. */
+    private Map<String, String> variantAttributes;
 }
