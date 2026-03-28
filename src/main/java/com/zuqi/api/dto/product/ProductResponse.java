@@ -55,6 +55,14 @@ public class ProductResponse {
     private UUID createdById;
     private BigDecimal minSalePrice;
 
+    // Variation fields
+    private boolean hasVariants;
+    private UUID parentProductId;
+    private String parentProductName;
+    private String variantName;
+    private Map<String, String> variantAttributes;
+    private List<ProductResponse> variants;
+
     public static ProductResponse fromEntity(Product product) {
         return ProductResponse.builder()
                 .id(product.getId())
@@ -82,6 +90,11 @@ public class ProductResponse {
                 .approvalStatus(product.getApprovalStatus())
                 .createdById(product.getCreatedById())
                 .minSalePrice(product.getMinSalePrice())
+                .hasVariants(product.isHasVariants())
+                .parentProductId(product.getParentProduct() != null ? product.getParentProduct().getId() : null)
+                .parentProductName(product.getParentProduct() != null ? product.getParentProduct().getName() : null)
+                .variantName(product.getVariantName())
+                .variantAttributes(product.getVariantAttributes())
                 .build();
     }
 

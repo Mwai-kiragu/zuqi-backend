@@ -2,6 +2,8 @@ package com.zuqi.util;
 
 import com.zuqi.domain.accesscontrol.UserTypePermission;
 import com.zuqi.domain.user.User;
+import com.zuqi.repository.DistributorRepository;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -10,7 +12,10 @@ import java.util.List;
 import java.util.UUID;
 
 @Component
+@RequiredArgsConstructor
 public class SecurityUtils {
+
+    private final DistributorRepository distributorRepository;
 
     private static final String ROLE_SUPER_ADMIN = "SUPER_ADMIN";
 
@@ -52,6 +57,26 @@ public class SecurityUtils {
     public UUID getCurrentUserMerchantId() {
         User user = getCurrentUser();
         return user != null ? user.getMerchantId() : null;
+    }
+
+    /**
+     * Returns the effective merchant ID for the current user.
+     * - MERCHANT_ADMIN: directly from user.merchantId
+     * - DISTRIBUTOR_ADMIN / other distributor staff: resolved through distributor → merchant FK
+     * - Returns null for SUPER_ADMIN (they must supply merchantId explicitly)
+     */
+    public UUID getEffectiveMerchantId() {
+        User user = getCurrentUser();
+        if (user == null) return null;
+        // Direct merchant link (MERCHANT_ADMIN)
+        if (user.getMerchantId() != null) return user.getMerchantId();
+        // Resolve through distributor
+        if (user.getDistributorId() != null) {
+            return distributorRepository.findById(user.getDistributorId())
+                    .map(d -> d.getMerchant() != null ? d.getMerchant().getId() : null)
+                    .orElse(null);
+        }
+        return null;
     }
 
     public boolean hasRole(User user, String roleName) {

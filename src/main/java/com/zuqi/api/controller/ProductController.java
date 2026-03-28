@@ -131,6 +131,26 @@ public class ProductController {
         return ResponseEntity.ok(ApiResponse.success("Product activated successfully"));
     }
 
+    @GetMapping("/{id}/variants")
+    @Operation(summary = "Get product variants", description = "Returns all active variants of a parent product")
+    public ResponseEntity<ApiResponse<List<ProductResponse>>> getProductVariants(
+            @Parameter(description = "Parent product ID") @PathVariable UUID id) {
+        List<ProductResponse> variants = productService.getProductVariants(id);
+        return ResponseEntity.ok(ApiResponse.success(variants));
+    }
+
+    @PostMapping("/{id}/variants")
+    @Operation(summary = "Create product variant", description = "Creates a new variant for a parent product")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN')")
+    public ResponseEntity<ApiResponse<ProductResponse>> createProductVariant(
+            @Parameter(description = "Parent product ID") @PathVariable UUID id,
+            @Valid @RequestBody ProductRequest request) {
+        ProductResponse variant = productService.createProductVariant(id, request);
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(ApiResponse.success("Variant created successfully", variant));
+    }
+
     @GetMapping("/categories")
     @Operation(summary = "Get product categories", description = "Retrieves all product categories")
     public ResponseEntity<ApiResponse<List<ProductCategoryResponse>>> getCategories(

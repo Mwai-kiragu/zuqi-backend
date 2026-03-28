@@ -12,10 +12,35 @@ import java.util.UUID;
 @Repository
 public interface ReorderSuggestionRepository extends JpaRepository<ReorderSuggestion, UUID> {
 
+    @Query("SELECT rs FROM ReorderSuggestion rs " +
+           "JOIN FETCH rs.distributor " +
+           "JOIN FETCH rs.warehouse " +
+           "JOIN FETCH rs.product " +
+           "WHERE rs.distributor.id = :distributorId " +
+           "AND rs.warehouse.id = :warehouseId " +
+           "AND rs.status = :status")
     List<ReorderSuggestion> findByDistributorIdAndWarehouseIdAndStatus(
-            UUID distributorId, UUID warehouseId, String status);
+            @Param("distributorId") UUID distributorId,
+            @Param("warehouseId") UUID warehouseId,
+            @Param("status") String status);
 
-    List<ReorderSuggestion> findByDistributorIdAndStatus(UUID distributorId, String status);
+    @Query("SELECT rs FROM ReorderSuggestion rs " +
+           "JOIN FETCH rs.distributor " +
+           "JOIN FETCH rs.warehouse " +
+           "JOIN FETCH rs.product " +
+           "WHERE rs.distributor.id = :distributorId AND rs.status = :status " +
+           "ORDER BY rs.computedAt DESC")
+    List<ReorderSuggestion> findByDistributorIdAndStatus(
+            @Param("distributorId") UUID distributorId,
+            @Param("status") String status);
+
+    @Query("SELECT rs FROM ReorderSuggestion rs " +
+           "JOIN FETCH rs.distributor " +
+           "JOIN FETCH rs.warehouse " +
+           "JOIN FETCH rs.product " +
+           "WHERE rs.distributor.id = :distributorId " +
+           "ORDER BY rs.computedAt DESC")
+    List<ReorderSuggestion> findAllByDistributorIdFetched(@Param("distributorId") UUID distributorId);
 
     @Query("SELECT rs FROM ReorderSuggestion rs WHERE rs.distributor.id = :distributorId " +
            "AND rs.product.id = :productId ORDER BY rs.computedAt DESC")

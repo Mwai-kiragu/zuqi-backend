@@ -141,4 +141,11 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
     @Modifying
     @Query("UPDATE Product p SET p.approvalStatus = :status WHERE p.id = :id")
     void updateApprovalStatus(@Param("id") UUID id, @Param("status") String status);
+
+    // Non-paginated exports
+    List<Product> findByDistributorMerchantIdAndActiveTrue(UUID merchantId);
+
+    // Variation queries
+    List<Product> findByParentProductId(UUID parentProductId);
+    List<Product> findByParentProductIdAndActiveTrue(UUID parentProductId);
 }

@@ -59,6 +59,21 @@ public class ImportController {
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 
+    @PostMapping(value = "/categories", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "Bulk import product categories from CSV")
+    public ResponseEntity<ApiResponse<ImportService.ImportResult>> importCategories(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "distributorId", required = false) UUID distributorId) {
+
+        UUID resolvedDistributorId = resolveDistributorId(distributorId);
+        if (resolvedDistributorId == null) {
+            return ResponseEntity.badRequest()
+                    .body(ApiResponse.error("distributorId is required for category import"));
+        }
+        ImportService.ImportResult result = importService.importCategories(file, resolvedDistributorId);
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
     private UUID resolveDistributorId(UUID requested) {
         if (requested != null) return requested;
         return securityUtils.getDistributorIdForFiltering();

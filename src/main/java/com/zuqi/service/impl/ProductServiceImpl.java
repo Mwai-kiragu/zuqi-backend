@@ -17,6 +17,7 @@ import com.zuqi.domain.product.ProductCategory;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.DuplicateResourceException;
 import com.zuqi.exception.ResourceNotFoundException;
+import com.zuqi.exception.ValidationException;
 import com.zuqi.api.dto.inventory.StockAdjustmentRequest;
 import com.zuqi.domain.inventory.Stock;
 import com.zuqi.domain.inventory.StockMovement;
@@ -166,6 +167,13 @@ public class ProductServiceImpl implements ProductService {
                     .map(ProductBranchPriceResponse::fromEntity)
                     .collect(Collectors.toList()));
         }
+        // Embed variants for parent products
+        if (product.isHasVariants()) {
+            List<ProductResponse> variants = productRepository.findByParentProductIdAndActiveTrue(id).stream()
+                    .map(ProductResponse::fromEntity)
+                    .collect(Collectors.toList());
+            response.setVariants(variants);
+        }
         enrichGlAccountNames(List.of(response));
         return response;
     }
@@ -205,7 +213,20 @@ public class ProductServiceImpl implements ProductService {
                 .revenueAccountId(request.getRevenueAccountId())
                 .cogsAccountId(request.getCogsAccountId())
                 .minSalePrice(request.getMinSalePrice())
+                .hasVariants(request.isHasVariants())
+                .variantName(request.getVariantName())
+                .variantAttributes(request.getVariantAttributes())
                 .build();
+
+        // Link to parent product if this is a variant
+        if (request.getParentProductId() != null) {
+            Product parent = productRepository.findById(request.getParentProductId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Product", "id", request.getParentProductId().toString()));
+            if (!parent.isHasVariants()) {
+                throw new ValidationException("Parent product is not configured as a variant parent.");
+            }
+            product.setParentProduct(parent);
+        }
 
         if (request.getCategoryId() != null) {
             ProductCategory category = categoryRepository.findById(request.getCategoryId())
@@ -566,6 +587,71 @@ public class ProductServiceImpl implements ProductService {
         categoryRepository.save(category);
 
         log.info("Product category activated successfully: {}", id);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProductResponse> getProductVariants(UUID parentId) {
+        productRepository.findById(parentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product", "id", parentId.toString()));
+        return productRepository.findByParentProductIdAndActiveTrue(parentId).stream()
+                .map(ProductResponse::fromEntity)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public ProductResponse createProductVariant(UUID parentId, ProductRequest request) {
+        log.info("Creating variant for parent product: {}", parentId);
+
+        Product parent = productRepository.findById(parentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Product", "id", parentId.toString()));
+
+        if (!parent.isHasVariants()) {
+            throw new ValidationException("Product " + parentId + " is not configured as a parent product. Set hasVariants=true first.");
+        }
+
+        if (productRepository.existsBySkuAndDistributorId(request.getSku(), parent.getDistributor().getId())) {
+            throw new DuplicateResourceException("Product", "sku", request.getSku());
+        }
+
+        String variantDisplayName = request.getName() != null
+                ? request.getName()
+                : parent.getName() + (request.getVariantName() != null ? " - " + request.getVariantName() : "");
+
+        Product variant = Product.builder()
+                .distributor(parent.getDistributor())
+                .sku(request.getSku())
+                .name(variantDisplayName)
+                .description(request.getDescription() != null ? request.getDescription() : parent.getDescription())
+                .unitOfMeasure(request.getUnitOfMeasure() != null ? request.getUnitOfMeasure() : parent.getUnitOfMeasure())
+                .unitPrice(request.getUnitPrice())
+                .costPrice(request.getCostPrice() != null ? request.getCostPrice() : parent.getCostPrice())
+                .imageUrl(request.getImageUrl() != null ? request.getImageUrl() : parent.getImageUrl())
+                .barcode(request.getBarcode())
+                .allBranches(parent.isAllBranches())
+                .revenueAccountId(request.getRevenueAccountId() != null ? request.getRevenueAccountId() : parent.getRevenueAccountId())
+                .cogsAccountId(request.getCogsAccountId() != null ? request.getCogsAccountId() : parent.getCogsAccountId())
+                .minSalePrice(request.getMinSalePrice() != null ? request.getMinSalePrice() : parent.getMinSalePrice())
+                .hasVariants(false)
+                .parentProduct(parent)
+                .variantName(request.getVariantName())
+                .variantAttributes(request.getVariantAttributes())
+                .approvalStatus("APPROVED")
+                .createdById(securityUtils.getCurrentUserId())
+                .build();
+
+        if (request.getCategoryId() != null) {
+            ProductCategory category = categoryRepository.findById(request.getCategoryId())
+                    .orElseThrow(() -> new ResourceNotFoundException("ProductCategory", "id", request.getCategoryId().toString()));
+            variant.setCategory(category);
+        } else if (parent.getCategory() != null) {
+            variant.setCategory(parent.getCategory());
+        }
+
+        Product saved = productRepository.save(variant);
+        log.info("Variant created successfully: {}", saved.getId());
+        return ProductResponse.fromEntity(saved);
     }
 
     // -------------------------------------------------------

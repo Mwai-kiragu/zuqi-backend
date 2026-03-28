@@ -148,4 +148,11 @@ public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
             @Param("distributorId") UUID distributorId,
             @Param("from") LocalDate from,
             @Param("to") LocalDate to);
+
+    java.util.List<Expense> findByDistributorIdOrderByExpenseDateDesc(UUID distributorId);
+
+    @Query("SELECT e FROM Expense e WHERE e.distributorId IN " +
+           "(SELECT d.id FROM Distributor d WHERE d.merchant.id = :merchantId) " +
+           "ORDER BY e.expenseDate DESC")
+    java.util.List<Expense> findByDistributorMerchantIdForExport(@Param("merchantId") UUID merchantId);
 }

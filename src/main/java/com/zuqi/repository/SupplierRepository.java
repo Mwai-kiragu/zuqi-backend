@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -66,4 +67,8 @@ public interface SupplierRepository extends JpaRepository<Supplier, UUID> {
     @Modifying
     @Query("UPDATE Supplier s SET s.approvalStatus = :status WHERE s.id = :id")
     void updateApprovalStatus(@Param("id") UUID id, @Param("status") String status);
+
+    // Non-paginated exports
+    List<Supplier> findByDistributorId(UUID distributorId);
+    List<Supplier> findByDistributorMerchantId(UUID merchantId);
 }

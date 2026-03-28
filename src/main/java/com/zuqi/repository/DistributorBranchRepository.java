@@ -21,4 +21,6 @@ public interface DistributorBranchRepository extends JpaRepository<DistributorBr
     boolean existsByCodeAndDistributorId(String code, UUID distributorId);
 
     Optional<DistributorBranch> findFirstByDistributorIdAndHeadquartersTrue(UUID distributorId);
+
+    List<DistributorBranch> findByDistributorMerchantId(UUID merchantId);
 }

@@ -3,6 +3,7 @@ package com.zuqi.domain.inventory;
 import com.zuqi.domain.branch.DistributorBranch;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.user.User;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
@@ -13,6 +14,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 @Entity
 @Table(name = "warehouses", indexes = {
         @Index(name = "idx_warehouses_distributor", columnList = "distributor_id")

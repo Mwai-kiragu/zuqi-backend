@@ -23,4 +23,7 @@ public interface EmailService {
 
     void sendAnomalyAlertEmail(String to, String alertType, String severity, String entityType,
                                 String description, Double anomalyScore);
+
+    void sendDataExportEmail(String to, String name, String entityType, int recordCount,
+                             String csvContent, String attachmentFilename);
 }

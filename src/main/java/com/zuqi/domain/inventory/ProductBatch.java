@@ -2,6 +2,7 @@ package com.zuqi.domain.inventory;
 
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.product.Product;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
@@ -18,6 +19,7 @@ import java.util.UUID;
  *
  * Table: product_batches
  */
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 @Entity
 @Table(name = "product_batches", uniqueConstraints = {
         @UniqueConstraint(name = "uq_product_batch", columnNames = {"warehouse_id", "product_id", "batch_number"})

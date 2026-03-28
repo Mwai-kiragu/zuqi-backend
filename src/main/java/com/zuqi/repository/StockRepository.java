@@ -79,4 +79,13 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
             @Param("distributorId") UUID distributorId,
             @Param("warehouseId") UUID warehouseId,
             Pageable pageable);
+
+    @Query("SELECT s FROM Stock s JOIN FETCH s.warehouse JOIN FETCH s.product WHERE s.warehouse.distributor.id = :distributorId")
+    List<Stock> findAllByDistributorIdFetched(@Param("distributorId") UUID distributorId);
+
+    @Query("SELECT s FROM Stock s JOIN FETCH s.warehouse JOIN FETCH s.product WHERE s.warehouse.distributor.merchant.id = :merchantId")
+    List<Stock> findAllByMerchantIdFetched(@Param("merchantId") UUID merchantId);
+
+    @Query("SELECT s FROM Stock s JOIN FETCH s.warehouse JOIN FETCH s.product")
+    List<Stock> findAllFetched();
 }

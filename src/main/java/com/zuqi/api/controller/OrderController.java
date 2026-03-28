@@ -151,4 +151,23 @@ public class OrderController {
         List<OrderResponse> orders = orderService.getOverdueOrders();
         return ResponseEntity.ok(ApiResponse.success(orders));
     }
+
+    @PatchMapping("/{id}/assign-driver")
+    @Operation(summary = "Assign driver", description = "Assigns a driver to an order for delivery")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN', 'WAREHOUSE_MANAGER')")
+    public ResponseEntity<ApiResponse<OrderResponse>> assignDriver(
+            @Parameter(description = "Order ID") @PathVariable UUID id,
+            @Valid @RequestBody AssignDriverRequest request,
+            @AuthenticationPrincipal User currentUser) {
+        OrderResponse order = orderService.assignDriver(id, request.getDriverId(), request.getNotes(), currentUser);
+        return ResponseEntity.ok(ApiResponse.success("Driver assigned successfully", order));
+    }
+
+    @GetMapping("/available-drivers")
+    @Operation(summary = "Get available drivers", description = "Returns active users with DRIVER role for the distributor")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN', 'WAREHOUSE_MANAGER', 'DRIVER')")
+    public ResponseEntity<ApiResponse<List<DriverDto>>> getAvailableDrivers() {
+        List<DriverDto> drivers = orderService.getAvailableDrivers();
+        return ResponseEntity.ok(ApiResponse.success(drivers));
+    }
 }

@@ -2,6 +2,7 @@ package com.zuqi.domain.product;
 
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.user.User;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -15,7 +16,10 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.List;
+import java.util.ArrayList;
 
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 @Entity
 @Table(name = "products", indexes = {
         @Index(name = "idx_products_distributor", columnList = "distributor_id"),
@@ -117,4 +121,30 @@ public class Product {
 
     @Column(name = "created_by_id")
     private UUID createdById;
+
+    // ── Product Variations ────────────────────────────────────────────────────
+
+    /** True if this product has size/colour/style variants. Parent products cannot be ordered directly. */
+    @Column(name = "has_variants", nullable = false)
+    @Builder.Default
+    private boolean hasVariants = false;
+
+    /** Null for parent/standalone products; set for each variant pointing to its parent. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_product_id")
+    private Product parentProduct;
+
+    /** Human-readable variant label, e.g. "Small", "Red - XL". Set only on variant products. */
+    @Column(name = "variant_name", length = 100)
+    private String variantName;
+
+    /** Key-value attribute pairs for this variant, e.g. {"size":"Large","color":"Red"}. */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "variant_attributes", columnDefinition = "jsonb")
+    private Map<String, String> variantAttributes;
+
+    /** Child variants — loaded on demand via repository, not via eager fetch. */
+    @OneToMany(mappedBy = "parentProduct", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<Product> variants = new ArrayList<>();
 }

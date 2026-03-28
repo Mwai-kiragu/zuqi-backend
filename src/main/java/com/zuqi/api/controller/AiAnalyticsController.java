@@ -5,6 +5,7 @@ import com.zuqi.ai.demand.CashFlowForecastService;
 import com.zuqi.ai.demand.ExpiryRiskJob;
 import com.zuqi.api.dto.ApiResponse;
 import com.zuqi.api.dto.CashFlowForecastEntry;
+import com.zuqi.api.dto.ai.ReorderSuggestionResponse;
 import com.zuqi.domain.ai.ChurnPrediction;
 import com.zuqi.domain.ai.CustomerSegment;
 import com.zuqi.domain.ai.ExpiryRiskScore;
@@ -88,14 +89,22 @@ public class AiAnalyticsController {
 
     @GetMapping("/reorder/suggestions/{distributorId}")
     @Operation(summary = "Get pending reorder suggestions for a distributor")
-    public ResponseEntity<ApiResponse<List<ReorderSuggestion>>> getReorderSuggestions(
+    public ResponseEntity<ApiResponse<List<ReorderSuggestionResponse>>> getReorderSuggestions(
             @PathVariable UUID distributorId,
-            @Parameter(description = "Filter by status (default: PENDING)")
+            @Parameter(description = "Filter by status (default: PENDING). Use ALL to return every status.")
             @RequestParam(defaultValue = "PENDING") String status) {
 
         log.info("GET /analytics/reorder/suggestions/{} status={}", distributorId, status);
-        List<ReorderSuggestion> suggestions =
-                reorderSuggestionRepository.findByDistributorIdAndStatus(distributorId, status);
+        List<ReorderSuggestionResponse> suggestions;
+        if ("ALL".equalsIgnoreCase(status)) {
+            suggestions = reorderSuggestionRepository
+                    .findAllByDistributorIdFetched(distributorId)
+                    .stream().map(ReorderSuggestionResponse::fromEntity).toList();
+        } else {
+            suggestions = reorderSuggestionRepository
+                    .findByDistributorIdAndStatus(distributorId, status)
+                    .stream().map(ReorderSuggestionResponse::fromEntity).toList();
+        }
         return ResponseEntity.ok(ApiResponse.success(suggestions));
     }
 
