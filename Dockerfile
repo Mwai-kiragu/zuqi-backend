@@ -23,6 +23,9 @@ RUN ./mvnw clean package -DskipTests -q
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
+# Install libgomp required by XGBoost4j
+RUN apk add --no-cache libgomp
+
 # Non-root user for security
 RUN addgroup -S zuqi && adduser -S zuqi -G zuqi
 
