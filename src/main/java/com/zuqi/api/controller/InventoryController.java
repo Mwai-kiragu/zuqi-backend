@@ -56,7 +56,7 @@ public class InventoryController {
                     item.setAiRiskScore(result.riskScore());
                     item.setAiDaysUntilStockout(result.daysUntilStockout());
                     item.setAiDemand7d(result.demand7d());
-                } catch (Exception e) {
+                } catch (Throwable e) {
                     // AI prediction is non-critical — log and continue with safe defaults
                     log.warn("AI prediction failed for warehouse={} product={}: {}",
                             item.getWarehouseId(), item.getProductId(), e.getMessage());
