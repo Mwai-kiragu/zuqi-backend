@@ -4,6 +4,7 @@ import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
 import com.zuqi.api.dto.inventory.*;
 import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.distributor.Distributor;
+import com.zuqi.domain.inventory.ProductBatch;
 import com.zuqi.domain.inventory.Stock;
 import com.zuqi.domain.inventory.StockMovement;
 import com.zuqi.domain.inventory.Warehouse;
@@ -46,6 +47,7 @@ public class InventoryServiceImpl implements InventoryService {
     private final DistributorRepository distributorRepository;
     private final DistributorBranchRepository branchRepository;
     private final UserRepository userRepository;
+    private final ProductBatchRepository productBatchRepository;
     private final SecurityUtils securityUtils;
     private final ApplicationEventPublisher eventPublisher;
     private final FeatureStore featureStore;
@@ -192,6 +194,26 @@ public class InventoryServiceImpl implements InventoryService {
                 .approvalStatus("APPROVED")
                 .build();
         stockMovementRepository.save(movement);
+
+        // Auto-create ProductBatch when expiry date is provided on a stock-in
+        if (request.getMovementType() == StockMovement.MovementType.IN && request.getExpiryDate() != null) {
+            String batchNum = (request.getBatchNumber() != null && !request.getBatchNumber().isBlank())
+                    ? request.getBatchNumber()
+                    : "BATCH-" + System.currentTimeMillis();
+            ProductBatch batch = ProductBatch.builder()
+                    .distributor(warehouse.getDistributor())
+                    .warehouse(warehouse)
+                    .product(product)
+                    .batchNumber(batchNum)
+                    .expiryDate(request.getExpiryDate())
+                    .initialQuantity(request.getQuantity().doubleValue())
+                    .currentQuantity(request.getQuantity().doubleValue())
+                    .status("ACTIVE")
+                    .build();
+            productBatchRepository.save(batch);
+            log.info("ProductBatch created - batch: {}, expiry: {}, qty: {}",
+                    batchNum, request.getExpiryDate(), request.getQuantity());
+        }
 
         log.info("Stock adjusted - Warehouse: {}, Product: {}, Type: {}, Qty: {}, New Balance: {}",
                 warehouse.getName(), product.getName(), request.getMovementType(),

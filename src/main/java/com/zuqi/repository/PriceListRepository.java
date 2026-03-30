@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -19,6 +20,11 @@ public interface PriceListRepository extends JpaRepository<PriceList, UUID> {
 
     @Query("SELECT pl FROM PriceList pl WHERE pl.distributor.merchant.id = :merchantId")
     Page<PriceList> findByDistributorMerchantId(@Param("merchantId") UUID merchantId, Pageable pageable);
+
+    List<PriceList> findAllByDistributorId(UUID distributorId);
+
+    @Query("SELECT pl FROM PriceList pl WHERE pl.distributor.merchant.id = :merchantId")
+    List<PriceList> findAllByDistributorMerchantId(@Param("merchantId") UUID merchantId);
 
     Optional<PriceList> findByDistributorIdAndIsDefaultTrue(UUID distributorId);
 

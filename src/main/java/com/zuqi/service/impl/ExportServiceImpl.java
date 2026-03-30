@@ -7,6 +7,7 @@ import com.zuqi.domain.inventory.Stock;
 import com.zuqi.domain.inventory.Warehouse;
 import com.zuqi.domain.invoice.Invoice;
 import com.zuqi.domain.pos.PosSale;
+import com.zuqi.domain.pricing.PriceList;
 import com.zuqi.domain.product.Product;
 import com.zuqi.domain.product.ProductCategory;
 import com.zuqi.domain.supplier.Supplier;
@@ -16,6 +17,7 @@ import com.zuqi.repository.DistributorBranchRepository;
 import com.zuqi.repository.ExpenseRepository;
 import com.zuqi.repository.InvoiceRepository;
 import com.zuqi.repository.PosSaleRepository;
+import com.zuqi.repository.PriceListRepository;
 import com.zuqi.repository.ProductCategoryRepository;
 import com.zuqi.repository.ProductRepository;
 import com.zuqi.repository.StockRepository;
@@ -47,6 +49,7 @@ public class ExportServiceImpl implements ExportService {
     private final ProductCategoryRepository categoryRepository;
     private final PosSaleRepository posSaleRepository;
     private final ExpenseRepository expenseRepository;
+    private final PriceListRepository priceListRepository;
     private final EmailService emailService;
     private final SecurityUtils securityUtils;
 
@@ -401,6 +404,42 @@ public class ExportServiceImpl implements ExportService {
             "Financial Report", expenses.size(), csv.toString(), "financial_report_export.csv"
         );
         log.info("Financial report export email sent to {} — {} records", user.getEmail(), expenses.size());
+    }
+
+    @Override
+    @Async
+    public void exportPriceListsToEmail() {
+        User user = securityUtils.getCurrentUser();
+        UUID distributorId = securityUtils.getCurrentUserDistributorId();
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+
+        List<PriceList> priceLists;
+        if (merchantId != null) {
+            priceLists = priceListRepository.findAllByDistributorMerchantId(merchantId);
+        } else if (distributorId != null) {
+            priceLists = priceListRepository.findAllByDistributorId(distributorId);
+        } else {
+            priceLists = priceListRepository.findAll();
+        }
+
+        StringBuilder csv = new StringBuilder();
+        csv.append("Name,Description,Default,Status,Approval Status,Valid From,Valid To,Items Count\n");
+        for (PriceList pl : priceLists) {
+            csv.append(escape(pl.getName())).append(',')
+               .append(escape(pl.getDescription())).append(',')
+               .append(pl.isDefault() ? "Yes" : "No").append(',')
+               .append(pl.isActive() ? "Active" : "Inactive").append(',')
+               .append(escape(pl.getApprovalStatus())).append(',')
+               .append(pl.getValidFrom() != null ? pl.getValidFrom() : "").append(',')
+               .append(pl.getValidTo() != null ? pl.getValidTo() : "").append(',')
+               .append(pl.getItems().size()).append('\n');
+        }
+
+        emailService.sendDataExportEmail(
+            user.getEmail(), user.getFirstName(),
+            "Price Lists", priceLists.size(), csv.toString(), "price_lists_export.csv"
+        );
+        log.info("Price lists export email sent to {} — {} records", user.getEmail(), priceLists.size());
     }
 
     /** CSV-safe quoting: wrap value in quotes if it contains comma, quote, or newline */
