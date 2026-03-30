@@ -125,7 +125,14 @@ public class SecurityUtils {
      * Returns true if the current user's workflow tier matches the given tier.
      */
     public boolean currentUserHasWorkflowTier(String tier) {
-        return tier != null && tier.equals(getCurrentUserWorkflowTier());
+        if (tier == null) return false;
+        String stored = getCurrentUserWorkflowTier();
+        if (stored == null) return false;
+        // Support comma-separated multi-tier values (e.g. "INITIATOR,VERIFIER")
+        for (String t : stored.split(",")) {
+            if (tier.equals(t.trim())) return true;
+        }
+        return false;
     }
 
     /**

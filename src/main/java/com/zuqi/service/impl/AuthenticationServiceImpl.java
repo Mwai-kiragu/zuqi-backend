@@ -468,12 +468,20 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         log.info("Authenticating user: {}", request.getEmail());
 
         // Authenticate with Spring Security
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.getEmail(),
-                        request.getPassword()
-                )
-        );
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            request.getEmail(),
+                            request.getPassword()
+                    )
+            );
+        } catch (org.springframework.security.authentication.LockedException e) {
+            throw new AuthenticationException("Your account has been locked. Please contact your administrator.");
+        } catch (org.springframework.security.authentication.DisabledException e) {
+            throw new AuthenticationException("Your account has been disabled. Please contact your administrator.");
+        } catch (org.springframework.security.core.AuthenticationException e) {
+            throw new AuthenticationException("Invalid email or password");
+        }
 
         // Find user
         User user = userRepository.findByEmail(request.getEmail())
