@@ -21,7 +21,8 @@ public enum BillingPackageType {
                 "payments", "invoices", "suppliers", "procurement",
                 "reports", "approvals", "pos", "branches",
                 "stockTransfers", "stockTakes", "accounting",
-                "expenses", "fundsTransfer", "warehouses", "paymentSetup"
+                "expenses", "fundsTransfer", "warehouses", "paymentSetup",
+                "crm"
             ));
             return modules;
         }

@@ -7,6 +7,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -17,4 +19,7 @@ public class StatusUpdateRequest {
     private OrderStatus status;
 
     private String notes;
+
+    /** Optional: assign a driver when transitioning to OUT_FOR_DELIVERY */
+    private UUID driverId;
 }

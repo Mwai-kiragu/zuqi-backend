@@ -66,4 +66,13 @@ public interface PosSaleRepository extends JpaRepository<PosSale, UUID> {
                                            @Param("from") LocalDateTime from,
                                            @Param("to") LocalDateTime to,
                                            Pageable pageable);
+
+    @Query("SELECT s FROM PosSale s JOIN FETCH s.branch WHERE s.branch.distributor.id = :distributorId ORDER BY s.createdAt DESC")
+    List<PosSale> findAllByDistributorIdFetched(@Param("distributorId") UUID distributorId);
+
+    @Query("SELECT s FROM PosSale s JOIN FETCH s.branch WHERE s.branch.distributor.merchant.id = :merchantId ORDER BY s.createdAt DESC")
+    List<PosSale> findAllByMerchantIdFetched(@Param("merchantId") UUID merchantId);
+
+    @Query("SELECT s FROM PosSale s JOIN FETCH s.branch ORDER BY s.createdAt DESC")
+    List<PosSale> findAllFetched();
 }

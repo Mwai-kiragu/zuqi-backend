@@ -163,6 +163,13 @@ public class SesEmailServiceImpl implements EmailService {
     }
 
     @Override
+    @Async
+    public void sendDataExportEmail(String to, String name, String entityType, int recordCount, String csvContent, String attachmentFilename) {
+        // SES raw email with attachment is complex; log intent and skip in SES provider
+        log.info("SES sendDataExportEmail skipped for {} ({} records) — attachment not supported via template-only SES impl", entityType, recordCount);
+    }
+
+    @Override
     public void sendTemplatedEmail(String to, String subject, String templateName, Map<String, Object> contextVariables) {
         if (!emailConfig.isEnabled()) {
             log.info("Email disabled (SES). Would send '{}' to: {}", templateName, to);

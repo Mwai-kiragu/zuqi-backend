@@ -2,6 +2,8 @@ package com.zuqi.repository;
 
 import com.zuqi.domain.product.ProductCategory;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -33,4 +35,10 @@ public interface ProductCategoryRepository extends JpaRepository<ProductCategory
     List<ProductCategory> findByParentId(Long parentId);
 
     List<ProductCategory> findByParentIdAndActiveTrue(Long parentId);
+
+    @Query("SELECT c FROM ProductCategory c LEFT JOIN FETCH c.parent WHERE c.distributor.id = :distributorId ORDER BY c.name")
+    List<ProductCategory> findByDistributorIdFetchedForExport(@Param("distributorId") UUID distributorId);
+
+    @Query("SELECT c FROM ProductCategory c LEFT JOIN FETCH c.parent WHERE c.distributor.merchant.id = :merchantId ORDER BY c.name")
+    List<ProductCategory> findByMerchantIdFetchedForExport(@Param("merchantId") UUID merchantId);
 }

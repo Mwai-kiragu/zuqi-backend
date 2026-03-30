@@ -127,7 +127,7 @@ public class MpesaController {
 
     private UUID resolveMerchantId(UUID requestedMerchantId) {
         if (requestedMerchantId != null) return requestedMerchantId;
-        UUID fromContext = securityUtils.getCurrentUserMerchantId();
+        UUID fromContext = securityUtils.getEffectiveMerchantId();
         if (fromContext != null) return fromContext;
         throw new com.zuqi.exception.ValidationException("merchantId is required");
     }

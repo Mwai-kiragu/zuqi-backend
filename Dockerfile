@@ -20,11 +20,11 @@ COPY src/ src/
 RUN ./mvnw clean package -DskipTests -q
 
 # ── Stage 2: Runtime ─────────────────────────────────────────
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:21-jre-jammy
 WORKDIR /app
 
 # Non-root user for security
-RUN addgroup -S zuqi && adduser -S zuqi -G zuqi
+RUN groupadd -r zuqi && useradd -r -g zuqi zuqi
 
 COPY --from=builder /build/target/zuqi-*.jar app.jar
 

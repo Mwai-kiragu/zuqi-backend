@@ -234,16 +234,33 @@ public class UserServiceImpl implements UserService {
             throw new DuplicateResourceException("User", "phoneNumber", request.getPhoneNumber());
         }
 
-        // Validate and get role
+        // Resolve UserGroup early so we can derive the role from its UserType.baseRole
+        UserGroup userGroup = null;
+        if (request.getUserGroupId() != null) {
+            userGroup = userGroupRepository.findByIdWithUserType(request.getUserGroupId()).orElse(null);
+        }
+
+        // Determine effective role: UserGroup.userType.baseRole takes priority; fall back to explicit request.role
+        String effectiveRole = request.getRole();
+        if (userGroup != null && userGroup.getUserType() != null
+                && userGroup.getUserType().getBaseRole() != null
+                && !userGroup.getUserType().getBaseRole().isBlank()) {
+            effectiveRole = userGroup.getUserType().getBaseRole();
+        }
+        if (effectiveRole == null || effectiveRole.isBlank()) {
+            throw new ValidationException("User Group is required and must have a base role configured in its User Type.");
+        }
+
+        final String resolvedRole = effectiveRole;
         RoleName roleName;
         try {
-            roleName = RoleName.valueOf(request.getRole());
+            roleName = RoleName.valueOf(resolvedRole);
         } catch (IllegalArgumentException e) {
-            throw new ValidationException("Invalid role: " + request.getRole());
+            throw new ValidationException("Invalid role: " + resolvedRole);
         }
 
         Role role = roleRepository.findByName(roleName)
-                .orElseThrow(() -> new ResourceNotFoundException("Role", "name", request.getRole()));
+                .orElseThrow(() -> new ResourceNotFoundException("Role", "name", resolvedRole));
 
         // Determine distributor ID
         final UUID finalDistributorId;
@@ -296,10 +313,11 @@ public class UserServiceImpl implements UserService {
                     .ifPresent(roles::add);
         }
 
-        // Resolve optional UserGroup
-        UserGroup userGroup = null;
-        if (request.getUserGroupId() != null) {
-            userGroup = userGroupRepository.findById(request.getUserGroupId()).orElse(null);
+        // UserGroup already resolved above (with UserType fetch)
+
+        // Require merchantId when assigning MERCHANT_ADMIN role
+        if (roleName == RoleName.MERCHANT_ADMIN && resolvedMerchantId == null) {
+            throw new ValidationException("merchantId is required when creating a MERCHANT_ADMIN user");
         }
 
         User user = User.builder()
@@ -314,6 +332,7 @@ public class UserServiceImpl implements UserService {
                 .userGroup(userGroup)
                 .active(true)
                 .emailVerified(false)
+                .mustChangePassword(sendWelcomeEmail)
                 .build();
 
         User savedUser = userRepository.save(user);
@@ -342,7 +361,7 @@ public class UserServiceImpl implements UserService {
             if (targetBranch != null && !branchUserRepository.existsByBranchIdAndUserId(targetBranch.getId(), savedUser.getId())) {
                 String effectiveBranchRole = (request.getBranchRole() != null && !request.getBranchRole().isBlank())
                         ? request.getBranchRole()
-                        : request.getRole();
+                        : resolvedRole;
                 BranchUser branchUser = BranchUser.builder()
                         .branch(targetBranch)
                         .user(savedUser)

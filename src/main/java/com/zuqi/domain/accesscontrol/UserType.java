@@ -32,6 +32,10 @@ public class UserType {
     @Column(name = "distributor_id")
     private UUID distributorId;
 
+    /** Maps this UserType to a system Casbin role (e.g. SALES_REP, FINANCE, WAREHOUSE_MANAGER). */
+    @Column(name = "base_role", length = 50)
+    private String baseRole;
+
     @OneToMany(mappedBy = "userType", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private List<UserTypePermission> permissions = new ArrayList<>();

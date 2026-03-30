@@ -50,4 +50,8 @@ public interface OrderService {
     long getOrderCountByStatus(UUID distributorId, OrderStatus status);
 
     List<OrderResponse> getOverdueOrders();
+
+    OrderResponse assignDriver(UUID orderId, UUID driverId, String notes, User currentUser);
+
+    List<DriverDto> getAvailableDrivers();
 }

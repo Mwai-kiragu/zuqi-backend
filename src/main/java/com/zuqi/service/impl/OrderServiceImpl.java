@@ -203,6 +203,9 @@ public class OrderServiceImpl implements OrderService {
         // Generate order number
         String orderNumber = generateOrderNumber();
 
+        // Determine approval routing before building the order
+        boolean needsApproval = securityUtils.currentUserHasWorkflowTier("INITIATOR");
+
         // Create order
         Order order = Order.builder()
                 .orderNumber(orderNumber)
@@ -211,7 +214,8 @@ public class OrderServiceImpl implements OrderService {
                 .salesRep(salesRep != null ? salesRep : currentUser)
                 .warehouse(warehouse)
                 .orderType(request.getOrderType() != null ? request.getOrderType() : OrderType.STANDARD)
-                .status(OrderStatus.PENDING)
+                .status(needsApproval ? OrderStatus.PENDING : OrderStatus.CONFIRMED)
+                .approvalStatus(needsApproval ? "PENDING_APPROVAL" : "NOT_REQUIRED")
                 .paymentStatus(PaymentStatus.PENDING)
                 .discountAmount(request.getDiscountAmount() != null ? request.getDiscountAmount() : BigDecimal.ZERO)
                 .paymentTermsDays(request.getPaymentTermsDays() != null ? request.getPaymentTermsDays() : merchant.getPaymentTermsDays())
@@ -267,13 +271,6 @@ public class OrderServiceImpl implements OrderService {
             }
         }
 
-        // Approval routing for INITIATOR users
-        boolean needsApproval = securityUtils.currentUserHasWorkflowTier("INITIATOR");
-        if (needsApproval) {
-            order.setApprovalStatus("PENDING_APPROVAL");
-            order.setStatus(OrderStatus.PENDING);
-        }
-
         // Save order
         order = orderRepository.save(order);
 
@@ -287,7 +284,7 @@ public class OrderServiceImpl implements OrderService {
         }
 
         // Add initial status history
-        addStatusHistory(order, OrderStatus.PENDING, "Order created", currentUser);
+        addStatusHistory(order, order.getStatus(), "Order created", currentUser);
 
         // Deduct stock immediately at order creation
         if (order.getWarehouse() != null) {
@@ -403,6 +400,14 @@ public class OrderServiceImpl implements OrderService {
 
         order.setStatus(newStatus);
 
+        // Auto-assign driver when transitioning to OUT_FOR_DELIVERY
+        if (newStatus == OrderStatus.OUT_FOR_DELIVERY && request.getDriverId() != null) {
+            User driver = userRepository.findById(request.getDriverId())
+                    .orElseThrow(() -> new ResourceNotFoundException("User", "id", request.getDriverId()));
+            order.setAssignedDriver(driver);
+            order.setAssignedAt(LocalDateTime.now());
+        }
+
         // Add status history
         addStatusHistory(order, newStatus, request.getNotes(), currentUser);
 
@@ -465,6 +470,44 @@ public class OrderServiceImpl implements OrderService {
         return orderRepository.findOverdueOrders(LocalDate.now())
                 .stream()
                 .map(OrderResponse::fromEntity)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public OrderResponse assignDriver(UUID orderId, UUID driverId, String notes, User currentUser) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
+
+        User driver = userRepository.findById(driverId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", driverId));
+
+        order.setAssignedDriver(driver);
+        order.setAssignedAt(LocalDateTime.now());
+
+        addStatusHistory(order, order.getStatus(),
+                "Driver assigned: " + driver.getFirstName() + " " + driver.getLastName()
+                + (notes != null ? " — " + notes : ""), currentUser);
+
+        order = orderRepository.save(order);
+        log.info("Driver {} assigned to order {}", driver.getFullName(), order.getOrderNumber());
+        return OrderResponse.fromEntity(order);
+    }
+
+    @Override
+    public List<DriverDto> getAvailableDrivers() {
+        UUID distributorId = securityUtils.getDistributorIdForFiltering();
+        if (distributorId == null) {
+            return List.of();
+        }
+        return userRepository.findActiveDriversByDistributorId(distributorId)
+                .stream()
+                .map(u -> DriverDto.builder()
+                        .id(u.getId())
+                        .fullName(u.getFirstName() + " " + u.getLastName())
+                        .phoneNumber(u.getPhoneNumber())
+                        .email(u.getEmail())
+                        .build())
                 .toList();
     }
 

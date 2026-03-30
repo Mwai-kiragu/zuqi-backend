@@ -54,4 +54,8 @@ public interface ProductService {
     void activateCategory(Long id);
 
     Page<ProductResponse> getProductsForBranch(UUID distributorId, UUID branchId, String search, Long categoryId, Pageable pageable);
+
+    List<ProductResponse> getProductVariants(UUID parentId);
+
+    ProductResponse createProductVariant(UUID parentId, ProductRequest request);
 }

@@ -20,9 +20,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class AnomalyAlertsTool {
-
     private final AnomalyAlertRepository anomalyAlertRepository;
-
     @Tool("Get open anomaly alerts for a distributor. Returns the total number of open alerts " +
           "broken down by severity (CRITICAL, HIGH, MEDIUM, LOW), and the descriptions of the " +
           "5 most recent open alerts sorted by creation date descending. " +
@@ -36,7 +34,6 @@ public class AnomalyAlertsTool {
         try {
             UUID distId = UUID.fromString(distributorId.trim());
 
-            // Fetch all OPEN alerts for this distributor
             List<AnomalyAlert> openAlerts = anomalyAlertRepository.findByDistributorIdAndStatus(
                     distId, AlertStatus.OPEN);
 
@@ -50,12 +47,10 @@ public class AnomalyAlertsTool {
             long lowCount      = openAlerts.stream()
                     .filter(a -> AlertSeverity.LOW      == a.getSeverity()).count();
 
-            // Also count ACKNOWLEDGED alerts as they are still actionable
             List<AnomalyAlert> acknowledgedAlerts = anomalyAlertRepository.findByDistributorIdAndStatus(
                     distId, AlertStatus.ACKNOWLEDGED);
             long totalAcknowledged = acknowledgedAlerts.size();
 
-            // 5 most recent OPEN alerts by creation date
             List<AnomalyAlert> recent5 = openAlerts.stream()
                     .filter(a -> a.getCreatedAt() != null)
                     .sorted(Comparator.comparing(AnomalyAlert::getCreatedAt).reversed())

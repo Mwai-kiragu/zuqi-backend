@@ -1,4 +1,4 @@
-CREATE TABLE approval_thresholds (
+CREATE TABLE IF NOT EXISTS approval_thresholds (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     distributor_id UUID REFERENCES distributors(id),
     workflow_type VARCHAR(50) NOT NULL,

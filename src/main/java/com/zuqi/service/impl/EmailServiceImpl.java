@@ -260,4 +260,54 @@ public class EmailServiceImpl implements EmailService {
             log.error("Failed to send invoice email to: {}", to, e);
         }
     }
+
+    @Override
+    @Async
+    public void sendDataExportEmail(String to, String name, String entityType, int recordCount,
+                                    String csvContent, String attachmentFilename) {
+        if (to == null || to.isBlank()) {
+            log.warn("sendDataExportEmail: no email address for user, skipping");
+            return;
+        }
+        if (!emailConfig.isEnabled()) {
+            log.info("Email disabled. Would send data export ({}) to: {}", entityType, to);
+            return;
+        }
+
+        try {
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(
+                    message,
+                    MimeMessageHelper.MULTIPART_MODE_MIXED_RELATED,
+                    java.nio.charset.StandardCharsets.UTF_8.name()
+            );
+
+            helper.setTo(to);
+            helper.setFrom(emailConfig.getFrom(), emailConfig.getFromName());
+            helper.setSubject("Your " + entityType + " export is ready — " + recordCount + " records");
+
+            String greeting = (name != null && !name.isBlank()) ? "Hi " + name + "," : "Hello,";
+            String html = "<div style='font-family:sans-serif;color:#111;'>"
+                + "<p>" + greeting + "</p>"
+                + "<p>Your <strong>" + entityType + "</strong> export has been prepared and is attached to this email.</p>"
+                + "<p><strong>" + recordCount + " records</strong> were included in the export.</p>"
+                + "<p style='color:#6b7280;font-size:13px;'>This export was requested from the Zuqi platform. "
+                + "If you did not request this, please contact your administrator.</p>"
+                + "<p>— " + emailConfig.getFromName() + "</p>"
+                + "</div>";
+
+            helper.setText(html, true);
+
+            // Attach the CSV file
+            byte[] csvBytes = csvContent.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            helper.addAttachment(attachmentFilename,
+                new org.springframework.core.io.ByteArrayResource(csvBytes), "text/csv");
+
+            mailSender.send(message);
+            log.info("Data export email ({}) sent to: {} — {} records", entityType, to, recordCount);
+
+        } catch (Exception e) {
+            log.error("Failed to send data export email to: {}", to, e);
+        }
+    }
 }
