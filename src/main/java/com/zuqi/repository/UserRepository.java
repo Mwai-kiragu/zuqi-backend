@@ -1,5 +1,6 @@
 package com.zuqi.repository;
 
+import com.zuqi.domain.accesscontrol.UserTypePermission;
 import com.zuqi.domain.user.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -70,6 +71,12 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     // Global queries for SUPER_ADMIN/ADMIN (no distributor filter)
     @Query("SELECT COUNT(u) FROM User u JOIN u.roles r WHERE r.name = :roleName AND u.active = true")
     long countByRole(@Param("roleName") String roleName);
+
+    /** Fetch all UserType permissions for a user via their UserGroup → UserType chain. */
+    @Query("SELECT p FROM UserType ut JOIN ut.permissions p " +
+           "WHERE ut.id = (SELECT u.userGroup.userType.id FROM User u WHERE u.id = :userId " +
+           "AND u.userGroup IS NOT NULL AND u.userGroup.userType IS NOT NULL)")
+    List<UserTypePermission> findUserTypePermissionsByUserId(@Param("userId") UUID userId);
 
     /** Scope to a merchant brand (MERCHANT_ADMIN) — users who belong to the brand or its distributors. */
     @Query("SELECT u FROM User u WHERE u.merchantId = :merchantId OR " +
