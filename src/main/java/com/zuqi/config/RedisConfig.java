@@ -1,7 +1,9 @@
 package com.zuqi.config;
 
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
@@ -42,6 +44,14 @@ public class RedisConfig {
         ObjectMapper mapper = new ObjectMapper()
                 .registerModule(new JavaTimeModule())
                 .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+        // Enable @class type metadata so Java records (final types) round-trip correctly.
+        // Without this, records deserialize as LinkedHashMap (no type hint in JSON).
+        // EVERYTHING + PROPERTY matches the behaviour of GenericJackson2JsonRedisSerializer().
+        mapper.activateDefaultTyping(
+                LaissezFaireSubTypeValidator.instance,
+                ObjectMapper.DefaultTyping.EVERYTHING,
+                JsonTypeInfo.As.PROPERTY
+        );
         return new GenericJackson2JsonRedisSerializer(mapper);
     }
 

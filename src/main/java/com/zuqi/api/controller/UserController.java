@@ -25,6 +25,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -50,7 +51,7 @@ public class UserController {
             @RequestParam(required = false) Boolean active,
             @RequestParam(required = false) String search) {
 
-        Page<UserResponse> users = userService.getAllUsers(PageRequest.of(page, size), active, search);
+        Page<UserResponse> users = userService.getAllUsers(PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")), active, search);
         return ResponseEntity.ok(ApiResponse.success("Users retrieved successfully", users));
     }
 
@@ -63,7 +64,7 @@ public class UserController {
             @RequestParam(required = false) Boolean active,
             @RequestParam(required = false) String search) {
 
-        Page<UserResponse> users = userService.getUsersByDistributor(distributorId, PageRequest.of(page, size), active, search);
+        Page<UserResponse> users = userService.getUsersByDistributor(distributorId, PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")), active, search);
         return ResponseEntity.ok(ApiResponse.success("Users retrieved successfully", users));
     }
 
