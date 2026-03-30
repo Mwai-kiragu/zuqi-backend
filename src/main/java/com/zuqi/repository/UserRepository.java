@@ -29,6 +29,10 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     Page<User> findByActiveFalse(Pageable pageable);
 
+    Page<User> findByDistributorId(UUID distributorId, Pageable pageable);
+
+    Page<User> findByDistributorIdAndActiveTrue(UUID distributorId, Pageable pageable);
+
     Page<User> findByDistributorIdAndActiveFalse(UUID distributorId, Pageable pageable);
 
     List<User> findByDistributorId(UUID distributorId);
