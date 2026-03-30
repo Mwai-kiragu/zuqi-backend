@@ -44,6 +44,8 @@ public class ProductController {
             @Parameter(description = "Category ID filter") @RequestParam(required = false) Long categoryId,
             @Parameter(description = "Search term") @RequestParam(required = false) String search,
             @Parameter(description = "Filter by active status") @RequestParam(required = false) Boolean active,
+            @Parameter(description = "topLevelOnly=true: only top-level (no parent). listableOnly=true: exclude parent templates (show variants + standalone)") @RequestParam(required = false, defaultValue = "false") Boolean topLevelOnly,
+            @Parameter(description = "When true, hides parent templates (hasVariants=true) — variants + standalone products only") @RequestParam(required = false, defaultValue = "false") Boolean listableOnly,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @PageableDefault(size = 20, sort = "name", direction = Sort.Direction.ASC) Pageable pageable) {
@@ -63,7 +65,13 @@ public class ProductController {
                 products = productService.getInactiveProducts(pageable);
             }
         } else if (distributorId != null) {
-            products = productService.getProductsByDistributor(distributorId, startDate, endDate, pageable);
+            if (Boolean.TRUE.equals(listableOnly)) {
+                products = productService.getListableProductsByDistributor(distributorId, startDate, endDate, pageable);
+            } else if (Boolean.TRUE.equals(topLevelOnly)) {
+                products = productService.getTopLevelProductsByDistributor(distributorId, startDate, endDate, pageable);
+            } else {
+                products = productService.getProductsByDistributor(distributorId, startDate, endDate, pageable);
+            }
         } else if (categoryId != null) {
             products = productService.getProductsByCategory(categoryId, pageable);
         } else {

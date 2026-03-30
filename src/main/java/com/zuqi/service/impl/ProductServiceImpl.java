@@ -108,6 +108,32 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<ProductResponse> getTopLevelProductsByDistributor(UUID distributorId, java.time.LocalDate startDate, java.time.LocalDate endDate, Pageable pageable) {
+        log.debug("Fetching top-level products for distributor: {}", distributorId);
+        boolean hasDates = startDate != null && endDate != null;
+        if (hasDates) {
+            java.time.LocalDateTime from = startDate.atStartOfDay();
+            java.time.LocalDateTime to = endDate.plusDays(1).atStartOfDay();
+            return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndActiveTrueAndParentProductIsNullAndCreatedAtBetween(distributorId, from, to, pageable));
+        }
+        return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndActiveTrueAndParentProductIsNull(distributorId, pageable));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProductResponse> getListableProductsByDistributor(UUID distributorId, java.time.LocalDate startDate, java.time.LocalDate endDate, Pageable pageable) {
+        log.debug("Fetching listable (non-template) products for distributor: {}", distributorId);
+        boolean hasDates = startDate != null && endDate != null;
+        if (hasDates) {
+            java.time.LocalDateTime from = startDate.atStartOfDay();
+            java.time.LocalDateTime to = endDate.plusDays(1).atStartOfDay();
+            return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndActiveTrueAndHasVariantsFalseAndCreatedAtBetween(distributorId, from, to, pageable));
+        }
+        return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndActiveTrueAndHasVariantsFalse(distributorId, pageable));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Page<ProductResponse> getProductsByCategory(Long categoryId, Pageable pageable) {
         log.debug("Fetching products for category: {}", categoryId);
         return enrichWithStockAndBranchPrices(productRepository.findByCategoryIdAndActiveTrue(categoryId, pageable));

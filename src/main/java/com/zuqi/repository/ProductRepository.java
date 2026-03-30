@@ -24,7 +24,19 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
 
     Page<Product> findByDistributorIdAndActiveTrue(UUID distributorId, Pageable pageable);
 
+    /** Top-level only — excludes variant children (parentProduct IS NULL). */
+    Page<Product> findByDistributorIdAndActiveTrueAndParentProductIsNull(UUID distributorId, Pageable pageable);
+
+    /** Excludes parent templates (hasVariants=false) — shows standalone + variant children. */
+    Page<Product> findByDistributorIdAndActiveTrueAndHasVariantsFalse(UUID distributorId, Pageable pageable);
+
     Page<Product> findByDistributorIdAndActiveTrueAndCreatedAtBetween(UUID distributorId, LocalDateTime from, LocalDateTime to, Pageable pageable);
+
+    /** Top-level only with date range. */
+    Page<Product> findByDistributorIdAndActiveTrueAndParentProductIsNullAndCreatedAtBetween(UUID distributorId, LocalDateTime from, LocalDateTime to, Pageable pageable);
+
+    /** Excludes parent templates with date range. */
+    Page<Product> findByDistributorIdAndActiveTrueAndHasVariantsFalseAndCreatedAtBetween(UUID distributorId, LocalDateTime from, LocalDateTime to, Pageable pageable);
 
     Page<Product> findByActiveFalse(Pageable pageable);
 
@@ -67,7 +79,17 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
     /** Scope to a merchant brand (MERCHANT_ADMIN). */
     Page<Product> findByDistributorMerchantIdAndActiveTrue(UUID merchantId, Pageable pageable);
 
+    /** Top-level only for a merchant brand. */
+    Page<Product> findByDistributorMerchantIdAndActiveTrueAndParentProductIsNull(UUID merchantId, Pageable pageable);
+
+    /** Excludes parent templates for a merchant brand. */
+    Page<Product> findByDistributorMerchantIdAndActiveTrueAndHasVariantsFalse(UUID merchantId, Pageable pageable);
+
     Page<Product> findByDistributorMerchantIdAndActiveTrueAndCreatedAtBetween(UUID merchantId, LocalDateTime from, LocalDateTime to, Pageable pageable);
+
+    Page<Product> findByDistributorMerchantIdAndActiveTrueAndParentProductIsNullAndCreatedAtBetween(UUID merchantId, LocalDateTime from, LocalDateTime to, Pageable pageable);
+
+    Page<Product> findByDistributorMerchantIdAndActiveTrueAndHasVariantsFalseAndCreatedAtBetween(UUID merchantId, LocalDateTime from, LocalDateTime to, Pageable pageable);
 
     Page<Product> findByDistributorMerchantIdAndActiveFalse(UUID merchantId, Pageable pageable);
 
