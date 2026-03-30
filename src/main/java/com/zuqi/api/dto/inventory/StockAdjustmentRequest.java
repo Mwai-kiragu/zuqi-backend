@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Data
@@ -31,4 +32,10 @@ public class StockAdjustmentRequest {
     private String referenceType;
     private UUID referenceId;
     private String notes;
+
+    /** Optional: batch number for this stock-in (auto-generated if omitted but expiryDate is set). */
+    private String batchNumber;
+
+    /** Optional: expiry date for this stock-in. When provided, a ProductBatch record is auto-created. */
+    private LocalDate expiryDate;
 }
