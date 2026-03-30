@@ -248,7 +248,7 @@ public class UserServiceImpl implements UserService {
             effectiveRole = userGroup.getUserType().getBaseRole();
         }
         if (effectiveRole == null || effectiveRole.isBlank()) {
-            throw new ValidationException("Role is required — either provide a role or select a User Group whose User Type has a base role configured");
+            throw new ValidationException("User Group is required and must have a base role configured in its User Type.");
         }
 
         final String resolvedRole = effectiveRole;
@@ -361,7 +361,7 @@ public class UserServiceImpl implements UserService {
             if (targetBranch != null && !branchUserRepository.existsByBranchIdAndUserId(targetBranch.getId(), savedUser.getId())) {
                 String effectiveBranchRole = (request.getBranchRole() != null && !request.getBranchRole().isBlank())
                         ? request.getBranchRole()
-                        : request.getRole();
+                        : resolvedRole;
                 BranchUser branchUser = BranchUser.builder()
                         .branch(targetBranch)
                         .user(savedUser)
