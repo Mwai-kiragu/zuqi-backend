@@ -38,6 +38,9 @@ public class UserResponse {
     /** UserGroup id and name — drives module permissions + workflow tier */
     private UUID userGroupId;
     private String userGroupName;
+    /** UserType assigned to the user's group */
+    private UUID userTypeId;
+    private String userTypeName;
     /** Effective workflow tier: from UserGroup if set, else from legacy role */
     private String workflowTier;
 
@@ -68,6 +71,10 @@ public class UserResponse {
                 .merchantId(user.getMerchantId())
                 .userGroupId(user.getUserGroup() != null ? user.getUserGroup().getId() : null)
                 .userGroupName(user.getUserGroup() != null ? user.getUserGroup().getName() : null)
+                .userTypeId(user.getUserGroup() != null && user.getUserGroup().getUserType() != null
+                        ? user.getUserGroup().getUserType().getId() : null)
+                .userTypeName(user.getUserGroup() != null && user.getUserGroup().getUserType() != null
+                        ? user.getUserGroup().getUserType().getName() : null)
                 .active(user.isActive())
                 .emailVerified(user.isEmailVerified())
                 .lastLoginAt(user.getLastLoginAt())
