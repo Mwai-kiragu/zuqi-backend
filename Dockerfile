@@ -17,7 +17,7 @@ RUN ./mvnw dependency:go-offline -q
 
 # Copy source and build the fat JAR
 COPY src/ src/
-RUN ./mvnw clean package -DskipTests -q
+RUN ./mvnw clean package -Dmaven.test.skip=true -q
 
 # ── Stage 2: Runtime ─────────────────────────────────────────
 FROM eclipse-temurin:21-jre-jammy
