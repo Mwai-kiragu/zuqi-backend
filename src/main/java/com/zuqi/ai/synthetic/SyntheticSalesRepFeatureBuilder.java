@@ -42,53 +42,66 @@ public class SyntheticSalesRepFeatureBuilder {
                                              LocalDateTime periodStart,
                                              LocalDateTime periodEnd,
                                              SyntheticDataBundle bundle) {
-        // All activities for this rep in the period
+        // Orders placed by this rep in the period — mirrors SalesRepFeatureServiceImpl#getOrdersForPeriod
+        List<SyntheticOrder> repOrders = bundle.getOrders().stream()
+                .filter(o -> salesRepId.equals(o.salesRepRef()))
+                .filter(o -> !o.orderDate().isBefore(periodStart) && !o.orderDate().isAfter(periodEnd))
+                .collect(Collectors.toList());
+
+        // Assigned merchants (distinct merchants from all activities in period)
         List<SyntheticRepActivity> activities = bundle.getRepActivities().stream()
                 .filter(a -> a.salesRepId().equals(salesRepId))
                 .filter(a -> !a.visitDate().isBefore(periodStart.toLocalDate())
                         && !a.visitDate().isAfter(periodEnd.toLocalDate()))
                 .collect(Collectors.toList());
 
-        // Activity records that resulted in an order
-        List<SyntheticRepActivity> orderActivities = activities.stream()
-                .filter(SyntheticRepActivity::orderPlaced)
-                .collect(Collectors.toList());
-
-        // Assigned merchants (distinct merchants from all activities in period)
         Set<UUID> merchantSet = activities.stream()
                 .map(SyntheticRepActivity::merchantRef)
                 .collect(Collectors.toSet());
         int assignedMerchants = merchantSet.size();
 
-        // Visit and conversion metrics
-        int visitCount         = activities.size();
-        int visitTarget        = computeVisitTarget(periodStart, periodEnd, assignedMerchants);
-        int ordersCreated      = orderActivities.size();
-        double orderConversionRate = FeatureComputationUtils.computePercentage(
-                ordersCreated, visitCount);
+        // visitCount = unique merchants who placed orders
+        // Mirrors SalesRepFeatureServiceImpl#computeVisitCount (unique merchantIds in orders)
+        Set<UUID> merchantsWhoOrdered = repOrders.stream()
+                .map(SyntheticOrder::merchantRef)
+                .collect(Collectors.toSet());
+        int visitCount = merchantsWhoOrdered.size();
+
+        int visitTarget = computeVisitTarget(periodStart, periodEnd, assignedMerchants);
+        int ordersCreated = repOrders.size();
+        double orderConversionRate = FeatureComputationUtils.computePercentage(ordersCreated, visitCount);
 
         // Order value metrics
-        BigDecimal totalOrderValue = orderActivities.stream()
-                .map(SyntheticRepActivity::orderValue)
+        BigDecimal totalOrderValue = repOrders.stream()
+                .map(SyntheticOrder::totalAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         BigDecimal avgOrderValue = ordersCreated == 0 ? BigDecimal.ZERO :
                 totalOrderValue.divide(BigDecimal.valueOf(ordersCreated), 2, RoundingMode.HALF_UP);
 
         // Merchant retention: merchants with at least one order placed
-        Set<UUID> merchantsWhoOrdered = orderActivities.stream()
-                .map(SyntheticRepActivity::merchantRef)
-                .collect(Collectors.toSet());
         double merchantRetentionRate = FeatureComputationUtils.computePercentage(
                 merchantsWhoOrdered.size(), assignedMerchants);
 
-        // Collections (simplified: use order value as proxy for both target and 85% actual)
+        // Collections — mirrors SalesRepFeatureServiceImpl#computeCollectionRate
+        // collectionsTarget = total order value; collectionsActual = sum of actual payments
         BigDecimal collectionsTarget = totalOrderValue;
-        BigDecimal collectionsActual = totalOrderValue.multiply(BigDecimal.valueOf(0.85));
+        BigDecimal collectionsActual = repOrders.stream()
+                .flatMap(o -> bundle.getPaymentsForOrder(o.syntheticId()).stream())
+                .map(SyntheticPayment::amount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         double collectionRate = collectionsTarget.compareTo(BigDecimal.ZERO) == 0 ? 0.0 :
                 collectionsActual
                         .divide(collectionsTarget, 4, RoundingMode.HALF_UP)
                         .multiply(BigDecimal.valueOf(100))
                         .doubleValue();
+
+        // New merchants acquired — mirrors SalesRepFeatureServiceImpl#getNewMerchantsInPeriod
+        // Merchants whose registrationDate falls in the period and are assigned to this rep
+        int newMerchantsAcquired = (int) bundle.getMerchants().stream()
+                .filter(m -> merchantSet.contains(m.syntheticId()))
+                .filter(m -> !m.registrationDate().isBefore(periodStart.toLocalDate())
+                        && !m.registrationDate().isAfter(periodEnd.toLocalDate()))
+                .count();
 
         // Territory metrics
         int visitedTerritoryMerchants = merchantsWhoOrdered.size();
@@ -114,14 +127,16 @@ public class SyntheticSalesRepFeatureBuilder {
                 .totalOrderValue(totalOrderValue)
                 .avgOrderValue(avgOrderValue)
                 // Merchant metrics
-                .newMerchantsAcquired(0)   // new merchant tracking not available in synthetic data
+                .newMerchantsAcquired(newMerchantsAcquired)
                 .activeMerchants(assignedMerchants)
                 .merchantRetentionRate(merchantRetentionRate)
-                // Collections
+                // Collections — from actual payments, matching real service
                 .collectionsTarget(collectionsTarget)
                 .collectionsActual(collectionsActual)
                 .collectionRate(collectionRate)
-                .paymentsCollected(ordersCreated)
+                .paymentsCollected((int) repOrders.stream()
+                        .mapToLong(o -> bundle.getPaymentsForOrder(o.syntheticId()).size())
+                        .sum())
                 // Route and territory
                 .routeVisitsPlanned(visitTarget)
                 .routeVisitsCompleted(visitCount)

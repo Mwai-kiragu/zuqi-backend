@@ -56,10 +56,13 @@ public class DemandForecastController {
     )
     public ResponseEntity<ApiResponse<Page<DemandForecast>>> listForecasts(
             @Parameter(required = true) @RequestParam UUID distributorId,
+            @Parameter(description = "Warehouse filter (not stored on forecast — accepted for API compatibility)")
+            @RequestParam(required = false) UUID warehouseId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
-        log.info("GET /v1/ai/demand/forecasts distributor={} page={} size={}", distributorId, page, size);
+        log.info("GET /v1/ai/demand/forecasts distributor={} warehouseId={} page={} size={}",
+                distributorId, warehouseId, page, size);
 
         try {
             PageRequest pageable = PageRequest.of(page, size);

@@ -81,7 +81,13 @@ public class BankReconMatcher {
                 })
                 .toList();
 
-        Model<Label> model = modelLoader.loadModel(MODEL_NAME);
+        Model<Label> model;
+        try {
+            model = modelLoader.loadModel(MODEL_NAME);
+        } catch (Error e) {
+            log.error("[BankRecon] Fatal error loading model (native library issue?): {}", e.getMessage(), e);
+            model = null;
+        }
         List<MatchResult> results = new ArrayList<>();
 
         for (Payment candidate : candidates) {

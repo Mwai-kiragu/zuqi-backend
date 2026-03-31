@@ -55,11 +55,15 @@ public class CreditScoringController {
     public ResponseEntity<ApiResponse<Page<AIPrediction>>> listEvaluations(
             @Parameter(required = true) @RequestParam UUID distributorId,
             @RequestParam(required = false) String search,
+            @Parameter(description = "Filter by decision: AUTO_APPROVE, MANUAL_REVIEW, AUTO_REJECT (client-side filter)")
+            @RequestParam(required = false) String decision,
+            @Parameter(description = "Filter by risk tier: LOW_RISK, MODERATE_RISK, HIGH_RISK, VERY_HIGH_RISK (client-side filter)")
+            @RequestParam(required = false) String riskTier,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
 
-        log.info("GET /v1/ai/credit/evaluations distributor={} search={} page={} size={}",
-                distributorId, search, page, size);
+        log.info("GET /v1/ai/credit/evaluations distributor={} search={} decision={} riskTier={} page={} size={}",
+                distributorId, search, decision, riskTier, page, size);
 
         try {
             PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());

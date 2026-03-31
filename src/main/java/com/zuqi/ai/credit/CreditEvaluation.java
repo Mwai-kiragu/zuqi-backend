@@ -30,7 +30,9 @@ public record CreditEvaluation(
         List<String> riskFactors,           // Negative factors (e.g., "High utilization ratio")
         List<String> recommendations,       // Actionable suggestions (e.g., "Monitor payment delays")
         LocalDateTime evaluatedAt,
-        String modelVersion                 // Track which LLM version was used
+        String modelVersion,                // Track which LLM version was used
+        Integer mlScore,                    // Raw ML classifier score, null in LLM-only mode
+        Integer llmScore                    // Raw LLM score, null in ML-only mode
 ) {
 
     public enum RiskCategory {

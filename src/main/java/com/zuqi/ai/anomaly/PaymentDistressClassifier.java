@@ -70,6 +70,9 @@ public class PaymentDistressClassifier {
             log.warn("No active model found for '{}' ({}), returning safe default",
                     MODEL_NAME, e.getMessage());
             return defaultResult(merchantId);
+        } catch (Error e) {
+            log.error("Fatal error loading model '{}' (native library issue?): {}", MODEL_NAME, e.getMessage(), e);
+            return defaultResult(merchantId);
         }
 
         if (model == null) {

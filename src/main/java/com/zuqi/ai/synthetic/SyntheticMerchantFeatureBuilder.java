@@ -76,7 +76,7 @@ public class SyntheticMerchantFeatureBuilder {
                 .totalOverdueAmount(BigDecimal.ZERO)
                 // ── Credit features ─────────────────────────────────────
                 .currentCreditLimit(computeCurrentCreditLimit(merchant, creditHistory))
-                .currentUtilizationRatio(computeCurrentUtilizationRatio(merchant, creditHistory, orders))
+                .currentUtilizationRatio(computeCurrentUtilizationRatio(merchant, creditHistory, orders, bundle))
                 .peakUtilizationRatio(0.0)
                 .utilizationTrendSlope(0.0)
                 .limitIncreaseCount(computeLimitIncreaseCount(creditHistory))
@@ -238,16 +238,23 @@ public class SyntheticMerchantFeatureBuilder {
 
     private Double computeCurrentUtilizationRatio(SyntheticMerchant merchant,
                                                     List<SyntheticCreditEvaluation> creditHistory,
-                                                    List<SyntheticOrder> orders) {
+                                                    List<SyntheticOrder> orders,
+                                                    SyntheticDataBundle bundle) {
         BigDecimal limit = computeCurrentCreditLimit(merchant, creditHistory);
         if (limit.compareTo(BigDecimal.ZERO) == 0) return 0.0;
-        // Approximate outstanding balance as 30% of delivered orders total
-        BigDecimal outstanding = orders.stream()
-                .filter(o -> "DELIVERED".equals(o.status()))
-                .map(SyntheticOrder::totalAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .multiply(BigDecimal.valueOf(0.3));
-        return outstanding.divide(limit, 4, RoundingMode.HALF_UP).doubleValue();
+        // Mirrors MerchantFeatureServiceImpl#computeCurrentCreditBalance:
+        // sum of (totalAmount - paidAmount) for orders where outstanding > 0.
+        // paidAmount = sum of actual payments for that order (no getPaidAmount() field on synthetic records).
+        BigDecimal currentBalance = orders.stream()
+                .map(o -> {
+                    BigDecimal paid = bundle.getPaymentsForOrder(o.syntheticId()).stream()
+                            .map(SyntheticPayment::amount)
+                            .reduce(BigDecimal.ZERO, BigDecimal::add);
+                    return o.totalAmount().subtract(paid);
+                })
+                .filter(outstanding -> outstanding.compareTo(BigDecimal.ZERO) > 0)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return currentBalance.divide(limit, 4, RoundingMode.HALF_UP).doubleValue();
     }
 
     private Integer computeLimitIncreaseCount(List<SyntheticCreditEvaluation> creditHistory) {

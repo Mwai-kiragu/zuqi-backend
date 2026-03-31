@@ -103,6 +103,21 @@ public class SyntheticPaymentFeatureBuilder {
     /**
      * Compute 3-month merchant payment trend features for distress/default prediction.
      *
+     * <p>Mirrors {@link com.zuqi.ai.feature.PaymentFeatureServiceImpl#computeMerchantTrendFeatures}
+     * field-for-field:
+     * <ul>
+     *   <li>latePaymentRateTrend3m  — ratio (current−prev)/prev, not a simple difference</li>
+     *   <li>orderFrequencyTrend3m   — ratio (current−prev)/prev, not ×100 percentage</li>
+     *   <li>avgOrderValueTrend3m    — ratio (current−prev)/prev, not ×100 percentage</li>
+     *   <li>partialPaymentFreqTrend3m — ratio (current−prev)/prev, not a simple difference</li>
+     *   <li>creditUtilization3m     — avg (outstanding/limit) across 3m orders</li>
+     *   <li>creditUtilizationTrajectory — linear regression slope of per-order utilization</li>
+     *   <li>peakUtilization3m       — max outstanding/limit across 3m orders</li>
+     *   <li>totalOutstanding        — sum of unpaid balances across ALL orders</li>
+     *   <li>outstandingTrend3m      — ratio of current vs pre-3m outstanding</li>
+     *   <li>consecutiveMissedOrders — weeks since most recent order (not consecutive missed weeks)</li>
+     * </ul>
+     *
      * @param merchant  the synthetic merchant
      * @param bundle    the full in-memory dataset
      * @param asOfDate  reference date ("now")
@@ -114,6 +129,13 @@ public class SyntheticPaymentFeatureBuilder {
         UUID mid = merchant.syntheticId();
         List<SyntheticPayment> allPayments = bundle.getPaymentsForMerchant(mid);
         List<SyntheticOrder>   allOrders   = bundle.getOrdersForMerchant(mid);
+
+        // Credit limit — use most recent evaluation, fall back to initial limit
+        List<SyntheticCreditEvaluation> creditHistory = bundle.getCreditHistoryForMerchant(mid);
+        BigDecimal creditLimit = creditHistory.stream()
+                .max(Comparator.comparing(SyntheticCreditEvaluation::evaluationDate))
+                .map(SyntheticCreditEvaluation::creditLimit)
+                .orElse(merchant.initialCreditLimit());
 
         LocalDateTime threeMonthsAgo = asOfDate.minusMonths(3);
         LocalDateTime sixMonthsAgo   = asOfDate.minusMonths(6);
@@ -137,35 +159,107 @@ public class SyntheticPaymentFeatureBuilder {
                 .collect(Collectors.toList());
 
         // Payment timing trends
-        double daysToPayTrend3m      = computeDaysToPayTrend(payments3m);
-        double daysToPayStddev3m     = computeDaysToPayStddev(payments3m);
-        double latePaymentRate3m     = computeLatePaymentRate(payments3m);
-        double prevLatePaymentRate   = computeLatePaymentRate(prevPayments3m);
-        double latePaymentRateTrend3m = latePaymentRate3m - prevLatePaymentRate;
+        double daysToPayTrend3m  = computeDaysToPayTrend(payments3m);
+        double daysToPayStddev3m = computeDaysToPayStddev(payments3m);
+        double latePaymentRate3m   = computeLatePaymentRate(payments3m);
+        double prevLatePaymentRate = computeLatePaymentRate(prevPayments3m);
+        // Mirrors PaymentFeatureServiceImpl#computeLatePaymentRateTrend: ratio, not simple difference
+        double latePaymentRateTrend3m = prevLatePaymentRate == 0.0
+                ? (latePaymentRate3m > 0.0 ? 1.0 : 0.0)
+                : (latePaymentRate3m - prevLatePaymentRate) / prevLatePaymentRate;
 
         // Order frequency trends
-        double weeksIn3m             = 13.0;  // ≈ 3 months in weeks
-        double orderFrequency3m      = orders3m.size() / Math.max(1.0, weeksIn3m);
-        double prevOrderFrequency    = prevOrders3m.size() / Math.max(1.0, weeksIn3m);
-        double orderFrequencyTrend3m = prevOrderFrequency == 0.0 ? 0.0 :
-                ((orderFrequency3m - prevOrderFrequency) / prevOrderFrequency) * 100.0;
+        // Mirrors PaymentFeatureServiceImpl#computeOrderFrequency (orders / weeks) and
+        // computeOrderFrequencyTrend (ratio, not percentage)
+        double weeksIn3m          = 13.0;  // ≈ 3 months in weeks
+        double orderFrequency3m   = orders3m.size() / Math.max(1.0, weeksIn3m);
+        double prevOrderFrequency = prevOrders3m.size() / Math.max(1.0, weeksIn3m);
+        double orderFrequencyTrend3m = prevOrderFrequency == 0.0
+                ? (orderFrequency3m > 0.0 ? 1.0 : 0.0)
+                : (orderFrequency3m - prevOrderFrequency) / prevOrderFrequency;
 
         // Partial payment trends
-        double partialPaymentFreq3m     = computePartialRate(payments3m);
-        double prevPartialPaymentFreq   = computePartialRate(prevPayments3m);
-        double partialPaymentFreqTrend3m = partialPaymentFreq3m - prevPartialPaymentFreq;
+        double partialPaymentFreq3m   = computePartialRate(payments3m);
+        double prevPartialPaymentFreq = computePartialRate(prevPayments3m);
+        // Mirrors PaymentFeatureServiceImpl#computePartialPaymentFreqTrend: ratio, not simple difference
+        double partialPaymentFreqTrend3m = prevPartialPaymentFreq == 0.0
+                ? (partialPaymentFreq3m > 0.0 ? 1.0 : 0.0)
+                : (partialPaymentFreq3m - prevPartialPaymentFreq) / prevPartialPaymentFreq;
 
         // Order value trends
-        double avgOrderValue3m    = computeAvgOrderValue(orders3m);
-        double prevAvgOrderValue  = computeAvgOrderValue(prevOrders3m);
+        double avgOrderValue3m   = computeAvgOrderValue(orders3m);
+        double prevAvgOrderValue = computeAvgOrderValue(prevOrders3m);
+        // Mirrors PaymentFeatureServiceImpl#computeAvgOrderValueTrend: ratio, not ×100 percentage
         double avgOrderValueTrend3m = prevAvgOrderValue == 0.0 ? 0.0 :
-                ((avgOrderValue3m - prevAvgOrderValue) / prevAvgOrderValue) * 100.0;
+                (avgOrderValue3m - prevAvgOrderValue) / prevAvgOrderValue;
         double orderValueVolatility3m = computeOrderValueStddev(orders3m);
 
-        // Credit utilization (simplified — no real balance tracking in synthetic data)
-        double creditUtilization3m = 0.3;  // Placeholder — archetype drives actual utilization
+        // ── Credit utilization ─────────────────────────────────────────────
+        // Mirrors PaymentFeatureServiceImpl#computeAvgCreditUtilization,
+        // computeCreditUtilizationTrend, and computePeakCreditUtilization.
+        // Outstanding per order = order.totalAmount - sum(payments for that order).
+        double creditUtilization3m         = 0.0;
+        double creditUtilizationTrajectory = 0.0;
+        double peakUtilization3m           = 0.0;
 
-        // Outstanding and overdue
+        if (creditLimit.compareTo(BigDecimal.ZERO) != 0 && !orders3m.isEmpty()) {
+            // Average utilization over the 3m window
+            BigDecimal avgOutstanding = orders3m.stream()
+                    .map(o -> computeOrderOutstanding(o, bundle))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add)
+                    .divide(BigDecimal.valueOf(orders3m.size()), 4, RoundingMode.HALF_UP);
+            creditUtilization3m = avgOutstanding.divide(creditLimit, 4, RoundingMode.HALF_UP).doubleValue();
+
+            // Peak utilization
+            BigDecimal maxOutstanding = orders3m.stream()
+                    .map(o -> computeOrderOutstanding(o, bundle))
+                    .max(BigDecimal::compareTo)
+                    .orElse(BigDecimal.ZERO);
+            peakUtilization3m = maxOutstanding.divide(creditLimit, 4, RoundingMode.HALF_UP).doubleValue();
+
+            // Utilization trajectory (linear regression slope over time-ordered orders)
+            if (orders3m.size() >= 2) {
+                List<SyntheticOrder> sortedOrders3m = orders3m.stream()
+                        .sorted(Comparator.comparing(SyntheticOrder::orderDate))
+                        .toList();
+                double[] x = new double[sortedOrders3m.size()];
+                double[] y = new double[sortedOrders3m.size()];
+                for (int i = 0; i < sortedOrders3m.size(); i++) {
+                    x[i] = i;
+                    BigDecimal outstanding = computeOrderOutstanding(sortedOrders3m.get(i), bundle);
+                    y[i] = outstanding.divide(creditLimit, 4, RoundingMode.HALF_UP).doubleValue();
+                }
+                creditUtilizationTrajectory = FeatureComputationUtils.computeLinearRegressionSlope(x, y);
+            }
+        }
+
+        // ── Total outstanding (all orders) ────────────────────────────────
+        // Mirrors PaymentFeatureServiceImpl#computeTotalOutstanding
+        BigDecimal totalOutstanding = allOrders.stream()
+                .map(o -> computeOrderOutstanding(o, bundle))
+                .filter(amt -> amt.compareTo(BigDecimal.ZERO) > 0)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // ── Outstanding trend ─────────────────────────────────────────────
+        // Mirrors PaymentFeatureServiceImpl#computeOutstandingTrend:
+        // (currentOutstanding - previousOutstanding) / previousOutstanding
+        // where "previous" = outstanding of orders created BEFORE threeMonthsAgo
+        List<SyntheticOrder> oldOrders = allOrders.stream()
+                .filter(o -> !o.orderDate().isAfter(threeMonthsAgo))
+                .collect(Collectors.toList());
+        BigDecimal previousOutstanding = oldOrders.stream()
+                .map(o -> computeOrderOutstanding(o, bundle))
+                .filter(amt -> amt.compareTo(BigDecimal.ZERO) > 0)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        double outstandingTrend3m;
+        if (previousOutstanding.compareTo(BigDecimal.ZERO) == 0) {
+            outstandingTrend3m = totalOutstanding.compareTo(BigDecimal.ZERO) > 0 ? 1.0 : 0.0;
+        } else {
+            outstandingTrend3m = totalOutstanding.subtract(previousOutstanding)
+                    .divide(previousOutstanding, 4, RoundingMode.HALF_UP)
+                    .doubleValue();
+        }
+
         int daysOverdueMax = payments3m.stream()
                 .filter(p -> p.daysAfterInvoice() > LATE_THRESHOLD_DAYS)
                 .mapToInt(p -> p.daysAfterInvoice() - LATE_THRESHOLD_DAYS)
@@ -186,19 +280,21 @@ public class SyntheticPaymentFeatureBuilder {
                 .latePaymentRateTrend3m(latePaymentRateTrend3m)
                 .orderFrequency3m(orderFrequency3m)
                 .orderFrequencyTrend3m(orderFrequencyTrend3m)
-                .consecutiveMissedOrders(computeConsecutiveMissedWeeks(allOrders, asOfDate))
+                // Mirrors PaymentFeatureServiceImpl#computeConsecutiveMissedOrders:
+                // weeks since most recent order, not consecutive missed weeks
+                .consecutiveMissedOrders(computeWeeksSinceLastOrder(allOrders, asOfDate))
                 .creditUtilization3m(creditUtilization3m)
-                .creditUtilizationTrajectory(0.0)
-                .peakUtilization3m(0.0)
-                .hitCreditLimit3m(creditUtilization3m >= 0.95)
+                .creditUtilizationTrajectory(creditUtilizationTrajectory)
+                .peakUtilization3m(peakUtilization3m)
+                .hitCreditLimit3m(peakUtilization3m >= 0.95)
                 .partialPaymentFreq3m(partialPaymentFreq3m)
                 .partialPaymentFreqTrend3m(partialPaymentFreqTrend3m)
                 .consecutivePartialPayments(computeConsecutivePartialPayments(allPayments))
                 .avgOrderValue3m(avgOrderValue3m)
                 .avgOrderValueTrend3m(avgOrderValueTrend3m)
                 .orderValueVolatility3m(orderValueVolatility3m)
-                .totalOutstanding(BigDecimal.ZERO)
-                .outstandingTrend3m(0.0)
+                .totalOutstanding(totalOutstanding)
+                .outstandingTrend3m(outstandingTrend3m)
                 .daysOverdueMax(daysOverdueMax)
                 .paymentToOrderRatio3m(paymentToOrderRatio3m)
                 .build();
@@ -261,18 +357,32 @@ public class SyntheticPaymentFeatureBuilder {
         return (double) partial / payments.size();
     }
 
-    private int computeConsecutiveMissedWeeks(List<SyntheticOrder> allOrders,
-                                               LocalDateTime asOfDate) {
-        int weeks = 0;
-        for (int w = 0; w < 12; w++) {
-            LocalDateTime weekStart = asOfDate.minusWeeks(w + 1);
-            LocalDateTime weekEnd   = asOfDate.minusWeeks(w);
-            boolean hasOrder = allOrders.stream().anyMatch(o ->
-                    !o.orderDate().isBefore(weekStart) && o.orderDate().isBefore(weekEnd));
-            if (!hasOrder) weeks++;
-            else break;
-        }
-        return weeks;
+    /**
+     * Weeks since the most recent order.
+     *
+     * Mirrors {@code PaymentFeatureServiceImpl#computeConsecutiveMissedOrders}:
+     * finds the most-recent order and returns the number of full weeks between it and asOfDate.
+     */
+    private int computeWeeksSinceLastOrder(List<SyntheticOrder> allOrders,
+                                            LocalDateTime asOfDate) {
+        if (allOrders.isEmpty()) return 0;
+        LocalDateTime mostRecent = allOrders.stream()
+                .map(SyntheticOrder::orderDate)
+                .max(LocalDateTime::compareTo)
+                .orElse(asOfDate);
+        return (int) Math.max(0, ChronoUnit.WEEKS.between(mostRecent, asOfDate));
+    }
+
+    /**
+     * Outstanding balance for a single order: totalAmount minus sum of actual payments.
+     *
+     * Used to mirror {@code Order#getPaidAmount()} which is not available in synthetic records.
+     */
+    private BigDecimal computeOrderOutstanding(SyntheticOrder order, SyntheticDataBundle bundle) {
+        BigDecimal paidAmount = bundle.getPaymentsForOrder(order.syntheticId()).stream()
+                .map(SyntheticPayment::amount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return order.totalAmount().subtract(paidAmount);
     }
 
     private int computeConsecutivePartialPayments(List<SyntheticPayment> allPayments) {

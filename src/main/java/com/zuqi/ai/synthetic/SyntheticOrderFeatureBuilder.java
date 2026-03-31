@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
@@ -25,17 +26,6 @@ import java.util.stream.Collectors;
 @Component
 @Slf4j
 public class SyntheticOrderFeatureBuilder {
-
-    // Representative Kenya public holidays (month-day pairs, year-independent)
-    private static final int[][] KENYA_HOLIDAY_MONTH_DAY = {
-            {1, 1},   // New Year's Day
-            {4, 19},  // Good Friday (approximate)
-            {5, 1},   // Labour Day
-            {6, 1},   // Madaraka Day
-            {10, 20}, // Mashujaa Day
-            {12, 12}, // Jamhuri Day
-            {12, 25}  // Christmas Day
-    };
 
     // ── Public API ─────────────────────────────────────────────────────────
 
@@ -62,20 +52,29 @@ public class SyntheticOrderFeatureBuilder {
                 .sorted(Comparator.comparing(SyntheticOrder::orderDate))
                 .collect(Collectors.toList());
 
-        // Lag features
-        BigDecimal qty1w = qtyInWeek(skuId, bundle, asOfDate, 1);
-        BigDecimal qty2w = qtyInWeek(skuId, bundle, asOfDate, 2);
-        BigDecimal qty3w = qtyInWeek(skuId, bundle, asOfDate, 3);
-        BigDecimal qty4w = qtyInWeek(skuId, bundle, asOfDate, 4);
+        // Lag features — calendar-week aligned, matching OrderFeatureServiceImpl#getQuantityNWeeksAgo
+        BigDecimal qty1w = qtyInCalendarWeek(skuId, bundle, asOfDate, 1);
+        BigDecimal qty2w = qtyInCalendarWeek(skuId, bundle, asOfDate, 2);
+        BigDecimal qty3w = qtyInCalendarWeek(skuId, bundle, asOfDate, 3);
+        BigDecimal qty4w = qtyInCalendarWeek(skuId, bundle, asOfDate, 4);
 
-        BigDecimal rolling4w = List.of(qty1w, qty2w, qty3w, qty4w).stream()
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .divide(BigDecimal.valueOf(4), 3, RoundingMode.HALF_UP);
-
+        // Rolling averages — total qty in window / weeks, matching OrderFeatureServiceImpl#getRollingAverage
+        BigDecimal rolling4w  = computeRollingAvg(skuId, skuOrders, bundle, asOfDate, 4);
         BigDecimal rolling12w = computeRollingAvg(skuId, skuOrders, bundle, asOfDate, 12);
-        String trendDirection = computeTrendDirection(skuId, skuOrders, bundle, asOfDate);
+
+        // Trend direction — 4w vs 12w rolling avg, 15% threshold, matching real service
+        String trendDirection = computeTrendDirection(rolling4w, rolling12w);
 
         LocalDate asOf = asOfDate.toLocalDate();
+
+        // merchantSizeTier — count-based (last 12 weeks), matching OrderFeatureServiceImpl#computeMerchantSizeTier
+        String sizeTier = computeMerchantSizeTier(allOrders, asOfDate);
+
+        // merchantCreditStatus — payment on-time rate, matching OrderFeatureServiceImpl#computeMerchantCreditStatus
+        String creditStatus = computeCreditStatus(bundle.getPaymentsForMerchant(mid));
+
+        // priceTier — computed from typical unit price for this SKU, matching OrderFeatureServiceImpl#computePriceTier
+        String priceTier = computePriceTier(skuId, bundle);
 
         log.debug("[SyntheticOrderFB] merchant={} sku={} skuOrders={} trendDir={}",
                 mid, skuId, skuOrders.size(), trendDirection);
@@ -99,32 +98,42 @@ public class SyntheticOrderFeatureBuilder {
                 .isHoliday(isHoliday(asOf))
                 .isPaydayWeek(isPaydayWeek(asOf))
                 .isRamadan(isRamadan(asOf))
-                .isChristmasSeason(asOf.getMonthValue() >= 11)
+                .isChristmasSeason(asOf.getMonthValue() == 11 || asOf.getMonthValue() == 12)
                 // Merchant context
                 .merchantCategory(merchant.businessCategory())
-                .merchantSizeTier(computeMerchantSizeTier(allOrders))
-                .merchantCreditStatus(computeCreditStatus(bundle.getCreditHistoryForMerchant(mid)))
+                .merchantSizeTier(sizeTier)
+                .merchantCreditStatus(creditStatus)
                 .merchantTenureDays((int) ChronoUnit.DAYS.between(merchant.registrationDate(), asOf))
-                // SKU context (simplified — no real product catalogue in synthetic data)
-                .productCategory("GENERAL")
-                .priceTier("MEDIUM")
+                // SKU context — productCategory defaults to "UNKNOWN" (matching real service null-category default);
+                // priceTier derived from unit price; isPromotional=false (no discount data in synthetic);
+                // typicalShelfLifeDays=60 (matching real service default for unknown category)
+                .productCategory("UNKNOWN")
+                .priceTier(priceTier)
                 .isPromotional(false)
-                .typicalShelfLifeDays(90)
+                .typicalShelfLifeDays(60)
                 .build();
     }
 
     // ── Lag / rolling helpers ──────────────────────────────────────────────
 
     /**
-     * Sum the quantity of {@code skuId} ordered during the week that ended
-     * {@code weeksAgo} weeks before {@code asOfDate}.
+     * Sum the quantity of {@code skuId} ordered during the calendar week (Mon–Sun)
+     * that ended {@code weeksAgo} weeks before {@code asOfDate}.
+     *
+     * Mirrors {@code OrderFeatureServiceImpl#getQuantityNWeeksAgo} exactly.
      */
-    private BigDecimal qtyInWeek(UUID skuId, SyntheticDataBundle bundle,
-                                  LocalDateTime asOfDate, int weeksAgo) {
-        LocalDateTime weekEnd   = asOfDate.minusWeeks(weeksAgo - 1L);
-        LocalDateTime weekStart = asOfDate.minusWeeks(weeksAgo);
+    private BigDecimal qtyInCalendarWeek(UUID skuId, SyntheticDataBundle bundle,
+                                          LocalDateTime asOfDate, int weeksAgo) {
+        LocalDate startOfCalendarWeek = asOfDate.toLocalDate()
+                .minusWeeks(weeksAgo)
+                .with(DayOfWeek.MONDAY);
+        LocalDate endOfCalendarWeek = startOfCalendarWeek.plusDays(7);
+
         return bundle.getOrders().stream()
-                .filter(o -> !o.orderDate().isBefore(weekStart) && o.orderDate().isBefore(weekEnd))
+                .filter(o -> {
+                    LocalDate orderDay = o.orderDate().toLocalDate();
+                    return !orderDay.isBefore(startOfCalendarWeek) && orderDay.isBefore(endOfCalendarWeek);
+                })
                 .flatMap(o -> bundle.getItemsForOrder(o.syntheticId()).stream())
                 .filter(item -> item.skuId().equals(skuId))
                 .map(SyntheticOrderItem::quantity)
@@ -132,8 +141,9 @@ public class SyntheticOrderFeatureBuilder {
     }
 
     /**
-     * Compute the average weekly quantity over the {@code weeks}-week window ending at
-     * {@code asOfDate}, using pre-filtered {@code skuOrders}.
+     * Average weekly quantity over a rolling {@code weeks}-week window ending at {@code asOfDate}.
+     *
+     * Mirrors {@code OrderFeatureServiceImpl#getRollingAverage}: total qty in window / weeks.
      */
     private BigDecimal computeRollingAvg(UUID skuId,
                                           List<SyntheticOrder> skuOrders,
@@ -147,77 +157,120 @@ public class SyntheticOrderFeatureBuilder {
                 .filter(item -> item.skuId().equals(skuId))
                 .map(SyntheticOrderItem::quantity)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        return totalQty.divide(BigDecimal.valueOf(weeks), 3, RoundingMode.HALF_UP);
+        return totalQty.divide(BigDecimal.valueOf(weeks), 2, RoundingMode.HALF_UP);
     }
 
-    private String computeTrendDirection(UUID skuId,
-                                          List<SyntheticOrder> skuOrders,
-                                          SyntheticDataBundle bundle,
-                                          LocalDateTime asOfDate) {
-        BigDecimal recent4w = computeRollingAvg(skuId, skuOrders, bundle, asOfDate, 4);
-        BigDecimal prev4w = skuOrders.stream()
-                .filter(o -> o.orderDate().isAfter(asOfDate.minusWeeks(8))
-                        && o.orderDate().isBefore(asOfDate.minusWeeks(4)))
-                .flatMap(o -> bundle.getItemsForOrder(o.syntheticId()).stream())
-                .filter(item -> item.skuId().equals(skuId))
-                .map(SyntheticOrderItem::quantity)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .divide(BigDecimal.valueOf(4), 3, RoundingMode.HALF_UP);
-
-        if (prev4w.compareTo(BigDecimal.ZERO) == 0) return "STABLE";
-        double pctChange = recent4w.subtract(prev4w)
-                .divide(prev4w, 4, RoundingMode.HALF_UP)
-                .doubleValue();
-        if (pctChange >  0.10) return "INCREASING";
-        if (pctChange < -0.10) return "DECREASING";
+    /**
+     * Trend direction: compare 4-week vs 12-week rolling averages using 15% threshold.
+     *
+     * Mirrors {@code OrderFeatureServiceImpl#computeTrendDirection} exactly.
+     */
+    private String computeTrendDirection(BigDecimal avg4w, BigDecimal avg12w) {
+        if (avg4w.compareTo(BigDecimal.ZERO) == 0 && avg12w.compareTo(BigDecimal.ZERO) == 0) {
+            return "STABLE";
+        }
+        BigDecimal threshold = BigDecimal.valueOf(0.15);
+        BigDecimal diff = avg12w.compareTo(BigDecimal.ZERO) == 0 ? BigDecimal.ZERO :
+                avg4w.subtract(avg12w).divide(avg12w, 4, RoundingMode.HALF_UP);
+        if (diff.compareTo(threshold) > 0) return "INCREASING";
+        if (diff.compareTo(threshold.negate()) < 0) return "DECREASING";
         return "STABLE";
+    }
+
+    // ── Merchant size tier ─────────────────────────────────────────────────
+
+    /**
+     * Classify merchant by order COUNT in last 12 weeks.
+     *
+     * Mirrors {@code OrderFeatureServiceImpl#computeMerchantSizeTier} exactly.
+     */
+    private String computeMerchantSizeTier(List<SyntheticOrder> allOrders, LocalDateTime asOfDate) {
+        long recentOrderCount = allOrders.stream()
+                .filter(o -> o.orderDate().isAfter(asOfDate.minusWeeks(12)))
+                .count();
+        if (recentOrderCount >= 20) return "LARGE";
+        if (recentOrderCount >= 8)  return "MEDIUM";
+        return "SMALL";
+    }
+
+    // ── Merchant credit status ─────────────────────────────────────────────
+
+    /**
+     * Compute credit status from payment on-time rate.
+     *
+     * Mirrors {@code OrderFeatureServiceImpl#computeMerchantCreditStatus}:
+     * >= 90% on-time → GOOD, >= 70% → MODERATE, else → POOR, no payments → UNKNOWN.
+     *
+     * In synthetic data, a payment is "on-time" when {@code daysAfterInvoice <= 30}
+     * (standard 30-day payment terms).
+     */
+    private String computeCreditStatus(List<SyntheticPayment> payments) {
+        if (payments.isEmpty()) return "UNKNOWN";
+        long onTimeCount = payments.stream()
+                .filter(p -> !p.isDefault())
+                .filter(p -> p.daysAfterInvoice() <= 30)
+                .count();
+        double onTimeRate = (double) onTimeCount / payments.size();
+        if (onTimeRate >= 0.90) return "GOOD";
+        if (onTimeRate >= 0.70) return "MODERATE";
+        return "POOR";
+    }
+
+    // ── SKU price tier ─────────────────────────────────────────────────────
+
+    /**
+     * Derive price tier from the median unit price of the SKU across all order items.
+     *
+     * Mirrors {@code OrderFeatureServiceImpl#computePriceTier} thresholds:
+     * < KES 500 → LOW, < KES 2000 → MEDIUM, >= KES 2000 → HIGH.
+     */
+    private String computePriceTier(UUID skuId, SyntheticDataBundle bundle) {
+        List<BigDecimal> prices = bundle.getOrderItems().stream()
+                .filter(item -> item.skuId().equals(skuId))
+                .map(SyntheticOrderItem::unitPrice)
+                .filter(p -> p != null && p.compareTo(BigDecimal.ZERO) > 0)
+                .collect(Collectors.toList());
+        if (prices.isEmpty()) return "MEDIUM"; // same default as real service when price is mid-range
+        BigDecimal avg = prices.stream().reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(BigDecimal.valueOf(prices.size()), 2, RoundingMode.HALF_UP);
+        if (avg.compareTo(BigDecimal.valueOf(500)) < 0) return "LOW";
+        if (avg.compareTo(BigDecimal.valueOf(2000)) < 0) return "MEDIUM";
+        return "HIGH";
     }
 
     // ── Temporal helpers ───────────────────────────────────────────────────
 
+    /**
+     * Kenya public holidays — uses month/day pairs to work across training years.
+     * Includes fixed holidays; Good Friday/Easter Monday vary by year so are excluded here.
+     */
     private boolean isHoliday(LocalDate date) {
-        for (int[] md : KENYA_HOLIDAY_MONTH_DAY) {
-            if (md[0] == date.getMonthValue() && md[1] == date.getDayOfMonth()) return true;
-        }
-        return false;
+        int m = date.getMonthValue(), d = date.getDayOfMonth();
+        return (m == 1 && d == 1)   // New Year's Day
+            || (m == 5 && d == 1)   // Labour Day
+            || (m == 6 && d == 1)   // Madaraka Day
+            || (m == 10 && d == 10) // Huduma Day
+            || (m == 10 && d == 20) // Mashujaa Day
+            || (m == 12 && d == 12) // Jamhuri Day
+            || (m == 12 && d == 25) // Christmas Day
+            || (m == 12 && d == 26); // Boxing Day
     }
 
+    /**
+     * Payday week: 28th to end of month, or 1st–5th of month.
+     * Mirrors {@code OrderFeatureServiceImpl#isPaydayWeek}.
+     */
     private boolean isPaydayWeek(LocalDate date) {
-        int day    = date.getDayOfMonth();
-        int maxDay = date.lengthOfMonth();
-        // Payday week: 28th–end of month or 1st–5th of month
-        return (day >= 28 && day <= maxDay) || day <= 5;
+        int day = date.getDayOfMonth();
+        return day >= 28 || day <= 5;
     }
 
+    /**
+     * Ramadan approximation: March and/or April (valid for 2024–2027 range).
+     * Mirrors the spirit of {@code OrderFeatureServiceImpl#isRamadan}.
+     */
     private boolean isRamadan(LocalDate date) {
-        // Very rough approximation: Ramadan falls in March–April for 2024–2026 timeframe
         int month = date.getMonthValue();
         return month == 3 || month == 4;
-    }
-
-    // ── Merchant context helpers ───────────────────────────────────────────
-
-    private String computeMerchantSizeTier(List<SyntheticOrder> orders) {
-        if (orders.isEmpty()) return "SMALL";
-        double avg = orders.stream()
-                .mapToDouble(o -> o.totalAmount().doubleValue())
-                .average()
-                .orElse(0.0);
-        if (avg >= 50_000) return "LARGE";
-        if (avg >= 15_000) return "MEDIUM";
-        return "SMALL";
-    }
-
-    private String computeCreditStatus(List<SyntheticCreditEvaluation> creditHistory) {
-        if (creditHistory.isEmpty()) return "MODERATE";
-        String grade = creditHistory.stream()
-                .max(Comparator.comparing(SyntheticCreditEvaluation::evaluationDate))
-                .map(SyntheticCreditEvaluation::grade)
-                .orElse("C");
-        return switch (grade) {
-            case "A", "B" -> "GOOD";
-            case "C"      -> "MODERATE";
-            default       -> "POOR";
-        };
     }
 }

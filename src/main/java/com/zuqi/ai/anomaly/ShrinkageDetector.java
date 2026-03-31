@@ -80,6 +80,9 @@ public class ShrinkageDetector {
             log.error("Shrinkage detection failed for warehouse={} product={}: {}",
                     warehouseId, productId, e.getMessage(), e);
             return defaultResult(warehouseId, productId);
+        } catch (Error e) {
+            log.error("Fatal error in shrinkage detection for warehouse={} product={} (native library issue?): {}", warehouseId, productId, e.getMessage(), e);
+            return defaultResult(warehouseId, productId);
         }
     }
 

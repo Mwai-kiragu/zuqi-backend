@@ -90,6 +90,9 @@ public class CreditClassifier {
         } catch (Exception e) {
             log.error("Credit classification failed for merchant {}: {}", merchantId, e.getMessage(), e);
             return defaultResult();
+        } catch (Error e) {
+            log.error("Fatal error in credit classification for merchant {} (native library issue?): {}", merchantId, e.getMessage(), e);
+            return defaultResult();
         }
     }
 

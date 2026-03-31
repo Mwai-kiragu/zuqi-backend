@@ -26,6 +26,9 @@ public interface RecommendationRepository extends JpaRepository<Recommendation, 
     Page<Recommendation> findByDistributorIdAndRecommendationType(
             UUID distributorId, RecommendationType type, Pageable pageable);
 
+    Page<Recommendation> findByDistributorIdAndStatusAndRecommendationType(
+            UUID distributorId, RecommendationStatus status, RecommendationType type, Pageable pageable);
+
     long countByDistributorIdAndStatus(UUID distributorId, RecommendationStatus status);
 
     @Query("SELECT r FROM Recommendation r WHERE r.distributor.id = :distributorId " +
