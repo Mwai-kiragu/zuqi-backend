@@ -50,7 +50,11 @@ public interface ApprovalRequestRepository extends JpaRepository<ApprovalRequest
             @Param("entityType") String entityType,
             Pageable pageable);
 
+    Page<ApprovalRequest> findByStatusAndDistributorId(ApprovalStatus status, UUID distributorId, Pageable pageable);
+
     long countByStatus(ApprovalStatus status);
+
+    long countByStatusAndDistributorId(ApprovalStatus status, UUID distributorId);
 
     long countByRequestedByIdAndStatus(UUID requestedById, ApprovalStatus status);
 }

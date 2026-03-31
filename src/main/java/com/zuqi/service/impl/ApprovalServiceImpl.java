@@ -42,6 +42,7 @@ import com.zuqi.service.EmailService;
 import com.zuqi.service.GlAutoPostingService;
 import com.zuqi.service.InvoiceService;
 import com.zuqi.service.NotificationService;
+import com.zuqi.util.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import lombok.RequiredArgsConstructor;
@@ -85,6 +86,7 @@ public class ApprovalServiceImpl implements ApprovalService {
     private final EmailConfig emailConfig;
     private final ApprovalWorkflowConfigService approvalWorkflowConfigService;
     private final GlAutoPostingService glAutoPostingService;
+    private final SecurityUtils securityUtils;
 
     @Lazy @Autowired
     private InvoiceService invoiceService;
@@ -120,6 +122,7 @@ public class ApprovalServiceImpl implements ApprovalService {
                 .entityType(dto.getEntityType())
                 .entityId(dto.getEntityId())
                 .entityName(dto.getEntityName())
+                .distributorId(requester.getDistributorId())
                 .requestedById(requesterId)
                 .requestedByEmail(requester.getEmail())
                 .requestedByName(requester.getFirstName() + " " + requester.getLastName())
@@ -384,14 +387,20 @@ public class ApprovalServiceImpl implements ApprovalService {
     @Transactional(readOnly = true)
     public PageResponse<ApprovalRequestResponse> getPendingForApprover(int page, int size) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").ascending());
-        Page<ApprovalRequest> result = approvalRequestRepository.findByStatus(ApprovalStatus.PENDING, pageable);
+        UUID distributorId = securityUtils.getCurrentUserDistributorId();
+        Page<ApprovalRequest> result = distributorId != null
+                ? approvalRequestRepository.findByStatusAndDistributorId(ApprovalStatus.PENDING, distributorId, pageable)
+                : approvalRequestRepository.findByStatus(ApprovalStatus.PENDING, pageable); // SUPER_ADMIN sees all
         return toPageResponse(result);
     }
 
     @Override
     @Transactional(readOnly = true)
     public long countPending() {
-        return approvalRequestRepository.countByStatus(ApprovalStatus.PENDING);
+        UUID distributorId = securityUtils.getCurrentUserDistributorId();
+        return distributorId != null
+                ? approvalRequestRepository.countByStatusAndDistributorId(ApprovalStatus.PENDING, distributorId)
+                : approvalRequestRepository.countByStatus(ApprovalStatus.PENDING); // SUPER_ADMIN sees all
     }
 
     @Override
