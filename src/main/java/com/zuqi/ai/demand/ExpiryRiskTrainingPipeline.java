@@ -101,7 +101,7 @@ public class ExpiryRiskTrainingPipeline {
 
             // Step 5: Evaluate (regression metrics)
             Dataset<Regressor> testDataset = featureBuilder.buildDataset(testExamples);
-            ModelEvaluator.RegressionEvaluationResult eval =
+            ModelEvaluator.RegressorEvaluationResult eval =
                     modelEvaluator.evaluateRegressor(model, testDataset);
 
             boolean passed = eval.r2() >= R2_GATE;
@@ -131,7 +131,7 @@ public class ExpiryRiskTrainingPipeline {
     }
 
     private UUID promoteModel(Model<Regressor> model,
-                               ModelEvaluator.RegressionEvaluationResult eval,
+                               ModelEvaluator.RegressorEvaluationResult eval,
                                int trainingSize,
                                XGBoostHyperparameterTuner.TuningResult tuning) throws Exception {
 
