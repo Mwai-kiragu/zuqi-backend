@@ -38,6 +38,7 @@ import com.zuqi.service.ApprovalService;
 import com.zuqi.service.ApprovalWorkflowConfigService;
 import com.zuqi.service.EmailService;
 import com.zuqi.service.InvoiceService;
+import com.zuqi.service.NotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import lombok.RequiredArgsConstructor;
@@ -82,6 +83,9 @@ public class ApprovalServiceImpl implements ApprovalService {
 
     @Lazy @Autowired
     private InvoiceService invoiceService;
+
+    @Lazy @Autowired
+    private NotificationService notificationService;
 
     private final AtomicLong sequenceCounter = new AtomicLong(0);
 
@@ -221,7 +225,10 @@ public class ApprovalServiceImpl implements ApprovalService {
         switch (request.getEntityType()) {
             case "CUSTOMER"       -> customerRepository.updateApprovalStatus(entityId, status);
             case "SUPPLIER"       -> supplierRepository.updateApprovalStatus(entityId, status);
-            case "PRODUCT"        -> productRepository.updateApprovalStatus(entityId, status);
+            case "PRODUCT"        -> {
+                if ("APPROVED".equals(status)) productRepository.approveAndActivate(entityId);
+                else productRepository.updateApprovalStatus(entityId, status);
+            }
             case "PRICE_LIST"     -> priceListRepository.updateApprovalStatus(entityId, status);
             case "PROMOTION"      -> promotionRepository.updateApprovalStatus(entityId, status);
             case "STOCK_MOVEMENT" -> {
@@ -397,9 +404,7 @@ public class ApprovalServiceImpl implements ApprovalService {
 
     private void notifyApproversAsync(ApprovalRequest request) {
         try {
-            // Notify all ADMIN/DISTRIBUTOR_ADMIN users — in production, query by role
-            // For now, log the intent; wired notification goes through email template
-            log.info("Notifying approvers for request: {}", request.getRequestNumber());
+            notificationService.notifyApprovers(request);
         } catch (Exception e) {
             log.error("Failed to notify approvers for request: {}", request.getRequestNumber(), e);
         }
@@ -422,6 +427,8 @@ public class ApprovalServiceImpl implements ApprovalService {
                     "approval-decision",
                     vars
             );
+
+            notificationService.notifyRequester(request, approver.getFirstName() + " " + approver.getLastName());
         } catch (Exception e) {
             log.error("Failed to notify requester for request: {}", request.getRequestNumber(), e);
         }

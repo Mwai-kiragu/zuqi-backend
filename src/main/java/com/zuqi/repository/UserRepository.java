@@ -136,4 +136,10 @@ public interface UserRepository extends JpaRepository<User, UUID> {
             "LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
             "LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', :search, '%')))")
     Page<User> searchInactiveByMerchantScope(@Param("merchantId") UUID merchantId, @Param("search") String search, Pageable pageable);
+
+    @Query("SELECT DISTINCT u FROM User u LEFT JOIN u.roles r LEFT JOIN u.userGroup ug " +
+            "WHERE u.distributorId = :distributorId AND u.active = true " +
+            "AND (r.name IN ('VERIFIER','AUTHORIZER','DISTRIBUTOR_ADMIN') " +
+            "     OR ug.workflowTier IN ('VERIFIER','AUTHORIZER'))")
+    List<User> findActiveApproversByDistributorId(@Param("distributorId") UUID distributorId);
 }
