@@ -110,6 +110,9 @@ public class ExpiryRiskPredictor {
         } catch (Exception e) {
             log.error("Expiry risk prediction failed for batch {}: {}", batchId, e.getMessage(), e);
             throw new RuntimeException("Expiry risk prediction failed", e);
+        } catch (Error e) {
+            log.error("Fatal error in expiry risk prediction for batch {} (native library issue?): {}", batchId, e.getMessage(), e);
+            throw new RuntimeException("Expiry risk prediction unavailable (native library error)", e);
         }
     }
 

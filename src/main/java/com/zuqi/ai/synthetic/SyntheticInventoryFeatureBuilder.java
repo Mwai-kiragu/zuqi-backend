@@ -174,7 +174,14 @@ public class SyntheticInventoryFeatureBuilder {
         return BigDecimal.valueOf(base * noise).setScale(3, java.math.RoundingMode.HALF_UP);
     }
 
-    /** Approximate expected incoming: sum of IN movements in the last 7 days. */
+    /**
+     * Expected incoming: sum of IN movements in the last 7 days.
+     *
+     * In the real service ({@code InventoryFeatureServiceImpl#computeExpectedIncoming}),
+     * only movements with {@code referenceType = "PURCHASE"} are counted. In synthetic data,
+     * all IN movements represent purchase receipts (the generator does not produce non-purchase
+     * INs), so filtering all IN movements is equivalent. No additional filter is applied here.
+     */
     private BigDecimal computeExpectedIncoming(List<SyntheticInventoryMovement> movements,
                                                 LocalDateTime asOfDate) {
         return movements.stream()

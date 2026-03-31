@@ -117,6 +117,9 @@ public class DemandForecaster {
             log.error("Demand forecasting failed for merchant {} SKU {}: {}",
                     merchantId, productId, e.getMessage(), e);
             return defaultForecast(merchantId, productId);
+        } catch (Error e) {
+            log.error("Fatal error in demand forecasting for merchant {} SKU {} (native library issue?): {}", merchantId, productId, e.getMessage(), e);
+            return defaultForecast(merchantId, productId);
         }
     }
 
@@ -231,9 +234,14 @@ public class DemandForecaster {
                             || !metrics.containsKey("upper_residual")) {
                         return null;
                     }
-                    double lower = ((Number) metrics.get("lower_residual")).doubleValue();
-                    double upper = ((Number) metrics.get("upper_residual")).doubleValue();
-                    return new double[]{lower, upper};
+                    try {
+                        double lower = ((Number) metrics.get("lower_residual")).doubleValue();
+                        double upper = ((Number) metrics.get("upper_residual")).doubleValue();
+                        return new double[]{lower, upper};
+                    } catch (ClassCastException | NullPointerException e) {
+                        log.warn("Residual percentiles in model registry have unexpected type; falling back to ±20%");
+                        return null;
+                    }
                 })
                 .orElse(null);
     }

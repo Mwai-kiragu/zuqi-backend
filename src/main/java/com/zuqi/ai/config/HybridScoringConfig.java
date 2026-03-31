@@ -1,5 +1,6 @@
 package com.zuqi.ai.config;
 
+import jakarta.annotation.PostConstruct;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
@@ -95,7 +96,9 @@ public class HybridScoringConfig {
 
     /**
      * Validate configuration on initialization.
+     * Called automatically by Spring after properties are bound.
      */
+    @PostConstruct
     public void validate() {
         hybridWeights.validate();
 

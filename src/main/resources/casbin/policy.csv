@@ -517,6 +517,12 @@ p, FINANCE, /v1/ai/analytics/cashflow/forecast/:distributorId, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/customers/product-recs/:distributorId, GET
 p, SALES_REP, /v1/ai/analytics/customers/product-recs/:distributorId, GET
 
+# CRM: customer health scores
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/customers/health/:distributorId, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/customers/health/:distributorId/:customerId, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/customers/health/:distributorId/:customerId/compute, POST
+p, SALES_REP, /v1/ai/analytics/customers/health/:distributorId/:customerId, GET
+
 # Role hierarchy - who inherits what
 g, SUPER_ADMIN, DISTRIBUTOR_ADMIN
 g, DISTRIBUTOR_ADMIN, FINANCE

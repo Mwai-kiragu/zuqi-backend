@@ -4,6 +4,7 @@ import com.zuqi.ai.agent.RecommendationService;
 import com.zuqi.api.dto.ApiResponse;
 import com.zuqi.domain.ai.Recommendation;
 import com.zuqi.domain.ai.RecommendationStatus;
+import com.zuqi.domain.ai.RecommendationType;
 import com.zuqi.repository.RecommendationRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -62,26 +63,40 @@ public class AiRecommendationController {
     @Operation(
             summary = "List recommendations for a distributor",
             description = "Returns a paginated list of AI-generated recommendations. " +
-                          "Optionally filter by status: PENDING, ACCEPTED, REJECTED, COMPLETED.")
+                          "Optionally filter by status (PENDING, ACCEPTED, REJECTED, COMPLETED) " +
+                          "and/or category (INVENTORY, CREDIT, SALES, OPERATIONS).")
     public ResponseEntity<ApiResponse<Page<Recommendation>>> listRecommendations(
             @Parameter(required = true, description = "UUID of the distributor")
             @PathVariable UUID distributorId,
             @Parameter(description = "Filter by recommendation status (optional)")
             @RequestParam(required = false) RecommendationStatus status,
+            @Parameter(description = "Filter by category: INVENTORY, CREDIT, SALES, OPERATIONS (optional)")
+            @RequestParam(required = false) String category,
             @Parameter(description = "Zero-based page index")
             @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Number of results per page")
             @RequestParam(defaultValue = "20") int size) {
 
-        log.info("GET /v1/ai/recommendations/{} status={} page={} size={}",
-                distributorId, status, page, size);
+        log.info("GET /v1/ai/recommendations/{} status={} category={} page={} size={}",
+                distributorId, status, category, page, size);
 
         try {
             PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
+            RecommendationType type = mapCategory(category);
 
-            Page<Recommendation> recommendations = (status != null)
-                    ? recommendationRepository.findByDistributorIdAndStatus(distributorId, status, pageable)
-                    : recommendationRepository.findByDistributorId(distributorId, pageable);
+            Page<Recommendation> recommendations;
+            if (status != null && type != null) {
+                recommendations = recommendationRepository.findByDistributorIdAndStatusAndRecommendationType(
+                        distributorId, status, type, pageable);
+            } else if (type != null) {
+                recommendations = recommendationRepository.findByDistributorIdAndRecommendationType(
+                        distributorId, type, pageable);
+            } else if (status != null) {
+                recommendations = recommendationRepository.findByDistributorIdAndStatus(
+                        distributorId, status, pageable);
+            } else {
+                recommendations = recommendationRepository.findByDistributorId(distributorId, pageable);
+            }
 
             return ResponseEntity.ok(ApiResponse.success(recommendations));
 
@@ -91,6 +106,18 @@ public class AiRecommendationController {
             return ResponseEntity.internalServerError()
                     .body(ApiResponse.error("Failed to fetch recommendations: " + e.getMessage()));
         }
+    }
+
+    /** Maps frontend category strings to the primary RecommendationType. */
+    private RecommendationType mapCategory(String category) {
+        if (category == null || category.isBlank()) return null;
+        return switch (category.toUpperCase()) {
+            case "INVENTORY"   -> RecommendationType.INVENTORY_OPTIMIZATION;
+            case "CREDIT"      -> RecommendationType.CREDIT_MANAGEMENT;
+            case "SALES"       -> RecommendationType.SALES_TREND;
+            case "OPERATIONS"  -> RecommendationType.DELIVERY_EFFICIENCY;
+            default            -> null;
+        };
     }
 
     // ── POST /{distributorId}/generate ────────────────────────────────────
@@ -211,17 +238,23 @@ public class AiRecommendationController {
     @PutMapping("/{id}/reject")
     @Operation(
             summary = "Reject a recommendation",
-            description = "Transitions the recommendation status to REJECTED and records the action timestamp.")
+            description = "Transitions the recommendation status to REJECTED and records the action timestamp. " +
+                          "Optional body: { \"reason\": \"...\" }")
     public ResponseEntity<ApiResponse<Recommendation>> rejectRecommendation(
             @Parameter(required = true, description = "UUID of the recommendation to reject")
-            @PathVariable UUID id) {
+            @PathVariable UUID id,
+            @RequestBody(required = false) RejectRequest body) {
 
-        log.info("PUT /v1/ai/recommendations/{}/reject", id);
+        log.info("PUT /v1/ai/recommendations/{}/reject reason={}", id,
+                body != null ? body.reason() : null);
 
         return recommendationRepository.findById(id)
                 .map(rec -> {
                     rec.setStatus(RecommendationStatus.REJECTED);
                     rec.setActedOnAt(LocalDateTime.now());
+                    if (body != null && body.reason() != null && !body.reason().isBlank()) {
+                        rec.setOutcome(body.reason());
+                    }
                     Recommendation saved = recommendationRepository.save(rec);
                     log.info("Recommendation {} rejected", id);
                     return ResponseEntity.ok(ApiResponse.success("Recommendation rejected", saved));
@@ -231,4 +264,6 @@ public class AiRecommendationController {
                     return ResponseEntity.notFound().build();
                 });
     }
+
+    public record RejectRequest(String reason) {}
 }

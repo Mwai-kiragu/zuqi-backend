@@ -306,6 +306,8 @@ public class CreditScoringOrchestrator {
                 .recommendations(llmResponse.recommendations())
                 .evaluatedAt(LocalDateTime.now())
                 .modelVersion("hybrid-v1-ml70-llm30")
+                .mlScore(mlClassifier.creditScore())
+                .llmScore(llmResponse.creditScore())
                 .build();
 
         // Apply business rules
@@ -350,6 +352,8 @@ public class CreditScoringOrchestrator {
                 .recommendations(java.util.List.of())
                 .evaluatedAt(LocalDateTime.now())
                 .modelVersion(mlResult.modelVersion())
+                .mlScore(mlResult.creditScore())
+                .llmScore(null)
                 .build();
 
         // Apply business rules
@@ -425,6 +429,8 @@ public class CreditScoringOrchestrator {
                 .recommendations(evaluation.recommendations())
                 .evaluatedAt(evaluation.evaluatedAt())
                 .modelVersion(evaluation.modelVersion())
+                .mlScore(evaluation.mlScore())
+                .llmScore(evaluation.llmScore())
                 .build();
     }
 
@@ -503,6 +509,8 @@ public class CreditScoringOrchestrator {
                 .recommendations(llmResponse.recommendations())
                 .evaluatedAt(LocalDateTime.now())
                 .modelVersion(MODEL_NAME + "-v" + MODEL_VERSION)
+                .llmScore(llmResponse.creditScore())
+                .mlScore(null)
                 .build();
     }
 

@@ -103,6 +103,9 @@ public class CustomerLifetimeValuePredictor {
         } catch (Exception e) {
             log.warn("[CLV] No active model, using heuristic: {}", e.getMessage());
             return null;
+        } catch (Error e) {
+            log.error("[CLV] Fatal error loading model (native library issue?): {}", e.getMessage(), e);
+            return null;
         }
     }
 }

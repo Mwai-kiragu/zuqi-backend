@@ -104,6 +104,10 @@ public class AiPredictionController {
             log.error("Stockout batch prediction failed for warehouse={}: {}", warehouseId, e.getMessage(), e);
             return ResponseEntity.internalServerError()
                     .body(ApiResponse.error("Failed to run stockout predictions: " + e.getMessage()));
+        } catch (Error e) {
+            log.error("Fatal error in stockout prediction for warehouse={} (native library issue?): {}", warehouseId, e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("Stockout prediction is temporarily unavailable. Please try again later."));
         }
     }
 
@@ -146,6 +150,10 @@ public class AiPredictionController {
                     distributorId, e.getMessage(), e);
             return ResponseEntity.internalServerError()
                     .body(ApiResponse.error("Failed to run rep performance predictions: " + e.getMessage()));
+        } catch (Error e) {
+            log.error("Fatal error in rep performance prediction for distributor={} (native library issue?): {}", distributorId, e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("Rep performance prediction is temporarily unavailable. Please try again later."));
         }
     }
 
@@ -167,6 +175,10 @@ public class AiPredictionController {
             log.error("Rep performance prediction failed for rep={}: {}", repId, e.getMessage(), e);
             return ResponseEntity.internalServerError()
                     .body(ApiResponse.error("Failed to predict rep performance: " + e.getMessage()));
+        } catch (Error e) {
+            log.error("Fatal error in rep performance prediction for rep={} (native library issue?): {}", repId, e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("Rep performance prediction is temporarily unavailable. Please try again later."));
         }
     }
 
