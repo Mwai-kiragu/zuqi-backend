@@ -369,7 +369,8 @@ public class ApprovalServiceImpl implements ApprovalService {
     public PageResponse<ApprovalRequestResponse> getAll(ApprovalStatus status, ApprovalWorkflowType workflowType,
                                                          String entityType, int page, int size) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<ApprovalRequest> result = approvalRequestRepository.findWithFilters(status, workflowType, entityType, pageable);
+        UUID distributorId = securityUtils.getCurrentUserDistributorId(); // null for SUPER_ADMIN → sees all
+        Page<ApprovalRequest> result = approvalRequestRepository.findWithFilters(status, workflowType, entityType, distributorId, pageable);
         return toPageResponse(result);
     }
 
@@ -377,8 +378,9 @@ public class ApprovalServiceImpl implements ApprovalService {
     @Transactional(readOnly = true)
     public PageResponse<ApprovalRequestResponse> getMyRequests(UUID requesterId, ApprovalStatus status, int page, int size) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<ApprovalRequest> result = status != null
-                ? approvalRequestRepository.findByRequestedById(requesterId, pageable)
+        UUID distributorId = securityUtils.getCurrentUserDistributorId();
+        Page<ApprovalRequest> result = distributorId != null
+                ? approvalRequestRepository.findByRequestedByIdAndDistributorId(requesterId, distributorId, pageable)
                 : approvalRequestRepository.findByRequestedById(requesterId, pageable);
         return toPageResponse(result);
     }
