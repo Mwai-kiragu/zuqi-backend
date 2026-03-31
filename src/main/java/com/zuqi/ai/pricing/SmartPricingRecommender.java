@@ -66,6 +66,9 @@ public class SmartPricingRecommender {
         } catch (Exception e) {
             log.warn("[SmartPricing] Model not available for product={}: {}", productId, e.getMessage());
             return null;
+        } catch (Error e) {
+            log.error("[SmartPricing] Fatal error loading model (native library issue?): {}", e.getMessage(), e);
+            return null;
         }
 
         double currentPrice = features.currentUnitPrice();

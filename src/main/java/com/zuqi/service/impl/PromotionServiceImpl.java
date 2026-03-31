@@ -39,7 +39,7 @@ public class PromotionServiceImpl implements PromotionService {
     public PromotionResponse create(CreatePromotionRequest request) {
         Distributor distributor = resolveDistributor();
         UUID currentUserId = securityUtils.getCurrentUserId();
-        boolean needsApproval = securityUtils.currentUserHasWorkflowTier("INITIATOR");
+        boolean needsApproval = securityUtils.currentUserRequiresApprovalFor("PROMOTIONS");
 
         Product product = request.getProductId() != null
                 ? productRepository.findById(request.getProductId())

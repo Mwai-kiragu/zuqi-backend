@@ -24,7 +24,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -45,7 +44,6 @@ public class InvoiceController {
     private final MpesaService mpesaService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN', 'SALES_REP')")
     @Operation(summary = "Create a manual invoice tied to a customer with products")
     public ResponseEntity<ApiResponse<InvoiceResponse>> createManualInvoice(
             @Valid @RequestBody ManualInvoiceRequest request) {

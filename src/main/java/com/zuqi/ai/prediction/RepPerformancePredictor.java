@@ -45,8 +45,8 @@ public class RepPerformancePredictor {
                 return defaultResult(salesRepId);
             }
 
-            // Use current month as the evaluation period
-            LocalDateTime periodStart = LocalDateTime.now().with(TemporalAdjusters.firstDayOfMonth())
+            // Use trailing 30 days to avoid instability on the 1st of each month
+            LocalDateTime periodStart = LocalDateTime.now().minusDays(30)
                     .withHour(0).withMinute(0).withSecond(0);
             LocalDateTime periodEnd   = LocalDateTime.now();
 
@@ -74,6 +74,9 @@ public class RepPerformancePredictor {
 
         } catch (Exception e) {
             log.error("Rep performance prediction failed for rep={}: {}", salesRepId, e.getMessage(), e);
+            return defaultResult(salesRepId);
+        } catch (Error e) {
+            log.error("Fatal error in rep performance prediction for rep={} (native library issue?): {}", salesRepId, e.getMessage(), e);
             return defaultResult(salesRepId);
         }
     }

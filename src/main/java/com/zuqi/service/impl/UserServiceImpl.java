@@ -235,8 +235,9 @@ public class UserServiceImpl implements UserService {
         } else if (request.getRole() != null && !request.getRole().isBlank()) {
             effectiveRole = request.getRole();
         } else if (userGroup != null && userGroup.getWorkflowTier() != null && !userGroup.getWorkflowTier().isBlank()) {
-            // Tier-only user (e.g. VERIFIER/AUTHORIZER group with no dedicated system role)
-            effectiveRole = userGroup.getWorkflowTier();
+            // Tier-only user: take the first tier as the primary system role
+            // (workflowTier may be comma-separated, e.g. "INITIATOR,VERIFIER")
+            effectiveRole = userGroup.getWorkflowTier().split(",")[0].trim();
         }
         if (effectiveRole == null || effectiveRole.isBlank()) {
             String typeName = (userGroup != null && userGroup.getUserType() != null)
@@ -302,18 +303,21 @@ public class UserServiceImpl implements UserService {
         Set<Role> roles = new HashSet<>();
         roles.add(role);
 
-        // Add workflow tier role (INITIATOR / VERIFIER / AUTHORIZER)
-        // Auto-derive from UserGroup.workflowTier; override with explicit request value if provided
-        String tierRole = (request.getWorkflowTierRole() != null && !request.getWorkflowTierRole().isBlank())
+        // Add workflow tier roles (INITIATOR / VERIFIER / AUTHORIZER)
+        // Auto-derive from UserGroup.workflowTier (may be comma-separated); override with explicit request value
+        String tierRawValue = (request.getWorkflowTierRole() != null && !request.getWorkflowTierRole().isBlank())
                 ? request.getWorkflowTierRole()
                 : (userGroup != null ? userGroup.getWorkflowTier() : null);
-        // Don't double-add if the tier role is already the primary role (tier-only user case)
-        if (tierRole != null && !tierRole.isBlank() && !tierRole.equals(effectiveRole)) {
-            try {
-                roleRepository.findByName(RoleName.valueOf(tierRole)).ifPresent(roles::add);
-            } catch (IllegalArgumentException e) {
-                log.warn("Unknown workflow tier role '{}' on UserGroup {}, skipping", tierRole,
-                        userGroup != null ? userGroup.getId() : "null");
+        if (tierRawValue != null && !tierRawValue.isBlank()) {
+            for (String tier : tierRawValue.split(",")) {
+                String trimmedTier = tier.trim();
+                if (trimmedTier.isEmpty() || trimmedTier.equals(effectiveRole)) continue;
+                try {
+                    roleRepository.findByName(RoleName.valueOf(trimmedTier)).ifPresent(roles::add);
+                } catch (IllegalArgumentException e) {
+                    log.warn("Unknown workflow tier role '{}' on UserGroup {}, skipping", trimmedTier,
+                            userGroup != null ? userGroup.getId() : "null");
+                }
             }
         }
 

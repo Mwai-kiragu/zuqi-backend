@@ -91,6 +91,9 @@ public class CreditLimitRegressor {
             log.error("Credit limit prediction failed for merchant {}: {}",
                     merchantId, e.getMessage(), e);
             return defaultCreditLimit();
+        } catch (Error e) {
+            log.error("Fatal error in credit limit prediction for merchant {} (native library issue?): {}", merchantId, e.getMessage(), e);
+            return defaultCreditLimit();
         }
     }
 

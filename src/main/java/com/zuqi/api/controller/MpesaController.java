@@ -53,7 +53,6 @@ public class MpesaController {
 
     @GetMapping("/configs")
     @Operation(summary = "Get M-Pesa configs for current merchant (or all for SUPER_ADMIN)")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MERCHANT_ADMIN', 'DISTRIBUTOR_ADMIN', 'CASHIER', 'FINANCE')")
     public ResponseEntity<ApiResponse<List<MpesaConfigResponse>>> getConfigs(
             @RequestParam(required = false) UUID merchantId) {
 
@@ -78,7 +77,6 @@ public class MpesaController {
 
     @PostMapping("/stk-push")
     @Operation(summary = "Initiate STK push", description = "Sends an M-Pesa payment prompt to a customer's phone")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MERCHANT_ADMIN', 'DISTRIBUTOR_ADMIN', 'CASHIER', 'FINANCE')")
     public ResponseEntity<ApiResponse<StkPushResponse>> initiateStk(
             @Valid @RequestBody StkPushRequest request) {
 
@@ -88,7 +86,6 @@ public class MpesaController {
 
     @GetMapping("/stk-push/{stkRequestId}/status")
     @Operation(summary = "Poll STK push status")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MERCHANT_ADMIN', 'DISTRIBUTOR_ADMIN', 'CASHIER', 'FINANCE')")
     public ResponseEntity<ApiResponse<StkPushResponse>> getStkStatus(
             @PathVariable UUID stkRequestId) {
 
@@ -98,7 +95,6 @@ public class MpesaController {
 
     @GetMapping("/cash")
     @Operation(summary = "Get cash payment status for current merchant")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MERCHANT_ADMIN', 'DISTRIBUTOR_ADMIN', 'CASHIER', 'FINANCE')")
     public ResponseEntity<ApiResponse<Boolean>> getCashEnabled(
             @RequestParam(required = false) UUID merchantId) {
         UUID resolvedId = resolveMerchantId(merchantId);

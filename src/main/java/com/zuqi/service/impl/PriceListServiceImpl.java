@@ -45,7 +45,7 @@ public class PriceListServiceImpl implements PriceListService {
     public PriceListResponse create(CreatePriceListRequest request) {
         Distributor distributor = resolveDistributor();
         UUID currentUserId = securityUtils.getCurrentUserId();
-        boolean needsApproval = securityUtils.currentUserHasWorkflowTier("INITIATOR");
+        boolean needsApproval = securityUtils.currentUserRequiresApprovalFor("PRICE_LISTS");
 
         PriceList priceList = PriceList.builder()
                 .distributor(distributor)

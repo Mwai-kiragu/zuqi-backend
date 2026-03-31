@@ -191,6 +191,9 @@ public class DataQualityDetector {
             log.warn("Tier-2 data quality check skipped for order {}: {}",
                     event.orderId(), e.getMessage());
             return 0.0;
+        } catch (Error e) {
+            log.error("Fatal error in data quality check for order {} (native library issue?): {}", event.orderId(), e.getMessage(), e);
+            return 0.0;
         }
     }
 

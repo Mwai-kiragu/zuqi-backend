@@ -94,8 +94,8 @@ public class InventoryServiceImpl implements InventoryService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
-        // INITIATOR role → create pending movement without applying stock change
-        boolean needsApproval = securityUtils.currentUserHasWorkflowTier("INITIATOR");
+        // INITIATOR role or requiresApproval → create pending movement without applying stock change
+        boolean needsApproval = securityUtils.currentUserRequiresApprovalFor("INVENTORY");
         if (needsApproval) {
             StockMovement pending = StockMovement.builder()
                     .warehouse(warehouse)

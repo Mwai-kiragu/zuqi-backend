@@ -181,15 +181,18 @@ p, FINANCE, /v1/ai/credit/evaluate/:id, POST
 p, FINANCE, /v1/ai/credit/score/:id, GET
 p, FINANCE, /v1/ai/credit/adjust/:id, POST
 
-# AI Demand Forecasting - DISTRIBUTOR_ADMIN, SALES_REP, WAREHOUSE_MANAGER
+# AI Demand Forecasting - DISTRIBUTOR_ADMIN, SALES_REP, WAREHOUSE_MANAGER, FINANCE
 p, DISTRIBUTOR_ADMIN, /v1/ai/demand/forecasts, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/demand/forecasts/:merchantId/:productId, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/demand/suggestions/:merchantId, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/demand/health, GET
 p, SALES_REP, /v1/ai/demand/forecasts, GET
+p, SALES_REP, /v1/ai/demand/forecasts/:merchantId/:productId, GET
 p, SALES_REP, /v1/ai/demand/suggestions/:merchantId, GET
 p, WAREHOUSE_MANAGER, /v1/ai/demand/forecasts, GET
 p, WAREHOUSE_MANAGER, /v1/ai/demand/forecasts/:merchantId/:productId, GET
+p, FINANCE, /v1/ai/demand/forecasts, GET
+p, FINANCE, /v1/ai/demand/forecasts/:merchantId/:productId, GET
 
 # AI Anomaly Detection - DISTRIBUTOR_ADMIN, WAREHOUSE_MANAGER, FINANCE
 p, DISTRIBUTOR_ADMIN, /v1/ai/anomaly/alerts, GET
@@ -233,10 +236,13 @@ p, DISTRIBUTOR_ADMIN, /v1/ai/recommendations/:id, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/recommendations/:id/accept, PUT
 p, DISTRIBUTOR_ADMIN, /v1/ai/recommendations/:id/reject, PUT
 
-# AI Compliance Reports - DISTRIBUTOR_ADMIN only
+# AI Compliance Reports - DISTRIBUTOR_ADMIN, FINANCE
 p, DISTRIBUTOR_ADMIN, /v1/ai/reports/compliance/generate, POST
 p, DISTRIBUTOR_ADMIN, /v1/ai/reports/compliance/templates, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/reports/compliance/:id, GET
+p, FINANCE, /v1/ai/reports/compliance/generate, POST
+p, FINANCE, /v1/ai/reports/compliance/templates, GET
+p, FINANCE, /v1/ai/reports/compliance/:id, GET
 
 # AI Assistant - Chat available to all roles (content is scoped by role server-side)
 p, SUPER_ADMIN, /v1/ai/assistant/chat, POST
@@ -250,11 +256,16 @@ p, MERCHANT_ADMIN, /v1/ai/assistant/chat, POST
 p, SUPER_ADMIN, /v1/ai/assistant/report, POST
 p, DISTRIBUTOR_ADMIN, /v1/ai/assistant/report, POST
 p, FINANCE, /v1/ai/assistant/report, POST
+p, WAREHOUSE_MANAGER, /v1/ai/assistant/report, POST
+p, SALES_REP, /v1/ai/assistant/report, POST
+p, MERCHANT_ADMIN, /v1/ai/assistant/report, POST
 
 p, SUPER_ADMIN, /v1/ai/assistant/report-data, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/assistant/report-data, GET
 p, MERCHANT_ADMIN, /v1/ai/assistant/report-data, GET
 p, FINANCE, /v1/ai/assistant/report-data, GET
+p, WAREHOUSE_MANAGER, /v1/ai/assistant/report-data, GET
+p, SALES_REP, /v1/ai/assistant/report-data, GET
 
 p, SUPER_ADMIN, /v1/ai/assistant/history/:id, GET|DELETE
 p, DISTRIBUTOR_ADMIN, /v1/ai/assistant/history/:id, GET|DELETE
@@ -491,10 +502,15 @@ p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/customers/segments/:distributorId, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/customers/churn/:distributorId, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/customers/churn/:distributorId/at-risk, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/customers/recommendations/:customerId, GET
+p, SALES_REP, /v1/ai/analytics/customers/segments/:distributorId, GET
 p, SALES_REP, /v1/ai/analytics/customers/recommendations/:customerId, GET
+p, SALES_REP, /v1/ai/analytics/customers/churn/:distributorId, GET
 p, SALES_REP, /v1/ai/analytics/customers/churn/:distributorId/at-risk, GET
 p, SALES_REP, /v1/ai/analytics/reps/:repId/visit-plan, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/reps/:repId/visit-plan, GET
+p, MERCHANT_ADMIN, /v1/ai/analytics/customers/segments/:distributorId, GET
+p, MERCHANT_ADMIN, /v1/ai/analytics/customers/churn/:distributorId, GET
+p, MERCHANT_ADMIN, /v1/ai/analytics/customers/churn/:distributorId/at-risk, GET
 
 # Procurement: supplier risk, price trends
 p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/suppliers/risk/:distributorId, GET
@@ -502,12 +518,15 @@ p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/suppliers/price-trends/:distributorId, GE
 p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/suppliers/price-trends/:distributorId/:supplierId, GET
 p, FINANCE, /v1/ai/analytics/suppliers/risk/:distributorId, GET
 p, FINANCE, /v1/ai/analytics/suppliers/price-trends/:distributorId, GET
+p, FINANCE, /v1/ai/analytics/suppliers/price-trends/:distributorId/:supplierId, GET
 
 # Sales: pricing recommendations
 p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/pricing/recommendations/:distributorId, GET
 p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/pricing/recommendations/:id/apply, POST
 p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/pricing/recommendations/:id/reject, POST
 p, FINANCE, /v1/ai/analytics/pricing/recommendations/:distributorId, GET
+p, FINANCE, /v1/ai/analytics/pricing/recommendations/:id/apply, POST
+p, FINANCE, /v1/ai/analytics/pricing/recommendations/:id/reject, POST
 
 # Finance: cash flow forecast
 p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/cashflow/forecast/:distributorId, GET
@@ -516,6 +535,17 @@ p, FINANCE, /v1/ai/analytics/cashflow/forecast/:distributorId, GET
 # CRM: product recommendations (distributor-level)
 p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/customers/product-recs/:distributorId, GET
 p, SALES_REP, /v1/ai/analytics/customers/product-recs/:distributorId, GET
+
+# CRM: customer health scores
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/customers/health/:distributorId, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/customers/health/:distributorId/:customerId, GET
+p, DISTRIBUTOR_ADMIN, /v1/ai/analytics/customers/health/:distributorId/:customerId/compute, POST
+p, SALES_REP, /v1/ai/analytics/customers/health/:distributorId, GET
+p, SALES_REP, /v1/ai/analytics/customers/health/:distributorId/:customerId, GET
+p, MERCHANT_ADMIN, /v1/ai/analytics/customers/health/:distributorId, GET
+p, MERCHANT_ADMIN, /v1/ai/analytics/customers/health/:distributorId/:customerId, GET
+
+
 
 # Role hierarchy - who inherits what
 g, SUPER_ADMIN, DISTRIBUTOR_ADMIN

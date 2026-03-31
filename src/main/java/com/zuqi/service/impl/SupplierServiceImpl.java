@@ -155,7 +155,7 @@ public class SupplierServiceImpl implements SupplierService {
             }
         }
 
-        boolean needsApproval = securityUtils.currentUserHasWorkflowTier("INITIATOR");
+        boolean needsApproval = securityUtils.currentUserRequiresApprovalFor("SUPPLIERS");
         supplier.setApprovalStatus(needsApproval ? "PENDING_APPROVAL" : "APPROVED");
         UUID currentUserId = securityUtils.getCurrentUserId();
         supplier.setCreatedById(currentUserId);

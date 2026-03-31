@@ -88,6 +88,10 @@ public class StockoutPredictor {
             log.error("Stockout prediction failed for warehouse={} product={}: {}",
                     warehouseId, productId, e.getMessage(), e);
             return defaultResult(warehouseId, productId);
+        } catch (Error e) {
+            log.error("Fatal error in stockout prediction for warehouse={} product={} (native library issue?): {}",
+                    warehouseId, productId, e.getMessage(), e);
+            return defaultResult(warehouseId, productId);
         }
     }
 

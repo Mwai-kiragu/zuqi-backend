@@ -77,6 +77,9 @@ public class PaymentAnomalyDetector {
             log.error("Payment anomaly detection failed for payment={} merchant={}: {}",
                     paymentId, merchantId, e.getMessage(), e);
             return defaultResult(paymentId, merchantId);
+        } catch (Error e) {
+            log.error("Fatal error in payment anomaly detection for payment={} merchant={} (native library issue?): {}", paymentId, merchantId, e.getMessage(), e);
+            return defaultResult(paymentId, merchantId);
         }
     }
 

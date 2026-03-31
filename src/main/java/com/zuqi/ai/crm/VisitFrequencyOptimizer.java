@@ -163,6 +163,9 @@ public class VisitFrequencyOptimizer {
         } catch (Exception e) {
             log.warn("[VisitOptimizer] No active model, using heuristic: {}", e.getMessage());
             return null;
+        } catch (Error e) {
+            log.error("[VisitOptimizer] Fatal error loading model (native library issue?): {}", e.getMessage(), e);
+            return null;
         }
     }
 

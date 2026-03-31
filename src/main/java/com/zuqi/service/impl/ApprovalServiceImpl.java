@@ -23,6 +23,8 @@ import com.zuqi.domain.procurement.PrStatus;
 import com.zuqi.repository.ApprovalActionRepository;
 import com.zuqi.repository.ApprovalRequestRepository;
 import com.zuqi.repository.CustomerRepository;
+import com.zuqi.domain.invoice.InvoiceStatus;
+import com.zuqi.repository.InvoiceRepository;
 import com.zuqi.repository.OrderRepository;
 import com.zuqi.repository.PosShiftRepository;
 import com.zuqi.repository.PriceListRepository;
@@ -37,6 +39,7 @@ import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.ApprovalService;
 import com.zuqi.service.ApprovalWorkflowConfigService;
 import com.zuqi.service.EmailService;
+import com.zuqi.service.GlAutoPostingService;
 import com.zuqi.service.InvoiceService;
 import com.zuqi.service.NotificationService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -76,10 +79,12 @@ public class ApprovalServiceImpl implements ApprovalService {
     private final PosShiftRepository posShiftRepository;
     private final PurchaseRequisitionRepository purchaseRequisitionRepository;
     private final OrderRepository orderRepository;
+    private final InvoiceRepository invoiceRepository;
     private final ActivityLogService activityLogService;
     private final EmailService emailService;
     private final EmailConfig emailConfig;
     private final ApprovalWorkflowConfigService approvalWorkflowConfigService;
+    private final GlAutoPostingService glAutoPostingService;
 
     @Lazy @Autowired
     private InvoiceService invoiceService;
@@ -120,7 +125,7 @@ public class ApprovalServiceImpl implements ApprovalService {
                 .requestedByName(requester.getFirstName() + " " + requester.getLastName())
                 .description(dto.getDescription())
                 .currentValues(dto.getCurrentValues() != null ? dto.getCurrentValues() : new HashMap<>())
-                .requestedValues(dto.getRequestedValues())
+                .requestedValues(dto.getRequestedValues() != null ? dto.getRequestedValues() : new HashMap<>())
                 .requiredApprovals(requiredApprovals)
                 .amount(dto.getAmount())
                 .expiresAt(LocalDateTime.now().plusDays(7))
@@ -264,6 +269,18 @@ public class ApprovalServiceImpl implements ApprovalService {
                     }
                 });
             }
+            case "INVOICE" -> invoiceRepository.findById(entityId).ifPresent(invoice -> {
+                if ("APPROVED".equals(status)) {
+                    invoice.setStatus(InvoiceStatus.UNPAID);
+                    invoiceRepository.save(invoice);
+                    try { glAutoPostingService.postInvoiceCreated(invoice); } catch (Exception e) {
+                        log.warn("GL posting failed for approved invoice {}: {}", invoice.getInvoiceNumber(), e.getMessage());
+                    }
+                } else {
+                    invoice.setStatus(InvoiceStatus.CANCELLED);
+                    invoiceRepository.save(invoice);
+                }
+            });
             default -> { /* no-op for other entity types */ }
         }
     }

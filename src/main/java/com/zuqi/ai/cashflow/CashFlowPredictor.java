@@ -61,7 +61,13 @@ public class CashFlowPredictor {
         Distributor distributor = distributorRepository.findById(distributorId)
                 .orElseThrow(() -> new IllegalArgumentException("Distributor not found: " + distributorId));
 
-        Model<Regressor> model = modelLoader.loadModel(MODEL_NAME);
+        Model<Regressor> model;
+        try {
+            model = modelLoader.loadModel(MODEL_NAME);
+        } catch (Error e) {
+            log.error("Fatal error loading cash flow model (native library issue?): {}", e.getMessage(), e);
+            model = null;
+        }
         double[] residuals = loadResidualPercentiles();
         double confidence = phaseService.applyModifier(0.75, MODEL_NAME);
         String phase = phaseTracker.getPhase(MODEL_NAME, distributorId).name();

@@ -1,5 +1,6 @@
 package com.zuqi.api.controller;
 
+import com.zuqi.ai.crm.CustomerHealthScoreService;
 import com.zuqi.ai.demand.AutoPurchaseOrderService;
 import com.zuqi.ai.demand.CashFlowForecastService;
 import com.zuqi.ai.demand.ExpiryRiskJob;
@@ -7,6 +8,7 @@ import com.zuqi.api.dto.ApiResponse;
 import com.zuqi.api.dto.CashFlowForecastEntry;
 import com.zuqi.api.dto.ai.ReorderSuggestionResponse;
 import com.zuqi.domain.ai.ChurnPrediction;
+import com.zuqi.domain.ai.CustomerHealthScore;
 import com.zuqi.domain.ai.CustomerSegment;
 import com.zuqi.domain.ai.ExpiryRiskScore;
 import com.zuqi.domain.ai.PriceTrend;
@@ -17,6 +19,7 @@ import com.zuqi.domain.ai.SupplierRiskScore;
 import com.zuqi.domain.ai.VisitRecommendation;
 import com.zuqi.domain.procurement.PurchaseRequisition;
 import com.zuqi.repository.ChurnPredictionRepository;
+import com.zuqi.repository.CustomerHealthScoreRepository;
 import com.zuqi.repository.CustomerSegmentRepository;
 import com.zuqi.repository.ExpiryRiskScoreRepository;
 import com.zuqi.repository.PriceTrendRepository;
@@ -69,6 +72,8 @@ public class AiAnalyticsController {
     private final AutoPurchaseOrderService         autoPurchaseOrderService;
     private final CashFlowForecastService          cashFlowForecastService;
     private final ExpiryRiskJob                    expiryRiskJob;
+    private final CustomerHealthScoreRepository    customerHealthScoreRepository;
+    private final CustomerHealthScoreService       customerHealthScoreService;
 
     // ── CASH FLOW FORECAST ────────────────────────────────────────────────────
 
@@ -346,6 +351,79 @@ public class AiAnalyticsController {
 
         log.info("POST /analytics/pricing/recommendations/{}/reject", id);
         return updatePricingStatus(id, "REJECTED");
+    }
+
+    // ── CRM: Customer Health Scores ───────────────────────────────────────────
+
+    @GetMapping("/customers/health/{distributorId}")
+    @Operation(
+            summary = "Get customer health scores for a distributor",
+            description = "Returns pre-computed composite health scores for all customers. " +
+                          "Scores aggregate order frequency, payment timeliness, revenue trend, " +
+                          "engagement, and credit health. Batch job refreshes scores nightly.")
+    public ResponseEntity<ApiResponse<org.springframework.data.domain.Page<CustomerHealthScore>>> getCustomerHealthScores(
+            @PathVariable UUID distributorId,
+            @Parameter(description = "Filter by health tier: THRIVING, HEALTHY, NEEDS_ATTENTION, AT_RISK, CRITICAL (optional)")
+            @RequestParam(required = false) String tier,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+
+        log.info("GET /analytics/customers/health/{} tier={} page={} size={}",
+                distributorId, tier, page, size);
+        org.springframework.data.domain.PageRequest pageable =
+                org.springframework.data.domain.PageRequest.of(page, size);
+
+        if (tier != null && !tier.isBlank()) {
+            // Return tier-filtered list wrapped as a Page
+            java.util.List<CustomerHealthScore> byTier =
+                    customerHealthScoreRepository.findByDistributorIdAndHealthTier(distributorId, tier.toUpperCase());
+            java.util.List<CustomerHealthScore> tieredPage = byTier.stream()
+                    .skip((long) page * size).limit(size).toList();
+            org.springframework.data.domain.Page<CustomerHealthScore> paged =
+                    new org.springframework.data.domain.PageImpl<>(tieredPage, pageable, byTier.size());
+            return ResponseEntity.ok(ApiResponse.success(paged));
+        }
+        return ResponseEntity.ok(ApiResponse.success(
+                customerHealthScoreRepository.findByDistributorId(distributorId, pageable)));
+    }
+
+    @GetMapping("/customers/health/{distributorId}/{customerId}")
+    @Operation(
+            summary = "Get health score for a single customer",
+            description = "Returns the latest health score for one customer. " +
+                          "Returns HTTP 404 if no score has been computed yet.")
+    public ResponseEntity<ApiResponse<CustomerHealthScore>> getCustomerHealthScore(
+            @PathVariable UUID distributorId,
+            @PathVariable UUID customerId) {
+
+        log.info("GET /analytics/customers/health/{}/{}", distributorId, customerId);
+        return customerHealthScoreRepository
+                .findByDistributorIdAndCustomerId(distributorId, customerId)
+                .map(score -> ResponseEntity.ok(ApiResponse.success(score)))
+                .orElseGet(() -> ResponseEntity.status(404)
+                        .body(ApiResponse.error("No health score found — run the nightly job or POST /compute")));
+    }
+
+    @PostMapping("/customers/health/{distributorId}/{customerId}/compute")
+    @Operation(
+            summary = "Compute health score for a single customer on-demand",
+            description = "Immediately computes and persists a health score for the given customer. " +
+                          "Useful when real-time scoring is needed outside the nightly batch window.")
+    public ResponseEntity<ApiResponse<CustomerHealthScore>> computeCustomerHealthScore(
+            @PathVariable UUID distributorId,
+            @PathVariable UUID customerId) {
+
+        log.info("POST /analytics/customers/health/{}/{}/compute", distributorId, customerId);
+        try {
+            CustomerHealthScore score = customerHealthScoreService.computeScore(customerId, distributorId);
+            return ResponseEntity.ok(ApiResponse.success(score));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getMessage()));
+        } catch (Exception e) {
+            log.error("Health score computation failed for customer={}: {}", customerId, e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body(ApiResponse.error("Health score computation failed: " + e.getMessage()));
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
