@@ -261,8 +261,11 @@ public class AccessControlServiceImpl implements AccessControlService {
 
     private void validateWorkflowTier(String tier) {
         if (tier == null) return;
-        if (!List.of("INITIATOR", "VERIFIER", "AUTHORIZER").contains(tier)) {
-            throw new ValidationException("Invalid workflowTier. Must be INITIATOR, VERIFIER, or AUTHORIZER");
+        List<String> valid = List.of("INITIATOR", "VERIFIER", "AUTHORIZER");
+        for (String t : tier.split(",")) {
+            if (!valid.contains(t.trim())) {
+                throw new ValidationException("Invalid workflowTier. Must be INITIATOR, VERIFIER, or AUTHORIZER");
+            }
         }
     }
 }
