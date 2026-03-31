@@ -32,6 +32,12 @@ public interface WarehouseRepository extends JpaRepository<Warehouse, UUID> {
 
     List<Warehouse> findByBranchIdAndActiveTrue(UUID branchId);
 
+    /** Warehouses in the HQ (headquarters) branch for a distributor. */
+    List<Warehouse> findByDistributorIdAndBranchHeadquartersTrueAndActiveTrue(UUID distributorId);
+
+    /** First warehouse created for a distributor — used as fallback default. */
+    Optional<Warehouse> findFirstByDistributorIdAndActiveTrueOrderByCreatedAtAsc(UUID distributorId);
+
     List<Warehouse> findByDistributorId(UUID distributorId);
 
     /** Scope to a merchant brand (MERCHANT_ADMIN). */

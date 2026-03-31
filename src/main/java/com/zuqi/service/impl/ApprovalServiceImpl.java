@@ -34,6 +34,8 @@ import com.zuqi.repository.PurchaseRequisitionRepository;
 import com.zuqi.repository.StockMovementRepository;
 import com.zuqi.repository.StockRepository;
 import com.zuqi.repository.SupplierRepository;
+import com.zuqi.repository.WarehouseRepository;
+import com.zuqi.domain.inventory.Warehouse;
 import com.zuqi.repository.UserRepository;
 import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.ApprovalService;
@@ -77,6 +79,7 @@ public class ApprovalServiceImpl implements ApprovalService {
     private final PromotionRepository promotionRepository;
     private final StockMovementRepository stockMovementRepository;
     private final StockRepository stockRepository;
+    private final WarehouseRepository warehouseRepository;
     private final PosShiftRepository posShiftRepository;
     private final PurchaseRequisitionRepository purchaseRequisitionRepository;
     private final OrderRepository orderRepository;
@@ -234,8 +237,41 @@ public class ApprovalServiceImpl implements ApprovalService {
             case "CUSTOMER"       -> customerRepository.updateApprovalStatus(entityId, status);
             case "SUPPLIER"       -> supplierRepository.updateApprovalStatus(entityId, status);
             case "PRODUCT"        -> {
-                if ("APPROVED".equals(status)) productRepository.approveAndActivate(entityId);
-                else productRepository.updateApprovalStatus(entityId, status);
+                if ("APPROVED".equals(status)) {
+                    productRepository.approveAndActivate(entityId);
+                    // Create zero-quantity stock records in all active warehouses so the product
+                    // appears in inventory immediately (listed as "out of stock")
+                    productRepository.findById(entityId).ifPresent(product -> {
+                        if (product.getDistributor() == null) return;
+                        UUID distributorId = product.getDistributor().getId();
+
+                        // Prefer the HQ-branch warehouse; fall back to the first warehouse created
+                        List<Warehouse> hqWarehouses = warehouseRepository
+                                .findByDistributorIdAndBranchHeadquartersTrueAndActiveTrue(distributorId);
+                        Warehouse defaultWarehouse = hqWarehouses.isEmpty()
+                                ? warehouseRepository
+                                        .findFirstByDistributorIdAndActiveTrueOrderByCreatedAtAsc(distributorId)
+                                        .orElse(null)
+                                : hqWarehouses.get(0);
+
+                        if (defaultWarehouse != null) {
+                            boolean exists = stockRepository.existsByWarehouseIdAndProductId(
+                                    defaultWarehouse.getId(), product.getId());
+                            if (!exists) {
+                                stockRepository.save(Stock.builder()
+                                        .warehouse(defaultWarehouse)
+                                        .product(product)
+                                        .quantity(java.math.BigDecimal.ZERO)
+                                        .reservedQuantity(java.math.BigDecimal.ZERO)
+                                        .build());
+                                log.info("Created zero-stock entry for approved product {} in warehouse {}",
+                                        product.getName(), defaultWarehouse.getName());
+                            }
+                        }
+                    });
+                } else {
+                    productRepository.updateApprovalStatus(entityId, status);
+                }
             }
             case "PRICE_LIST"     -> priceListRepository.updateApprovalStatus(entityId, status);
             case "PROMOTION"      -> promotionRepository.updateApprovalStatus(entityId, status);
