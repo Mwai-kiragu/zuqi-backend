@@ -36,6 +36,8 @@ public enum ApprovalWorkflowType {
     CREDIT_NOTE,
     WRITE_OFF_APPROVAL,
     JOURNAL_ENTRY,
+    INVOICE_CREATION,
+    CUSTOMER_CREATION,
 
     // User Management
     USER_CREATION,

@@ -58,7 +58,6 @@ public class KcbController {
 
     @GetMapping("/configs")
     @Operation(summary = "Get KCB configs for current merchant (or all for SUPER_ADMIN)")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MERCHANT_ADMIN', 'DISTRIBUTOR_ADMIN', 'CASHIER', 'FINANCE')")
     public ResponseEntity<ApiResponse<List<KcbConfigResponse>>> getConfigs(
             @RequestParam(required = false) UUID merchantId) {
 
@@ -82,7 +81,6 @@ public class KcbController {
 
     @PostMapping("/stk-push")
     @Operation(summary = "Initiate KCB STK push")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MERCHANT_ADMIN', 'DISTRIBUTOR_ADMIN', 'CASHIER', 'FINANCE')")
     public ResponseEntity<ApiResponse<KcbStkPushResponse>> initiateStk(
             @Valid @RequestBody KcbStkPushRequest request) {
         KcbStkPushResponse response = kcbService.initiateStk(request);
@@ -91,7 +89,6 @@ public class KcbController {
 
     @GetMapping("/stk-push/{stkRequestId}/status")
     @Operation(summary = "Poll KCB STK push status")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MERCHANT_ADMIN', 'DISTRIBUTOR_ADMIN', 'CASHIER', 'FINANCE')")
     public ResponseEntity<ApiResponse<KcbStkPushResponse>> getStkStatus(
             @PathVariable UUID stkRequestId) {
         KcbStkPushResponse response = kcbService.getStkStatus(stkRequestId);

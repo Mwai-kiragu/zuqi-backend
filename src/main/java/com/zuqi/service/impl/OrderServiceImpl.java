@@ -204,7 +204,7 @@ public class OrderServiceImpl implements OrderService {
         String orderNumber = generateOrderNumber();
 
         // Determine approval routing before building the order
-        boolean needsApproval = securityUtils.currentUserHasWorkflowTier("INITIATOR");
+        boolean needsApproval = securityUtils.currentUserRequiresApprovalFor("ORDERS");
 
         // Create order
         Order order = Order.builder()
@@ -304,6 +304,12 @@ public class OrderServiceImpl implements OrderService {
                         .description("Sales Order " + order.getOrderNumber() + " — KES " + order.getTotalAmount())
                         .requiredApprovals(requiredApprovals)
                         .amount(order.getTotalAmount())
+                        .requestedValues(java.util.Map.of(
+                                "orderNumber", order.getOrderNumber(),
+                                "totalAmount", order.getTotalAmount(),
+                                "customer", merchant.getBusinessName(),
+                                "orderDate", LocalDate.now().toString()
+                        ))
                         .build());
             } catch (Exception e) {
                 log.error("Failed to create approval request for order {}: {}", order.getOrderNumber(), e.getMessage());

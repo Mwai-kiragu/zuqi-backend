@@ -78,6 +78,10 @@ public interface UserRepository extends JpaRepository<User, UUID> {
            "AND u.userGroup IS NOT NULL AND u.userGroup.userType IS NOT NULL)")
     List<UserTypePermission> findUserTypePermissionsByUserId(@Param("userId") UUID userId);
 
+    /** Fetch the workflowTier from the user's UserGroup (avoids LazyInitializationException on detached User). */
+    @Query("SELECT ug.workflowTier FROM User u JOIN u.userGroup ug WHERE u.id = :userId")
+    Optional<String> findWorkflowTierByUserId(@Param("userId") UUID userId);
+
     /** Scope to a merchant brand (MERCHANT_ADMIN) — users who belong to the brand or its distributors. */
     @Query("SELECT u FROM User u WHERE u.merchantId = :merchantId OR " +
             "u.distributorId IN (SELECT d.id FROM Distributor d WHERE d.merchant.id = :merchantId)")

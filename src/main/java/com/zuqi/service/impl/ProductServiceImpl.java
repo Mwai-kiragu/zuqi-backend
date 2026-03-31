@@ -21,9 +21,12 @@ import com.zuqi.exception.ValidationException;
 import com.zuqi.api.dto.inventory.StockAdjustmentRequest;
 import com.zuqi.domain.inventory.Stock;
 import com.zuqi.domain.inventory.StockMovement;
+import com.zuqi.domain.pricing.PriceList;
+import com.zuqi.domain.pricing.PriceListItem;
 import com.zuqi.repository.DistributorBranchRepository;
 import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.GlAccountRepository;
+import com.zuqi.repository.PriceListRepository;
 import com.zuqi.repository.ProductBranchPriceRepository;
 import com.zuqi.repository.ProductCategoryRepository;
 import com.zuqi.repository.ProductRepository;
@@ -63,6 +66,7 @@ public class ProductServiceImpl implements ProductService {
     private final StockRepository stockRepository;
     private final WarehouseRepository warehouseRepository;
     private final GlAccountRepository glAccountRepository;
+    private final PriceListRepository priceListRepository;
     private final SecurityUtils securityUtils;
     private final ApprovalService approvalService;
     private final InventoryService inventoryService;
@@ -260,7 +264,7 @@ public class ProductServiceImpl implements ProductService {
             product.setCategory(category);
         }
 
-        boolean needsApproval = securityUtils.currentUserHasWorkflowTier("INITIATOR");
+        boolean needsApproval = securityUtils.currentUserRequiresApprovalFor("PRODUCTS");
         product.setApprovalStatus(needsApproval ? "PENDING_APPROVAL" : "APPROVED");
         UUID currentUserId = securityUtils.getCurrentUserId();
         product.setCreatedById(currentUserId);
@@ -326,6 +330,9 @@ public class ProductServiceImpl implements ProductService {
             });
         }
 
+        // Auto-add product to the distributor's default price list
+        addToDefaultPriceList(savedProduct);
+
         ProductResponse response = ProductResponse.fromEntity(savedProduct);
         List<ProductBranchPrice> prices = branchPriceRepository.findByProductId(savedProduct.getId());
         if (!prices.isEmpty()) {
@@ -334,6 +341,43 @@ public class ProductServiceImpl implements ProductService {
                     .collect(Collectors.toList()));
         }
         return response;
+    }
+
+    private void addToDefaultPriceList(Product product) {
+        try {
+            Distributor distributor = product.getDistributor();
+            if (distributor == null) return;
+
+            PriceList priceList = priceListRepository
+                    .findByDistributorIdAndIsDefaultTrue(distributor.getId())
+                    .orElseGet(() -> {
+                        PriceList newList = PriceList.builder()
+                                .distributor(distributor)
+                                .name("Standard Price List")
+                                .isDefault(true)
+                                .active(true)
+                                .approvalStatus("APPROVED")
+                                .build();
+                        return priceListRepository.save(newList);
+                    });
+
+            boolean alreadyExists = priceList.getItems().stream()
+                    .anyMatch(i -> i.getProduct().getId().equals(product.getId()));
+            if (alreadyExists) return;
+
+            BigDecimal price = product.getUnitPrice() != null ? product.getUnitPrice() : BigDecimal.ZERO;
+            PriceListItem item = PriceListItem.builder()
+                    .priceList(priceList)
+                    .product(product)
+                    .unitPrice(price)
+                    .discountPercent(BigDecimal.ZERO)
+                    .build();
+            priceList.getItems().add(item);
+            priceListRepository.save(priceList);
+            log.info("Auto-added product {} to default price list {}", product.getId(), priceList.getId());
+        } catch (Exception e) {
+            log.warn("Could not auto-add product {} to default price list: {}", product.getId(), e.getMessage());
+        }
     }
 
     @Override

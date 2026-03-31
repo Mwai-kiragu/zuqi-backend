@@ -13,6 +13,8 @@ import com.zuqi.service.GlPeriodService;
 import com.zuqi.service.JournalEntryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -36,7 +38,9 @@ public class JournalEntryServiceImpl implements JournalEntryService {
     private final GlAccountRepository glAccountRepository;
     private final CostCenterRepository costCenterRepository;
     private final GlPeriodService glPeriodService;
-    private final ApprovalService approvalService;
+
+    @Lazy @Autowired
+    private ApprovalService approvalService;
 
     @Override
     public Page<JournalEntryResponse> getAll(UUID distributorId, UUID merchantId, JournalEntryStatus status,

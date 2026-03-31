@@ -90,7 +90,7 @@ public class CasbinAuthorizationFilter extends OncePerRequestFilter {
         Map.entry("CREDIT",             List.of("/v1/credit")),
         Map.entry("AR_AGING",           List.of("/v1/reports/ar-aging")),
         Map.entry("AP_AGING",           List.of("/v1/reports/ap-aging")),
-        Map.entry("PAYMENT_SETUP",      List.of("/v1/payment-setup")),
+        Map.entry("PAYMENT_SETUP",      List.of("/v1/payment-setup", "/v1/mpesa", "/v1/kcb")),
         Map.entry("AUDIT_LOGS",         List.of("/v1/audit-logs")),
         Map.entry("ADMIN",              List.of("/v1/users", "/v1/user-groups", "/v1/user-types",
                                                "/v1/roles", "/v1/access-control")),

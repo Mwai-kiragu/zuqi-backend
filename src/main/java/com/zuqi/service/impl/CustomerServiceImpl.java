@@ -217,7 +217,7 @@ public class CustomerServiceImpl implements CustomerService {
             customer.setAssignedSalesRep(salesRep);
         }
 
-        boolean needsApproval = securityUtils.currentUserHasWorkflowTier("INITIATOR");
+        boolean needsApproval = securityUtils.currentUserRequiresApprovalFor("CUSTOMERS");
         customer.setApprovalStatus(needsApproval ? "PENDING_APPROVAL" : "APPROVED");
         UUID currentUserId = securityUtils.getCurrentUserId();
         customer.setCreatedById(currentUserId);

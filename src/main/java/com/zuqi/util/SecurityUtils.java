@@ -2,7 +2,9 @@ package com.zuqi.util;
 
 import com.zuqi.domain.accesscontrol.UserTypePermission;
 import com.zuqi.domain.user.User;
+import java.util.Optional;
 import com.zuqi.repository.DistributorRepository;
+import com.zuqi.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -16,6 +18,7 @@ import java.util.UUID;
 public class SecurityUtils {
 
     private final DistributorRepository distributorRepository;
+    private final UserRepository userRepository;
 
     private static final String ROLE_SUPER_ADMIN = "SUPER_ADMIN";
 
@@ -110,13 +113,12 @@ public class SecurityUtils {
     public String getCurrentUserWorkflowTier() {
         User user = getCurrentUser();
         if (user == null) return null;
-        // UserGroup-based tier (new system)
-        if (user.getUserGroup() != null && user.getUserGroup().getWorkflowTier() != null) {
-            return user.getUserGroup().getWorkflowTier();
-        }
+        // UserGroup-based tier — query DB to avoid LazyInitializationException on detached proxy
+        Optional<String> tier = userRepository.findWorkflowTierByUserId(user.getId());
+        if (tier.isPresent() && tier.get() != null) return tier.get();
         // Legacy role-based tier (for existing INITIATOR/VERIFIER/AUTHORIZER role users)
-        for (String tier : List.of("INITIATOR", "VERIFIER", "AUTHORIZER")) {
-            if (hasRole(user, tier)) return tier;
+        for (String t : List.of("INITIATOR", "VERIFIER", "AUTHORIZER")) {
+            if (hasRole(user, t)) return t;
         }
         return null;
     }
@@ -147,9 +149,8 @@ public class SecurityUtils {
         for (String adminRole : List.of("SUPER_ADMIN", "DISTRIBUTOR_ADMIN", "MERCHANT_ADMIN")) {
             if (hasRole(user, adminRole)) return true;
         }
-        // Check UserType permissions
-        if (user.getUserGroup() == null || user.getUserGroup().getUserType() == null) return false;
-        return user.getUserGroup().getUserType().getPermissions().stream()
+        List<UserTypePermission> permissions = userRepository.findUserTypePermissionsByUserId(user.getId());
+        return permissions.stream()
                 .filter(p -> p.getModule().equalsIgnoreCase(module))
                 .findFirst()
                 .map(p -> switch (action.toUpperCase()) {
@@ -160,6 +161,23 @@ public class SecurityUtils {
                     case "APPROVE" -> p.isCanApprove();
                     default -> false;
                 })
+                .orElse(false);
+    }
+
+    /**
+     * Returns true if the current user's actions on the given module should be routed
+     * through approval before taking effect.
+     * Checks both workflow tier (INITIATOR) and the UserType's per-module requiresApproval flag.
+     */
+    public boolean currentUserRequiresApprovalFor(String module) {
+        if (currentUserHasWorkflowTier("INITIATOR")) return true;
+        User user = getCurrentUser();
+        if (user == null) return false;
+        List<UserTypePermission> permissions = userRepository.findUserTypePermissionsByUserId(user.getId());
+        return permissions.stream()
+                .filter(p -> p.getModule().equalsIgnoreCase(module))
+                .findFirst()
+                .map(UserTypePermission::isRequiresApproval)
                 .orElse(false);
     }
 
