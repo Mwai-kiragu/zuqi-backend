@@ -1,6 +1,7 @@
 package com.zuqi.service;
 
 import com.zuqi.domain.customer.Customer;
+import com.zuqi.domain.procurement.PurchaseOrder;
 import com.zuqi.domain.user.User;
 
 public interface EmailService {
@@ -26,4 +27,6 @@ public interface EmailService {
 
     void sendDataExportEmail(String to, String name, String entityType, int recordCount,
                              String csvContent, String attachmentFilename);
+
+    void sendPurchaseOrderEmail(PurchaseOrder po, String distributorName);
 }

@@ -3,6 +3,7 @@ package com.zuqi.service.impl;
 import com.zuqi.config.AppConfig;
 import com.zuqi.config.EmailConfig;
 import com.zuqi.domain.customer.Customer;
+import com.zuqi.domain.procurement.PurchaseOrder;
 import com.zuqi.domain.user.User;
 import com.zuqi.service.EmailService;
 import lombok.extern.slf4j.Slf4j;
@@ -167,6 +168,42 @@ public class SesEmailServiceImpl implements EmailService {
     public void sendDataExportEmail(String to, String name, String entityType, int recordCount, String csvContent, String attachmentFilename) {
         // SES raw email with attachment is complex; log intent and skip in SES provider
         log.info("SES sendDataExportEmail skipped for {} ({} records) — attachment not supported via template-only SES impl", entityType, recordCount);
+    }
+
+    @Override
+    @Async
+    public void sendPurchaseOrderEmail(PurchaseOrder po, String distributorName) {
+        if (po.getSupplier() == null || po.getSupplier().getEmail() == null || po.getSupplier().getEmail().isBlank()) {
+            log.info("PO email skipped — supplier has no email address for PO {}", po.getPoNumber());
+            return;
+        }
+        if (!emailConfig.isEnabled()) {
+            log.info("Email disabled (SES). Would send PO {} to supplier: {}", po.getPoNumber(), po.getSupplier().getEmail());
+            return;
+        }
+        try {
+            Map<String, Object> vars = new HashMap<>();
+            vars.put("poNumber", po.getPoNumber());
+            vars.put("supplierName", po.getSupplier().getName());
+            vars.put("distributorName", distributorName != null ? distributorName : emailConfig.getFromName());
+            vars.put("sentAt", po.getSentAt() != null ? po.getSentAt().toLocalDate().toString() : java.time.LocalDate.now().toString());
+            vars.put("expectedDeliveryDate", po.getExpectedDeliveryDate() != null ? po.getExpectedDeliveryDate().toString() : "—");
+            vars.put("deliveryAddress", po.getDeliveryAddress());
+            vars.put("paymentTermsDays", po.getPaymentTermsDays());
+            vars.put("totalAmount", po.getTotalAmount());
+            vars.put("items", po.getItems() != null ? po.getItems() : java.util.Collections.emptyList());
+            vars.put("notes", po.getNotes());
+            vars.put("companyName", emailConfig.getFromName());
+            sendTemplatedEmail(
+                    po.getSupplier().getEmail(),
+                    "Purchase Order " + po.getPoNumber() + " from " + (distributorName != null ? distributorName : emailConfig.getFromName()),
+                    "po-notification",
+                    vars
+            );
+            log.info("SES PO email sent to supplier {} for PO {}", po.getSupplier().getEmail(), po.getPoNumber());
+        } catch (Exception e) {
+            log.error("Failed to send SES PO email for PO {}: {}", po.getPoNumber(), e.getMessage(), e);
+        }
     }
 
     @Override

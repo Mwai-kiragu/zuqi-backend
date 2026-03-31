@@ -21,6 +21,7 @@ import com.zuqi.repository.PurchaseRequisitionRepository;
 import com.zuqi.repository.SupplierRepository;
 import com.zuqi.service.ApprovalService;
 import com.zuqi.service.ApprovalThresholdService;
+import com.zuqi.service.EmailService;
 import com.zuqi.service.ProcurementService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +51,7 @@ public class ProcurementServiceImpl implements ProcurementService {
     private final ObjectMapper objectMapper;
     private final ApprovalThresholdService approvalThresholdService;
     private final ApprovalService approvalService;
+    private final EmailService emailService;
 
     private String generatePrNumber() {
         long count = prRepository.countAll();
@@ -246,7 +248,9 @@ public class ProcurementServiceImpl implements ProcurementService {
         po.setStatus(PoStatus.SENT);
         po.setSentAt(LocalDateTime.now());
         PurchaseOrder sentPo = poRepository.save(po);
-        return PurchaseOrderResponse.fromEntity(sentPo, resolveDistributorName(sentPo.getDistributorId()));
+        String distributorName = resolveDistributorName(sentPo.getDistributorId());
+        emailService.sendPurchaseOrderEmail(sentPo, distributorName);
+        return PurchaseOrderResponse.fromEntity(sentPo, distributorName);
     }
 
     @Override
