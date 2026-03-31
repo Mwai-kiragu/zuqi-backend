@@ -164,15 +164,18 @@ public class SecurityUtils {
                 .orElse(false);
     }
 
-    /**
-     * Returns true if the current user's actions on the given module should be routed
-     * through approval before taking effect.
-     * Checks both workflow tier (INITIATOR) and the UserType's per-module requiresApproval flag.
-     */
     public boolean currentUserRequiresApprovalFor(String module) {
-        if (currentUserHasWorkflowTier("INITIATOR")) return true;
         User user = getCurrentUser();
         if (user == null) return false;
+
+        // System admins bypass approval
+        for (String adminRole : List.of("SUPER_ADMIN", "DISTRIBUTOR_ADMIN", "MERCHANT_ADMIN")) {
+            if (hasRole(user, adminRole)) return false;
+        }
+
+        if (getCurrentUserWorkflowTier() != null) return true;
+
+        // Fallback: check per-module requiresApproval flag on UserType
         List<UserTypePermission> permissions = userRepository.findUserTypePermissionsByUserId(user.getId());
         return permissions.stream()
                 .filter(p -> p.getModule().equalsIgnoreCase(module))
@@ -181,21 +184,11 @@ public class SecurityUtils {
                 .orElse(false);
     }
 
-    /**
-     * Returns the active branch UUID from the JWT, or null if no branch context.
-     */
     public UUID getCurrentBranchId() {
         User user = getCurrentUser();
         return user != null ? user.getActiveBranchId() : null;
     }
 
-    /**
-     * Returns the effective branch filter to use in queries:
-     * - null  →  no branch filter (show all branches) for SUPER_ADMIN, HQ branch, or no branch selected
-     * - UUID  →  filter to this specific branch
-     *
-     * Business rule: the HQ branch represents the whole business, so it sees everything.
-     */
     public UUID getEffectiveBranchId() {
         if (canAccessAllData()) {
             return null; // SUPER_ADMIN always sees everything
