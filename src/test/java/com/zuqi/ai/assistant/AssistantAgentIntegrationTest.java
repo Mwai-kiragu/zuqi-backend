@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * and returns real answers from the database, not training-data guesses.
  *
  * Requires:
- *   - Ollama running at configured base-url with qwen2.5:14b
+ *   - RBS AI running at configured base-url with qwen3-14b
  *   - PostgreSQL (AWS RDS) reachable
  *   - Redis running
  *
@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringBootTest
 @ActiveProfiles("test")
-@Tag("ollama")
+@Tag("rbs-ai")
 class AssistantAgentIntegrationTest {
 
     @Autowired
@@ -40,7 +40,7 @@ class AssistantAgentIntegrationTest {
     @Test
     void salesQuestion_shouldReturnRealDataNotTrainingGuess() {
         UUID conversationId = UUID.randomUUID();
-        AssistantMemoryContext.set(DISTRIBUTOR_ID, TEST_USER_ID, "qwen2.5:14b");
+        AssistantMemoryContext.set(DISTRIBUTOR_ID, TEST_USER_ID, "qwen3-14b");
         try {
             String reply = assistantAgent.chat(conversationId,
                     "DISTRIBUTOR_ID: " + DISTRIBUTOR_ID + "\n\nHow many orders do we have this month?");
@@ -63,7 +63,7 @@ class AssistantAgentIntegrationTest {
     @Test
     void inventoryQuestion_shouldReturnRealStockData() {
         UUID conversationId = UUID.randomUUID();
-        AssistantMemoryContext.set(DISTRIBUTOR_ID, TEST_USER_ID, "qwen2.5:14b");
+        AssistantMemoryContext.set(DISTRIBUTOR_ID, TEST_USER_ID, "qwen3-14b");
         try {
             String reply = assistantAgent.chat(conversationId,
                     "DISTRIBUTOR_ID: " + DISTRIBUTOR_ID + "\n\nWhat is our current stock situation?");
@@ -83,7 +83,7 @@ class AssistantAgentIntegrationTest {
     @Test
     void paymentQuestion_shouldReturnRealPaymentData() {
         UUID conversationId = UUID.randomUUID();
-        AssistantMemoryContext.set(DISTRIBUTOR_ID, TEST_USER_ID, "qwen2.5:14b");
+        AssistantMemoryContext.set(DISTRIBUTOR_ID, TEST_USER_ID, "qwen3-14b");
         try {
             String reply = assistantAgent.chat(conversationId,
                     "DISTRIBUTOR_ID: " + DISTRIBUTOR_ID + "\n\nAny overdue payments or outstanding balances?");
@@ -102,7 +102,7 @@ class AssistantAgentIntegrationTest {
     @Test
     void broadSummaryQuestion_shouldCallMultipleToolsAndSynthesize() {
         UUID conversationId = UUID.randomUUID();
-        AssistantMemoryContext.set(DISTRIBUTOR_ID, TEST_USER_ID, "qwen2.5:14b");
+        AssistantMemoryContext.set(DISTRIBUTOR_ID, TEST_USER_ID, "qwen3-14b");
         try {
             String reply = assistantAgent.chat(conversationId,
                     "DISTRIBUTOR_ID: " + DISTRIBUTOR_ID +

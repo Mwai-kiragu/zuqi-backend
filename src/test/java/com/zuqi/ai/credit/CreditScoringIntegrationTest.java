@@ -103,8 +103,8 @@ class CreditScoringIntegrationTest {
                 );
 
         when(llmMetricsService.recordOperation(
-                eq("ollama"),
-                eq("qwen2.5:32b"),
+                eq("rbs-ai"),
+                eq("qwen3-14b"),
                 eq("credit_scoring"),
                 any()
         )).thenAnswer(invocation -> {
@@ -136,8 +136,8 @@ class CreditScoringIntegrationTest {
 
         // Verify metrics were recorded
         // verify(llmMetricsService, times(1)).recordOperation(
-        //         eq("ollama"),
-        //         eq("qwen2.5:32b"),
+        //         eq("rbs-ai"),
+        //         eq("qwen3-14b"),
         //         eq("credit_scoring"),
         //         any()
         // );

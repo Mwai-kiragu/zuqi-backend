@@ -51,10 +51,10 @@ public class AssistantService {
     private final CacheManager              cacheManager;
     private final com.zuqi.util.SecurityUtils securityUtils;
 
-    @Value("${langchain4j.ollama.chat-model.model-name}")
+    @Value("${langchain4j.rbs-ai.chat-model.model-name}")
     private String chatModelName;
 
-    @Value("${langchain4j.ollama.report-model.model-name}")
+    @Value("${langchain4j.rbs-ai.report-model.model-name}")
     private String reportModelName;
 
     // ── Chat ─────────────────────────────────────────────────────────────────

@@ -72,8 +72,8 @@ class AssistantServiceTest {
         distributor.setName("Test Distributor");
 
         // Inject @Value fields via reflection
-        ReflectionTestUtils.setField(service, "chatModelName",   "qwen2.5-coder:32b");
-        ReflectionTestUtils.setField(service, "reportModelName", "qwen2.5-coder:32b");
+        ReflectionTestUtils.setField(service, "chatModelName",   "qwen3-14b");
+        ReflectionTestUtils.setField(service, "reportModelName", "qwen3-14b");
 
         // Factory always returns the mock agent (only used by chat() tests, not report tests)
         lenient().when(assistantAgentFactory.buildForRole(anyString())).thenReturn(assistantAgent);
@@ -91,7 +91,7 @@ class AssistantServiceTest {
                 .role(ChatRole.ASSISTANT)
                 .content(content)
                 .messageType(ChatMessageType.CHAT)
-                .modelName("qwen2.5-coder:32b")
+                .modelName("qwen3-14b")
                 .build();
     }
 
@@ -170,7 +170,7 @@ class AssistantServiceTest {
         stubDistributor();
         // Agent throws — saveErrorAssistantMessage calls loadDistributor again
         when(assistantAgent.chat(eq(conversationId), anyString()))
-                .thenThrow(new RuntimeException("Ollama timeout"));
+                .thenThrow(new RuntimeException("RBS AI timeout"));
         stubRepoPage(assistantMessage("I'm sorry, I encountered an error"));
         // cacheManager is needed by evictHistoryCache even in error path
         when(cacheManager.getCache("chat-history")).thenReturn(cache);

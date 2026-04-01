@@ -45,7 +45,7 @@ import static org.mockito.Mockito.when;
  * ({@link AISyntheticRunRepository}, {@link DistributorRepository}) are mocked.
  *
  * <p>The {@link BusinessNameGenerator} is mocked to return simple template names
- * without calling Ollama.
+ * without calling RBS AI.
  */
 @ExtendWith(MockitoExtension.class)
 class SyntheticDataOrchestratorTest {

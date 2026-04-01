@@ -90,7 +90,7 @@ class SyntheticModelTrainerTest {
         lenient().when(cashFlowTrainingPipeline.runPipeline()).thenReturn(
                 new CashFlowTrainingPipeline.TrainingResult(true, 5000.0, 0.82, UUID.randomUUID(), null));
         lenient().when(expiryRiskTrainingPipeline.runPipeline()).thenReturn(
-                new ExpiryRiskTrainingPipeline.TrainingResult(true, 0.12, UUID.randomUUID(), null));
+                new ExpiryRiskTrainingPipeline.TrainingResult(true, 0.82, 50.0, 7.0, UUID.randomUUID(), null));
         lenient().when(segmentationTrainingPipeline.runPipeline()).thenReturn(
                 new SegmentationTrainingPipeline.TrainingResult(true, UUID.randomUUID(), java.util.Map.of(), null));
         lenient().when(clvTrainingPipeline.runPipeline()).thenReturn(

@@ -117,7 +117,7 @@ class RecommendationServiceTest {
     void generateAndSave_agentThrowsException_returnsEmptyList() {
         stubDistributor();
         when(recommendationAgent.generateRecommendations(any()))
-                .thenThrow(new RuntimeException("Ollama unavailable"));
+                .thenThrow(new RuntimeException("RBS AI unavailable"));
 
         List<Recommendation> result = service.generateAndSave(DISTRIBUTOR_ID);
 
