@@ -48,6 +48,7 @@ public class OrderResponse {
     private UUID assignedDriverId;
     private String assignedDriverName;
     private LocalDateTime assignedAt;
+    private String approvalStatus;
     private List<OrderItemResponse> items;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -81,6 +82,7 @@ public class OrderResponse {
                 .assignedDriverId(order.getAssignedDriver() != null ? order.getAssignedDriver().getId() : null)
                 .assignedDriverName(order.getAssignedDriver() != null ? order.getAssignedDriver().getFirstName() + " " + order.getAssignedDriver().getLastName() : null)
                 .assignedAt(order.getAssignedAt())
+                .approvalStatus(order.getApprovalStatus())
                 .items(order.getItems() != null
                         ? order.getItems().stream().map(OrderItemResponse::fromEntity).toList()
                         : null)

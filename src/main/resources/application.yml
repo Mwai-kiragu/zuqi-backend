@@ -17,7 +17,7 @@ spring:
       idle-timeout: 300000
       connection-timeout: 20000
 
-  # JPA Configuration
+  # JPA Configuration be
   jpa:
     hibernate:
       ddl-auto: validate

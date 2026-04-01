@@ -345,6 +345,8 @@ public class ProductServiceImpl implements ProductService {
 
     private void addToDefaultPriceList(Product product) {
         try {
+            // Skip parent templates — only add directly-sellable products (standalone or variants)
+            if (product.isHasVariants()) return;
             Distributor distributor = product.getDistributor();
             if (distributor == null) return;
 
