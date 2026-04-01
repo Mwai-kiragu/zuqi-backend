@@ -54,11 +54,11 @@ public class AIHealthServiceImpl implements AIHealthService {
     private final SyntheticDataOrchestrator syntheticDataOrchestrator;
     private final SyntheticGenerationService syntheticGenerationService;
 
-    @Value("${langchain4j.ollama.base-url}")
-    private String ollamaBaseUrl;
+    @Value("${langchain4j.rbs-ai.base-url}")
+    private String rbsAiBaseUrl;
 
-    @Value("${langchain4j.ollama.chat-model.model-name}")
-    private String ollamaModelName;
+    @Value("${langchain4j.rbs-ai.chat-model.model-name}")
+    private String rbsAiModelName;
 
     @Override
     public AISystemHealthResponse getSystemHealth() {
@@ -320,27 +320,27 @@ public class AIHealthServiceImpl implements AIHealthService {
     }
 
     private AISystemHealthResponse.LLMConnectivityHealth checkLLMConnectivity() {
-        AISystemHealthResponse.OllamaStatus ollamaStatus = pingOllama();
+        AISystemHealthResponse.LlmStatus llmStatus = pingRbsAi();
 
         AISystemHealthResponse.CloudLLMStatus cloudStatus = AISystemHealthResponse.CloudLLMStatus.builder()
                 .status("NOT_CONFIGURED")
-                .provider("OpenAI/Anthropic")
-                .message("Cloud LLM fallback not in use — local Ollama is primary")
+                .provider("RBS AI (vLLM)")
+                .message("RBS AI is the primary provider — no cloud fallback configured")
                 .build();
 
-        String overallStatus = "UP".equals(ollamaStatus.status()) ? "UP" : "DOWN";
+        String overallStatus = "UP".equals(llmStatus.status()) ? "UP" : "DOWN";
         return AISystemHealthResponse.LLMConnectivityHealth.builder()
                 .status(overallStatus)
-                .ollama(ollamaStatus)
+                .llm(llmStatus)
                 .cloudLLM(cloudStatus)
                 .build();
     }
 
     /**
-     * Pings the Ollama /api/tags endpoint to verify connectivity and confirm
+     * Pings the RBS AI /v1/models endpoint to verify connectivity and confirm
      * the configured model is available on the server.
      */
-    private AISystemHealthResponse.OllamaStatus pingOllama() {
+    private AISystemHealthResponse.LlmStatus pingRbsAi() {
         try {
             org.springframework.http.client.SimpleClientHttpRequestFactory factory =
                     new org.springframework.http.client.SimpleClientHttpRequestFactory();
@@ -349,45 +349,44 @@ public class AIHealthServiceImpl implements AIHealthService {
             RestTemplate restTemplate = new RestTemplate(factory);
 
             ResponseEntity<String> response = restTemplate.getForEntity(
-                    ollamaBaseUrl + "/api/tags", String.class);
+                    rbsAiBaseUrl + "/v1/models", String.class);
 
             String body = response.getBody();
             if (response.getStatusCode() == HttpStatus.OK && body != null) {
-                boolean modelPresent = body.contains("\"" + ollamaModelName + "\"")
-                        || body.contains(ollamaModelName.replace(":", "\":\""));
+                boolean modelPresent = body.contains("\"" + rbsAiModelName + "\"");
 
                 if (modelPresent) {
-                    log.debug("Ollama health check: UP, model {} confirmed available", ollamaModelName);
-                    return AISystemHealthResponse.OllamaStatus.builder()
+                    log.debug("RBS AI health check: UP, model {} confirmed available", rbsAiModelName);
+                    return AISystemHealthResponse.LlmStatus.builder()
                             .status("UP")
-                            .baseUrl(ollamaBaseUrl)
-                            .model(ollamaModelName)
-                            .message("Ollama reachable and model " + ollamaModelName + " is available")
+                            .baseUrl(rbsAiBaseUrl)
+                            .model(rbsAiModelName)
+                            .message("RBS AI reachable and model " + rbsAiModelName + " is available")
                             .build();
                 } else {
-                    log.warn("Ollama health check: reachable but model {} not found in tag list", ollamaModelName);
-                    return AISystemHealthResponse.OllamaStatus.builder()
+                    log.warn("RBS AI health check: reachable but model {} not found", rbsAiModelName);
+                    return AISystemHealthResponse.LlmStatus.builder()
                             .status("DEGRADED")
-                            .baseUrl(ollamaBaseUrl)
-                            .model(ollamaModelName)
-                            .message("Ollama reachable but model '" + ollamaModelName + "' not found — check OLLAMA_MODEL config")
+                            .baseUrl(rbsAiBaseUrl)
+                            .model(rbsAiModelName)
+                            .message("RBS AI reachable but model '" + rbsAiModelName + "' not found")
                             .build();
                 }
             } else {
-                return AISystemHealthResponse.OllamaStatus.builder()
+                return AISystemHealthResponse.LlmStatus.builder()
                         .status("DOWN")
-                        .baseUrl(ollamaBaseUrl)
-                        .model(ollamaModelName)
-                        .message("Ollama returned unexpected status: " + response.getStatusCode())
+                        .baseUrl(rbsAiBaseUrl)
+                        .model(rbsAiModelName)
+                        .message("RBS AI returned unexpected status: " + response.getStatusCode())
                         .build();
             }
         } catch (Exception e) {
-            log.warn("Ollama health check failed: {}", e.getMessage());
-            return AISystemHealthResponse.OllamaStatus.builder()
+            log.warn("RBS AI health check failed: {}", e.getMessage());
+            return AISystemHealthResponse.LlmStatus.builder()
                     .status("DOWN")
-                    .baseUrl(ollamaBaseUrl)
-                    .model(ollamaModelName)
-                    .message("Cannot reach Ollama at " + ollamaBaseUrl + " — " + e.getMessage())
+                    .baseUrl(rbsAiBaseUrl)
+                    .model(rbsAiModelName)
+                    .message("Cannot reach RBS AI at " + rbsAiBaseUrl + " — " + e.getMessage())
                     .build();
         }
     }

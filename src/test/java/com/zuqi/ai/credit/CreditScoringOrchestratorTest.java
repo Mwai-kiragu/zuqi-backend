@@ -84,7 +84,7 @@ class CreditScoringOrchestratorTest {
         when(featureBuilder.buildLlmProfile(MERCHANT_ID)).thenReturn(profile);
         when(featureBuilder.buildPeerContext(MERCHANT_ID)).thenReturn("No peers.");
         when(llmMetricsService.recordOperation(any(), any(), any(), any()))
-                .thenThrow(new RuntimeException("Connection refused — Ollama unreachable"));
+                .thenThrow(new RuntimeException("Connection refused — RBS AI unreachable"));
 
         assertThatThrownBy(() -> orchestrator.evaluateMerchant(MERCHANT_ID))
                 .isInstanceOf(RuntimeException.class)

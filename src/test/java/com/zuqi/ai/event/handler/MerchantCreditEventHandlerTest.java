@@ -65,7 +65,7 @@ class MerchantCreditEventHandlerTest {
 
     @Test
     void handleMerchantCreated_shouldNotThrow_whenEmbeddingFails() {
-        doThrow(new RuntimeException("Ollama unreachable"))
+        doThrow(new RuntimeException("RBS AI unreachable"))
                 .when(merchantEmbeddingService).embedMerchant(MERCHANT_ID);
 
         // Must complete without throwing

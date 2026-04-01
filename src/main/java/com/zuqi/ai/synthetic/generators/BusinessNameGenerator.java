@@ -10,10 +10,10 @@ import java.util.List;
  *
  * <p>Two implementations are provided:
  * <ul>
- *   <li>{@link OllamaBusinessNameGenerator} (primary) — calls the local Ollama LLM
- *       for authentic-sounding names; degrades gracefully to the fallback on failure.</li>
+ *   <li>{@link OllamaBusinessNameGenerator} (primary) — calls RBS AI (Qwen3 14B) via
+ *       the configured {@code ChatLanguageModel}; degrades gracefully to the fallback on failure.</li>
  *   <li>{@link FallbackBusinessNameGenerator} — template-based combinations of common
- *       Kenyan names and business suffixes; used in tests and when Ollama is offline.</li>
+ *       Kenyan names and business suffixes; used in tests and when the LLM is unavailable.</li>
  * </ul>
  */
 public interface BusinessNameGenerator {

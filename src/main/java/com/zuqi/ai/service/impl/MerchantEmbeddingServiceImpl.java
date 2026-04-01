@@ -7,9 +7,9 @@ import com.zuqi.domain.ai.MerchantEmbedding;
 import com.zuqi.domain.customer.Customer;
 import com.zuqi.repository.CustomerRepository;
 import com.zuqi.repository.MerchantEmbeddingRepository;
-import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.model.embedding.EmbeddingModel;
+// import dev.langchain4j.data.embedding.Embedding; // uncomment when RBS AI exposes embeddings endpoint
+// import dev.langchain4j.data.segment.TextSegment;
+// import dev.langchain4j.model.embedding.EmbeddingModel; // uncomment when RBS AI exposes embeddings endpoint
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -33,7 +33,7 @@ public class MerchantEmbeddingServiceImpl implements MerchantEmbeddingService {
     private final MerchantEmbeddingRepository embeddingRepository;
     private final CustomerRepository customerRepository;
     private final MerchantFeatureService merchantFeatureService;
-    private final EmbeddingModel embeddingModel;
+    // private final EmbeddingModel embeddingModel; // uncomment when RBS AI exposes embeddings endpoint
 
     private static final String EMBEDDING_MODEL_VERSION = "all-MiniLM-L6-v2";
 
@@ -52,9 +52,10 @@ public class MerchantEmbeddingServiceImpl implements MerchantEmbeddingService {
         // Convert features to text summary for embedding
         String featureSummary = buildFeatureSummary(merchant, features);
 
-        // Generate embedding
-        Embedding embedding = embeddingModel.embed(TextSegment.from(featureSummary)).content();
-        String embeddingVector = formatEmbeddingAsString(embedding.vectorAsList());
+        // Generate embedding — disabled until RBS AI exposes an embeddings endpoint
+        // Embedding embedding = embeddingModel.embed(TextSegment.from(featureSummary)).content();
+        // String embeddingVector = formatEmbeddingAsString(embedding.vectorAsList());
+        String embeddingVector = "[]"; // placeholder
 
         // Save or update
         MerchantEmbedding merchantEmbedding = embeddingRepository.findByMerchantId(merchantId)
@@ -69,7 +70,7 @@ public class MerchantEmbeddingServiceImpl implements MerchantEmbeddingService {
         merchantEmbedding.setUpdatedAt(LocalDateTime.now());
 
         MerchantEmbedding saved = embeddingRepository.save(merchantEmbedding);
-        log.info("Successfully embedded merchant {} with {} dimensions", merchantId, embedding.dimension());
+        log.info("Saved merchant embedding placeholder for {} (embeddings disabled)", merchantId);
 
         return saved;
     }

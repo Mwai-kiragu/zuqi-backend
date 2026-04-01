@@ -40,7 +40,7 @@ public class MerchantEmbedding {
     private Distributor distributor;
 
     /**
-     * 768-dimensional vector embedding from nomic-embed-text via Ollama.
+     * Vector embedding from RBS AI embedding model.
      * Stored as pgvector type in PostgreSQL.
      */
     @Column(name = "embedding", nullable = false, columnDefinition = "vector(768)")
