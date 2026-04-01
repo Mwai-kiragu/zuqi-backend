@@ -306,7 +306,7 @@ public class CreditScoringOrchestrator {
                 .recommendations(llmResponse.recommendations())
                 .evaluatedAt(LocalDateTime.now())
                 .modelVersion("hybrid-v1-ml70-llm30")
-                .mlScore(mlClassifier.creditScore())
+                .mlScore(mlResult.creditScore())
                 .llmScore(llmResponse.creditScore())
                 .build();
 
