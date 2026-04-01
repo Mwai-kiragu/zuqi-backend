@@ -73,9 +73,11 @@ public class AssistantService {
 
         try {
             AssistantAgent roleAgent = assistantAgentFactory.buildForRole(primaryRole);
-            // Prefix DISTRIBUTOR_ID so the LLM passes it correctly to every tool
+            // Prefix role context so the LLM stays within scope
             String contextualMessage = "USER ROLE: " + primaryRole +
-                    "\nDISTRIBUTOR_ID: " + distributorId + "\n\n" + userText;
+                    "\nDISTRIBUTOR_ID: " + distributorId +
+                    "\nROLE SCOPE: " + getRoleScopeInstruction(primaryRole) +
+                    "\n\n" + userText;
 
             long t0 = System.currentTimeMillis();
             String reply = roleAgent.chat(conversationId, contextualMessage);
@@ -205,6 +207,64 @@ public class AssistantService {
     private Distributor loadDistributor(UUID id) {
         return distributorRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Distributor not found: " + id));
+    }
+
+    /**
+     * Returns a role-specific scope instruction injected into every chat turn.
+     * This is Layer 2 of the three-layer AI security model — the tool restriction
+     * in RoleAwareToolProvider is Layer 1.  Even if the LLM tries to answer from
+     * training data it is explicitly told not to.
+     */
+    private String getRoleScopeInstruction(String role) {
+        return switch (role.toUpperCase()) {
+            case "DRIVER" ->
+                "You are assisting a DRIVER. Only answer questions about: " +
+                "deliveries, assigned orders, routes, and navigation. " +
+                "Politely decline any question about finance, credit, inventory management, " +
+                "sales performance, customer analytics, or accounting. " +
+                "Say: 'That topic is outside your access level. Please contact your manager.'";
+
+            case "SALES_REP" ->
+                "You are assisting a SALES REP. Only answer questions about: " +
+                "sales performance, customer orders, demand forecasts, customer health, churn risk, " +
+                "invoices, and deliveries relevant to your customers. " +
+                "Decline questions about finance, accounting, GL, expenses, warehouse operations, " +
+                "or other reps' detailed data.";
+
+            case "WAREHOUSE_MANAGER" ->
+                "You are assisting a WAREHOUSE MANAGER. Only answer questions about: " +
+                "inventory levels, stock transfers, stock takes, procurement, POS sales, " +
+                "reorder suggestions, expiry risk, and anomaly alerts. " +
+                "Decline questions about financial statements, credit scoring, " +
+                "GL accounts, or detailed sales rep performance.";
+
+            case "FINANCE" ->
+                "You are assisting a FINANCE user. Only answer questions about: " +
+                "payments, invoices, credit limits, expenses, funds transfers, " +
+                "GL accounts, balance sheet, profit & loss, trial balance, cash flow, " +
+                "accounts receivable, accounts payable, and supplier risk. " +
+                "Decline questions about warehouse operations, route planning, or driver activities.";
+
+            case "MERCHANT" ->
+                "You are assisting a MERCHANT (retail customer). Only answer questions about: " +
+                "their own orders, their own payments, their own invoices, " +
+                "their credit score, and order suggestions for their business. " +
+                "Never share data about other merchants or internal distributor operations.";
+
+            case "CUSTOMER" ->
+                "You are assisting a CUSTOMER. Only answer questions about: " +
+                "their own orders, their own payments, and their own invoices. " +
+                "Never share data about other customers or internal operations.";
+
+            case "MERCHANT_ADMIN" ->
+                "You are assisting a MERCHANT ADMIN. You have broad access to your " +
+                "organisation's sales, inventory, payments, invoices, expenses, and procurement data. " +
+                "You cannot access other distributors' data.";
+
+            // DISTRIBUTOR_ADMIN, SUPER_ADMIN → full access, no restriction
+            default ->
+                "You have full access to all available data tools for this distributor.";
+        };
     }
 
     /**
