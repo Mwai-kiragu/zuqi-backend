@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -23,6 +24,25 @@ public interface PromotionRepository extends JpaRepository<Promotion, UUID> {
 
     List<Promotion> findByDistributorIdAndActiveTrueAndValidFromLessThanEqualAndValidToGreaterThanEqual(
             UUID distributorId, LocalDate validFrom, LocalDate validTo);
+
+    /**
+     * Returns active, approved promotions that apply to the given product (product-specific first,
+     * then general/no-product promotions). Caller should take the first result.
+     */
+    @Query("""
+            SELECT p FROM Promotion p
+            WHERE p.distributor.id = :distributorId
+              AND p.active = true
+              AND p.approvalStatus = 'APPROVED'
+              AND p.validFrom <= :today
+              AND p.validTo >= :today
+              AND (p.product IS NULL OR p.product.id = :productId)
+            ORDER BY p.product.id NULLS LAST
+            """)
+    List<Promotion> findActiveApprovedPromotionsForProductOrGeneral(
+            @Param("distributorId") UUID distributorId,
+            @Param("productId") UUID productId,
+            @Param("today") LocalDate today);
 
     @Modifying
     @Query("UPDATE Promotion pr SET pr.approvalStatus = :status WHERE pr.id = :id")

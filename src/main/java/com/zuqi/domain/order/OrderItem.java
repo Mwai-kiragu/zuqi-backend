@@ -43,6 +43,9 @@ public class OrderItem {
     @Column(name = "total_amount", nullable = false, precision = 15, scale = 2)
     private BigDecimal totalAmount;
 
+    @Column(name = "promotion_name", length = 100)
+    private String promotionName;
+
     /**
      * Calculate the total amount for this line item.
      */

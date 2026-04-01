@@ -82,6 +82,13 @@ public class Order {
     @Builder.Default
     private BigDecimal discountAmount = BigDecimal.ZERO;
 
+    @Column(name = "tax_amount", precision = 15, scale = 2)
+    @Builder.Default
+    private BigDecimal taxAmount = BigDecimal.ZERO;
+
+    @Column(name = "tax_rate_name", length = 100)
+    private String taxRateName;
+
     @Column(name = "total_amount", nullable = false, precision = 15, scale = 2)
     private BigDecimal totalAmount;
 
@@ -173,6 +180,8 @@ public class Order {
                 .map(OrderItem::getTotalAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        this.totalAmount = this.subtotal.subtract(this.discountAmount != null ? this.discountAmount : BigDecimal.ZERO);
+        BigDecimal discount = this.discountAmount != null ? this.discountAmount : BigDecimal.ZERO;
+        BigDecimal tax = this.taxAmount != null ? this.taxAmount : BigDecimal.ZERO;
+        this.totalAmount = this.subtotal.subtract(discount).add(tax);
     }
 }
