@@ -67,4 +67,10 @@ public class AuthenticationResponse {
 
     @JsonProperty("user_group_name")
     private String userGroupName;
+
+    @JsonProperty("distributor_name")
+    private String distributorName;
+
+    @JsonProperty("merchant_name")
+    private String merchantName;
 }
