@@ -22,8 +22,9 @@ public interface ApprovalThresholdRepository extends JpaRepository<ApprovalThres
 
     @Query("SELECT t FROM ApprovalThreshold t WHERE t.distributorId = :distributorId " +
            "AND t.workflowType = :type AND t.active = true " +
-           "AND t.minAmount <= :amount AND (t.maxAmount IS NULL OR t.maxAmount >= :amount)")
-    Optional<ApprovalThreshold> findMatchingThreshold(
+           "AND t.minAmount <= :amount AND (t.maxAmount IS NULL OR t.maxAmount >= :amount) " +
+           "ORDER BY t.minAmount DESC")
+    List<ApprovalThreshold> findMatchingThresholds(
             @Param("distributorId") UUID distributorId,
             @Param("type") ApprovalWorkflowType type,
             @Param("amount") BigDecimal amount);

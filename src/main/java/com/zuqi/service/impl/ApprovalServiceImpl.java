@@ -219,7 +219,10 @@ public class ApprovalServiceImpl implements ApprovalService {
                 request.getRequestNumber(), "APPROVAL",
                 dto.getDecision().name() + " approval request: " + request.getRequestNumber());
 
-        notifyRequesterAsync(updated, approver);
+        // Only notify the requester when a final decision has been reached (not on intermediate approvals)
+        if (updated.getStatus() == ApprovalStatus.APPROVED || updated.getStatus() == ApprovalStatus.REJECTED) {
+            notifyRequesterAsync(updated, approver);
+        }
 
         if (updated.getStatus() == ApprovalStatus.APPROVED) {
             updateEntityApprovalStatus(updated, "APPROVED", approverId);

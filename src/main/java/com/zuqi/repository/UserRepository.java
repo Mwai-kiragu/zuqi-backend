@@ -72,6 +72,13 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("SELECT COUNT(u) FROM User u JOIN u.roles r WHERE r.name = :roleName AND u.active = true")
     long countByRole(@Param("roleName") String roleName);
 
+    /** Count all active users belonging to a distributor. */
+    @Query("SELECT COUNT(u) FROM User u WHERE u.distributorId = :distributorId AND u.active = true")
+    long countActiveByDistributorId(@Param("distributorId") UUID distributorId);
+
+    /** Count all active users in the system (SUPER_ADMIN view). */
+    long countByActiveTrue();
+
     /** Fetch all UserType permissions for a user via their UserGroup → UserType chain. */
     @Query("SELECT p FROM UserType ut JOIN ut.permissions p " +
            "WHERE ut.id = (SELECT u.userGroup.userType.id FROM User u WHERE u.id = :userId " +
