@@ -14,6 +14,7 @@ import java.util.UUID;
 public interface TaxRateRepository extends JpaRepository<TaxRate, UUID> {
     Page<TaxRate> findByDistributorIdOrderByNameAsc(UUID distributorId, Pageable pageable);
     List<TaxRate> findByDistributorIdAndActiveOrderByNameAsc(UUID distributorId, boolean active);
+    List<TaxRate> findByDistributorIdAndActiveTrue(UUID distributorId);
     Optional<TaxRate> findByDistributorIdAndCode(UUID distributorId, String code);
     boolean existsByDistributorIdAndCode(UUID distributorId, String code);
 }

@@ -260,6 +260,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                 .amount(order.getTotalAmount())
                 .subtotal(order.getSubtotal())
                 .discountAmount(order.getDiscountAmount())
+                .taxAmount(order.getTaxAmount() != null ? order.getTaxAmount() : BigDecimal.ZERO)
                 .totalAmount(order.getTotalAmount())
                 .paidAmount(order.getPaidAmount() != null ? order.getPaidAmount() : BigDecimal.ZERO)
                 .status(InvoiceStatus.DRAFT)

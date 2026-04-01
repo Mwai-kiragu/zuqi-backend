@@ -2,7 +2,10 @@ package com.zuqi.service.impl;
 
 import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
 import com.zuqi.api.dto.pos.*;
+import com.zuqi.domain.accounting.TaxRate;
+import com.zuqi.domain.accounting.TaxType;
 import com.zuqi.domain.approval.ApprovalWorkflowType;
+import com.zuqi.domain.pricing.Promotion;
 import com.zuqi.domain.branch.DistributorBranch;
 import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.inventory.*;
@@ -33,6 +36,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -66,6 +70,8 @@ public class PosServiceImpl implements PosService {
     private final GlAutoPostingService glAutoPostingService;
     private final ApplicationEventPublisher eventPublisher;
     private final ApprovalService approvalService;
+    private final PromotionRepository promotionRepository;
+    private final TaxRateRepository taxRateRepository;
 
 
     @Override
@@ -327,11 +333,33 @@ public class PosServiceImpl implements PosService {
 
         BigDecimal subtotal = BigDecimal.ZERO;
 
+        UUID branchDistributorId = sale.getBranch().getDistributor().getId();
+
         for (SaleItemRequest itemReq : request.getItems()) {
             Product product = productRepository.findById(itemReq.getProductId())
                     .orElseThrow(() -> new ResourceNotFoundException("Product", "id", itemReq.getProductId()));
 
             BigDecimal discount = itemReq.getDiscountAmount() != null ? itemReq.getDiscountAmount() : BigDecimal.ZERO;
+
+            // Auto-apply promotion if no manual discount was provided
+            String promotionName = null;
+            if (discount.compareTo(BigDecimal.ZERO) == 0) {
+                List<Promotion> promos = promotionRepository.findActiveApprovedPromotionsForProductOrGeneral(
+                        branchDistributorId, product.getId(), LocalDate.now());
+                if (!promos.isEmpty()) {
+                    Promotion promo = promos.get(0);
+                    BigDecimal lineGross = itemReq.getUnitPrice().multiply(itemReq.getQuantity());
+                    if ("PERCENTAGE".equals(promo.getPromotionType()) && promo.getDiscountValue() != null) {
+                        discount = lineGross.multiply(promo.getDiscountValue())
+                                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+                        promotionName = promo.getName();
+                    } else if ("FIXED_AMOUNT".equals(promo.getPromotionType()) && promo.getDiscountValue() != null) {
+                        discount = promo.getDiscountValue().min(lineGross);
+                        promotionName = promo.getName();
+                    }
+                }
+            }
+
             BigDecimal lineTotal = itemReq.getUnitPrice()
                     .multiply(itemReq.getQuantity())
                     .subtract(discount);
@@ -349,6 +377,7 @@ public class PosServiceImpl implements PosService {
                     .unitPrice(itemReq.getUnitPrice())
                     .discountAmount(discount)
                     .lineTotal(lineTotal)
+                    .promotionName(promotionName)
                     .build();
 
             sale.getItems().add(item);
@@ -360,8 +389,18 @@ public class PosServiceImpl implements PosService {
             }
         }
 
+        // Auto-apply default active tax rate
+        BigDecimal taxAmount = BigDecimal.ZERO;
+        List<TaxRate> taxRates = taxRateRepository.findByDistributorIdAndActiveTrue(branchDistributorId);
+        TaxRate defaultTax = taxRates.stream().filter(TaxRate::isDefault).findFirst().orElse(null);
+        if (defaultTax != null && TaxType.PERCENTAGE == defaultTax.getTaxType()) {
+            taxAmount = subtotal.multiply(defaultTax.getRate())
+                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+            sale.setTaxAmount(taxAmount);
+        }
+
         sale.setSubtotal(subtotal);
-        sale.setTotalAmount(subtotal.subtract(sale.getDiscountAmount()).add(sale.getTaxAmount()));
+        sale.setTotalAmount(subtotal.subtract(sale.getDiscountAmount()).add(taxAmount));
 
         PosSale savedSale = saleRepository.save(sale);
 

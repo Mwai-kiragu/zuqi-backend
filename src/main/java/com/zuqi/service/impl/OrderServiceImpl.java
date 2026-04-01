@@ -2,12 +2,15 @@ package com.zuqi.service.impl;
 
 import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
 import com.zuqi.api.dto.order.*;
+import com.zuqi.domain.accounting.TaxRate;
+import com.zuqi.domain.accounting.TaxType;
 import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.inventory.Stock;
 import com.zuqi.domain.inventory.Warehouse;
 import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.order.*;
+import com.zuqi.domain.pricing.Promotion;
 import com.zuqi.domain.product.Product;
 import com.zuqi.domain.user.User;
 import com.zuqi.domain.audit.ActivityAction;
@@ -62,6 +65,8 @@ public class OrderServiceImpl implements OrderService {
     private final UserRepository userRepository;
     private final CreditLimitRepository creditLimitRepository;
     private final InvoiceRepository invoiceRepository;
+    private final PromotionRepository promotionRepository;
+    private final TaxRateRepository taxRateRepository;
     private final SecurityUtils securityUtils;
     private final ActivityLogService activityLogService;
     private final InvoiceService invoiceService;
@@ -233,6 +238,27 @@ public class OrderServiceImpl implements OrderService {
                     .orElseThrow(() -> new ResourceNotFoundException("Product", "id", itemRequest.getProductId()));
 
             BigDecimal discountPct = itemRequest.getDiscountPercent() != null ? itemRequest.getDiscountPercent() : BigDecimal.ZERO;
+
+            // Auto-apply promotion if no manual discount was provided
+            String promotionName = null;
+            if (discountPct.compareTo(BigDecimal.ZERO) == 0) {
+                List<Promotion> promos = promotionRepository.findActiveApprovedPromotionsForProductOrGeneral(
+                        distributor.getId(), product.getId(), LocalDate.now());
+                if (!promos.isEmpty()) {
+                    Promotion promo = promos.get(0);
+                    if ("PERCENTAGE".equals(promo.getPromotionType()) && promo.getDiscountValue() != null) {
+                        discountPct = promo.getDiscountValue();
+                        promotionName = promo.getName();
+                    } else if ("FIXED_AMOUNT".equals(promo.getPromotionType()) && promo.getDiscountValue() != null
+                            && product.getUnitPrice().compareTo(BigDecimal.ZERO) > 0) {
+                        discountPct = promo.getDiscountValue()
+                                .divide(product.getUnitPrice(), 4, RoundingMode.HALF_UP)
+                                .multiply(BigDecimal.valueOf(100));
+                        promotionName = promo.getName();
+                    }
+                }
+            }
+
             BigDecimal effectivePrice = product.getUnitPrice().subtract(
                     product.getUnitPrice().multiply(discountPct).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP));
             if (product.getMinSalePrice() != null && effectivePrice.compareTo(product.getMinSalePrice()) < 0) {
@@ -244,6 +270,7 @@ public class OrderServiceImpl implements OrderService {
                     .quantity(itemRequest.getQuantity())
                     .unitPrice(product.getUnitPrice())
                     .discountPercent(discountPct)
+                    .promotionName(promotionName)
                     .build();
 
             item.calculateTotal();
@@ -252,6 +279,18 @@ public class OrderServiceImpl implements OrderService {
 
         // Calculate order totals
         order.calculateTotals();
+
+        // Auto-apply default active tax rate
+        List<TaxRate> taxRates = taxRateRepository.findByDistributorIdAndActiveTrue(distributor.getId());
+        TaxRate defaultTax = taxRates.stream().filter(TaxRate::isDefault).findFirst().orElse(null);
+        if (defaultTax != null && TaxType.PERCENTAGE == defaultTax.getTaxType()) {
+            BigDecimal taxAmount = order.getSubtotal()
+                    .multiply(defaultTax.getRate())
+                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+            order.setTaxAmount(taxAmount);
+            order.setTaxRateName(defaultTax.getName() + " (" + defaultTax.getRate().stripTrailingZeros().toPlainString() + "%)");
+            order.calculateTotals(); // recalculate with tax included
+        }
 
         // Set payment due date
         if (order.getPaymentTermsDays() != null && order.getPaymentTermsDays() > 0) {

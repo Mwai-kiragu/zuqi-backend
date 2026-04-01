@@ -49,4 +49,7 @@ public class PosSaleItem {
 
     @Column(name = "line_total", nullable = false, precision = 15, scale = 2)
     private BigDecimal lineTotal;
+
+    @Column(name = "promotion_name", length = 100)
+    private String promotionName;
 }
