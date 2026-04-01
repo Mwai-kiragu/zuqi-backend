@@ -74,9 +74,9 @@ public class ApprovalThresholdServiceImpl implements ApprovalThresholdService {
     @Override
     public int getRequiredApprovals(UUID distributorId, ApprovalWorkflowType workflowType, BigDecimal amount) {
         if (distributorId == null || amount == null) return 1;
-        return repository.findMatchingThreshold(distributorId, workflowType, amount)
-                .map(ApprovalThreshold::getRequiredApprovals)
-                .orElse(1);
+        List<ApprovalThreshold> matches = repository.findMatchingThresholds(distributorId, workflowType, amount);
+        // Pick the most specific threshold (highest minAmount = narrowest lower bound)
+        return matches.isEmpty() ? 1 : matches.get(0).getRequiredApprovals();
     }
 
     private ApprovalThreshold find(UUID id) {

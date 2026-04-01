@@ -164,8 +164,8 @@ public class DashboardServiceImpl implements DashboardService {
                 ? stockRepository.countAllOutOfStock()
                 : stockRepository.countOutOfStockByDistributorId(effectiveDistributorId);
         long salesReps = isGlobalView
-                ? userRepository.countByRole("SALES_REP")
-                : userRepository.countByRoleAndDistributor("SALES_REP", effectiveDistributorId);
+                ? userRepository.countByActiveTrue()
+                : userRepository.countActiveByDistributorId(effectiveDistributorId);
 
         return DashboardStatsResponse.builder()
                 .totalOrders(totalOrders)
