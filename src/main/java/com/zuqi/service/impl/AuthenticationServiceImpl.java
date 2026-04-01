@@ -508,6 +508,13 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 ActivityAction.LOGIN, "USER", user.getId(),
                 user.getEmail(), "AUTH", "User logged in successfully");
 
+        String distName = user.getDistributorId() != null
+                ? distributorRepository.findById(user.getDistributorId()).map(d -> d.getName()).orElse(null)
+                : null;
+        String mName = user.getMerchantId() != null
+                ? merchantRepository.findById(user.getMerchantId()).map(m -> m.getName()).orElse(null)
+                : null;
+
         return AuthenticationResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
@@ -527,6 +534,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .workflowTier(resolveWorkflowTier(user))
                 .userGroupId(user.getUserGroup() != null ? user.getUserGroup().getId() : null)
                 .userGroupName(user.getUserGroup() != null ? user.getUserGroup().getName() : null)
+                .distributorName(distName)
+                .merchantName(mName)
                 .build();
     }
 
@@ -555,6 +564,13 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         String accessToken = jwtService.generateUserAccessToken(user);
         String newRefreshToken = createRefreshToken(user);
 
+        String distName = user.getDistributorId() != null
+                ? distributorRepository.findById(user.getDistributorId()).map(d -> d.getName()).orElse(null)
+                : null;
+        String mName = user.getMerchantId() != null
+                ? merchantRepository.findById(user.getMerchantId()).map(m -> m.getName()).orElse(null)
+                : null;
+
         return AuthenticationResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(newRefreshToken)
@@ -573,6 +589,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .workflowTier(resolveWorkflowTier(user))
                 .userGroupId(user.getUserGroup() != null ? user.getUserGroup().getId() : null)
                 .userGroupName(user.getUserGroup() != null ? user.getUserGroup().getName() : null)
+                .distributorName(distName)
+                .merchantName(mName)
                 .build();
     }
 
