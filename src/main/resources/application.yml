@@ -104,7 +104,7 @@ langchain4j:
   # RBS AI — primary LLM provider (OpenAI-compatible, vLLM-backed)
   rbs-ai:
     base-url: https://rbsai.rbrc.io
-    api-key: ${RBS_AI_API_KEY}
+    api-key: ${RBS_AI_API_KEY:not-configured}
     chat-model:
       model-name: qwen3-14b
       temperature: 0.1  # Low for consistency in credit scoring
