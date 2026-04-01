@@ -720,6 +720,7 @@ public class ProductServiceImpl implements ProductService {
         }
 
         Product saved = productRepository.save(variant);
+        addToDefaultPriceList(saved);
         log.info("Variant created successfully: {}", saved.getId());
         return ProductResponse.fromEntity(saved);
     }
