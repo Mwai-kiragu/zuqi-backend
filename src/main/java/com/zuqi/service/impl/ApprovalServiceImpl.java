@@ -242,8 +242,6 @@ public class ApprovalServiceImpl implements ApprovalService {
             case "PRODUCT"        -> {
                 if ("APPROVED".equals(status)) {
                     productRepository.approveAndActivate(entityId);
-                    // Create zero-quantity stock records in all active warehouses so the product
-                    // appears in inventory immediately (listed as "out of stock")
                     productRepository.findById(entityId).ifPresent(product -> {
                         if (product.getDistributor() == null) return;
                         UUID distributorId = product.getDistributor().getId();
@@ -257,7 +255,28 @@ public class ApprovalServiceImpl implements ApprovalService {
                                         .orElse(null)
                                 : hqWarehouses.get(0);
 
-                        if (defaultWarehouse != null) {
+                        if (defaultWarehouse == null) return;
+
+                        if (product.isHasVariants()) {
+                            // Parent template: create stock for each variant child instead of the parent
+                            List<com.zuqi.domain.product.Product> variants =
+                                    productRepository.findByParentProductId(entityId);
+                            for (com.zuqi.domain.product.Product variant : variants) {
+                                boolean exists = stockRepository.existsByWarehouseIdAndProductId(
+                                        defaultWarehouse.getId(), variant.getId());
+                                if (!exists) {
+                                    stockRepository.save(Stock.builder()
+                                            .warehouse(defaultWarehouse)
+                                            .product(variant)
+                                            .quantity(java.math.BigDecimal.ZERO)
+                                            .reservedQuantity(java.math.BigDecimal.ZERO)
+                                            .build());
+                                    log.info("Created zero-stock entry for variant {} in warehouse {}",
+                                            variant.getName(), defaultWarehouse.getName());
+                                }
+                            }
+                        } else {
+                            // Standalone product: create stock for the product itself
                             boolean exists = stockRepository.existsByWarehouseIdAndProductId(
                                     defaultWarehouse.getId(), product.getId());
                             if (!exists) {
