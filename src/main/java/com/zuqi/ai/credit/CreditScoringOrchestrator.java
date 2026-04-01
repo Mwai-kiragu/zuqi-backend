@@ -120,8 +120,8 @@ public class CreditScoringOrchestrator {
         CreditScoringAiService aiService = AiServices.create(CreditScoringAiService.class, chatLanguageModel);
 
         CreditScoringAiService.CreditEvaluationResponse llmResponse = llmMetricsService.recordOperation(
-                "ollama",
-                "qwen2.5:32b",
+                "rbs-ai",
+                "qwen3-14b",
                 "credit_scoring",
                 () -> aiService.evaluate(profile, peerContext)
         );
@@ -186,8 +186,8 @@ public class CreditScoringOrchestrator {
         CreditScoringAiService aiService = AiServices.create(CreditScoringAiService.class, chatLanguageModel);
 
         CreditScoringAiService.CreditEvaluationResponse llmResponse = llmMetricsService.recordOperation(
-                "ollama",
-                "qwen2.5:32b",
+                "rbs-ai",
+                "qwen3-14b",
                 "credit_scoring",
                 () -> aiService.evaluate(profile, peerContext)
         );

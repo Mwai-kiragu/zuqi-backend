@@ -13,13 +13,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
- * Ollama-powered business name generator.
+ * LLM-powered business name generator (backed by RBS AI / Qwen3 14B).
  *
- * Calls the local LLM (configured in {@code LangChain4jConfig}) to produce
+ * Calls the configured {@code ChatLanguageModel} (RBS AI) to produce
  * authentic Kenyan business names in batches. Results are cached in-memory
  * by category — a single LLM call covers the entire generation run.
  *
- * Degrades gracefully: if Ollama is unavailable or returns too few names,
+ * Degrades gracefully: if the LLM is unavailable or returns too few names,
  * the remaining quota is filled by {@link FallbackBusinessNameGenerator}.
  *
  * Marked {@link Primary} so Spring injects this implementation into
@@ -80,28 +80,28 @@ public class OllamaBusinessNameGenerator implements BusinessNameGenerator {
     // -------------------------------------------------------------------------
 
     private List<String> buildPool(String category, int requestCount, long seed) {
-        List<String> fromLlm = queryOllama(category, requestCount);
+        List<String> fromLlm = queryLlm(category, requestCount);
         if (fromLlm.size() >= MIN_ACCEPTABLE) {
             return fromLlm;
         }
         // Supplement with fallback names
-        log.warn("Ollama returned {} names for '{}', supplementing with fallback",
+        log.warn("LLM returned {} names for '{}', supplementing with fallback",
                 fromLlm.size(), category);
         List<String> combined = new ArrayList<>(fromLlm);
         combined.addAll(fallback.generateBatch(category, requestCount - fromLlm.size(), seed));
         return combined;
     }
 
-    private List<String> queryOllama(String category, int count) {
+    private List<String> queryLlm(String category, int count) {
         String prompt = buildPrompt(category, count);
         try {
-            log.info("Requesting {} business names from Ollama for category '{}'", count, category);
+            log.info("Requesting {} business names from RBS AI for category '{}'", count, category);
             String response = chatLanguageModel.generate(prompt);
             List<String> names = parseResponse(response);
-            log.info("Ollama returned {} valid names for category '{}'", names.size(), category);
+            log.info("RBS AI returned {} valid names for category '{}'", names.size(), category);
             return names;
         } catch (Exception e) {
-            log.warn("Ollama name generation failed for '{}': {}", category, e.getMessage());
+            log.warn("LLM name generation failed for '{}': {}", category, e.getMessage());
             return List.of();
         }
     }

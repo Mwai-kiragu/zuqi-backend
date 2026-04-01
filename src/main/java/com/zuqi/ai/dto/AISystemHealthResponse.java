@@ -12,7 +12,7 @@ import java.util.Map;
  * Provides visibility into:
  * - Model registry status
  * - Feature services availability
- * - LLM connectivity (Ollama/Cloud)
+ * - LLM connectivity (RBS AI)
  * - Cache health
  *
  * Blueprint reference: implementation_plan.md Task 1.11
@@ -51,12 +51,12 @@ public record AISystemHealthResponse(
     @Builder
     public record LLMConnectivityHealth(
             String status,
-            OllamaStatus ollama,
+            LlmStatus llm,
             CloudLLMStatus cloudLLM
     ) {}
 
     @Builder
-    public record OllamaStatus(
+    public record LlmStatus(
             String status,
             String baseUrl,
             String model,

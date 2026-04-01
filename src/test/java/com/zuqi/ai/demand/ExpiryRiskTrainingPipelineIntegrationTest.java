@@ -9,7 +9,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.tribuo.Model;
-import org.tribuo.classification.Label;
+import org.tribuo.regression.Regressor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
@@ -41,43 +41,41 @@ class ExpiryRiskTrainingPipelineIntegrationTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void runPipeline_withFailingAucGate_returnsFailure_andNeverPromotes() {
-        Model<Label> mockModel = mock(Model.class);
+    void runPipeline_withFailingR2Gate_returnsFailure_andNeverPromotes() {
+        Model<Regressor> mockModel = mock(Model.class);
         XGBoostHyperparameterTuner.TuningResult tuning =
-                new XGBoostHyperparameterTuner.TuningResult(50, 0.1, 4, 0.50, "macro_f1", java.util.Map.of());
-        when(hyperparameterTuner.tuneAndTrainClassifier(any(), anyString()))
+                new XGBoostHyperparameterTuner.TuningResult(50, 0.1, 4, 0.50, "rmse", java.util.Map.of());
+        when(hyperparameterTuner.tuneAndTrainRegressor(any()))
                 .thenReturn(new XGBoostHyperparameterTuner.TunedModel<>(mockModel, tuning));
 
-        ModelEvaluator.ClassifierEvaluationResult badEval =
-                ModelEvaluator.ClassifierEvaluationResult.builder()
-                        .accuracy(0.55)
-                        .precision(0.50)
-                        .recall(0.50)
-                        .f1Score(0.50)
-                        .aucRoc(0.50)
+        ModelEvaluator.RegressorEvaluationResult badEval =
+                ModelEvaluator.RegressorEvaluationResult.builder()
+                        .r2(0.10)
+                        .mae(200.0)
+                        .rmse(300.0)
+                        .explainedVariance(0.10)
                         .passedQualityGate(false)
-                        .confusionMatrix("")
                         .build();
-        when(modelEvaluator.evaluateClassifier(eq(mockModel), any(), anyString())).thenReturn(badEval);
+        when(modelEvaluator.evaluateRegressor(eq(mockModel), any())).thenReturn(badEval);
 
         ExpiryRiskTrainingPipeline.TrainingResult result = pipeline.runPipeline();
 
         assertThat(result.success()).isFalse();
-        assertThat(result.aucRoc()).isEqualTo(0.50);
+        assertThat(result.r2()).isEqualTo(0.10);
         assertThat(result.errorMessage()).isNotNull();
         verify(modelRegistry, never()).promoteToActive(any());
     }
 
     @Test
     void runPipeline_withTrainerException_returnsFailure() {
-        when(hyperparameterTuner.tuneAndTrainClassifier(any(), anyString()))
+        when(hyperparameterTuner.tuneAndTrainRegressor(any()))
                 .thenThrow(new RuntimeException("XGBoost training error"));
 
         ExpiryRiskTrainingPipeline.TrainingResult result = pipeline.runPipeline();
 
         assertThat(result.success()).isFalse();
         assertThat(result.errorMessage()).contains("XGBoost training error");
-        assertThat(result.aucRoc()).isEqualTo(-1.0);
+        assertThat(result.r2()).isEqualTo(-1.0);
     }
 
     @Test

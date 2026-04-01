@@ -16,32 +16,32 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Manual test for credit scoring with actual Ollama connection.
+ * Manual test for credit scoring with actual RBS AI connection.
  *
  * REQUIRES:
- * - Ollama server running at http://192.168.2.17:11434
- * - qwen2.5:32b model pulled and ready
+ * - RBS AI server running at https://rbsai.rbrc.io
+ * - qwen3-14b model available and ready
  *
- * Run this test manually when Ollama is available to verify end-to-end flow.
+ * Run this test manually when RBS AI is available to verify end-to-end flow.
  *
  * To run: ./mvnw test -Dtest=CreditScoringManualTest
  */
 @SpringBootTest
 @ActiveProfiles("test")
-// @Disabled("Manual test - requires Ollama server running")
+// @Disabled("Manual test - requires RBS AI server running")
 class CreditScoringManualTest {
 
     @Autowired
     private ChatLanguageModel chatLanguageModel;
 
     @Test
-    void testOllamaConnection() {
+    void testRbsAiConnection() {
         // Simple connectivity test
-        String response = chatLanguageModel.generate("Say 'Ollama connected' in exactly those words.");
+        String response = chatLanguageModel.generate("Say 'RBS AI connected' in exactly those words.");
 
         assertThat(response).isNotNull();
         assertThat(response).isNotEmpty();
-        System.out.println("Ollama response: " + response);
+        System.out.println("RBS AI response: " + response);
     }
 
     @Test

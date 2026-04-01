@@ -124,7 +124,7 @@ public class CreditScoringController {
     @PostMapping("/evaluate/{merchantId}")
     @Operation(
             summary = "Evaluate merchant credit risk",
-            description = "Uses LLM (Ollama Qwen 2.5 32B) to evaluate merchant creditworthiness based on " +
+            description = "Uses LLM (RBS AI Qwen3 14B) to evaluate merchant creditworthiness based on " +
                     "payment history, order patterns, and peer comparison. Returns credit score (0-100), " +
                     "recommended credit limit, risk category, and detailed reasoning."
     )

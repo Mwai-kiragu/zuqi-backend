@@ -18,25 +18,25 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Manual integration test verifying the pgvector similarity search pipeline.
  *
  * Tests the full flow:
- *   Ollama nomic-embed-text → float vector → pgvector INSERT → cosine similarity query
+ *   RBS AI text-embedding-ada-002 → float vector → pgvector INSERT → cosine similarity query
  *
  * HOW TO RUN:
  *   ./mvnw test -Dtest=MerchantEmbeddingManualTest -Pintegration
  *   OR remove @Disabled and run: ./mvnw test -Dtest=MerchantEmbeddingManualTest
  *
  * REQUIRES:
- *   - Ollama reachable at http://192.168.2.17:11434 with nomic-embed-text
+ *   - RBS AI reachable at https://rbsai.rbrc.io with text-embedding-ada-002
  *   - PostgreSQL with pgvector at sifadevdb.cpv9gzf8h14i.eu-west-1.rds.amazonaws.com
  *   - A distributor_id that exists in the distributors table (see DISTRIBUTOR_ID below)
  *
  * Blueprint reference: implementation_plan.md Phase 2 Task 2.3
  */
-@Disabled("Infrastructure test — requires live PostgreSQL + Ollama. Remove @Disabled to run manually.")
+@Disabled("Infrastructure test — requires live PostgreSQL + RBS AI. Remove @Disabled to run manually.")
 class MerchantEmbeddingManualTest {
 
     // ── Infrastructure coordinates ────────────────────────────────────────────
-    private static final String OLLAMA_URL      = "http://192.168.2.17:11434/api/embed";
-    private static final String OLLAMA_MODEL    = "nomic-embed-text";
+    private static final String RBS_AI_URL      = "https://rbsai.rbrc.io/v1/embeddings";
+    private static final String RBS_AI_MODEL    = "text-embedding-ada-002";
 
     private static final String DB_URL  = "jdbc:postgresql://sifadevdb.cpv9gzf8h14i.eu-west-1.rds.amazonaws.com:5432/zuqi_test";
     private static final String DB_USER = "postgres";
@@ -64,8 +64,8 @@ class MerchantEmbeddingManualTest {
 
     @Test
     void pgvectorSimilaritySearch_returnsCorrectlySortedResults() throws Exception {
-        // ── Step 1: Generate embeddings via Ollama ──────────────────────────
-        System.out.println("Generating embeddings via Ollama...");
+        // ── Step 1: Generate embeddings via RBS AI ──────────────────────────
+        System.out.println("Generating embeddings via RBS AI...");
         float[] vecA = embedText(RETAIL_PROFILE_A);
         float[] vecB = embedText(RETAIL_PROFILE_B);
         float[] vecC = embedText(WHOLESALE_PROFILE_C);
@@ -115,25 +115,21 @@ class MerchantEmbeddingManualTest {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private float[] embedText(String text) throws Exception {
-        String body = String.format("{\"model\":\"%s\",\"input\":\"%s\"}", OLLAMA_MODEL,
+        String body = String.format("{\"model\":\"%s\",\"input\":\"%s\"}", RBS_AI_MODEL,
                 text.replace("\"", "\\\"").replace("\n", " "));
 
         HttpClient client = HttpClient.newHttpClient();
         HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create(OLLAMA_URL))
+                .uri(URI.create(RBS_AI_URL))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
 
         String resp = client.send(req, HttpResponse.BodyHandlers.ofString()).body();
 
-        // Parse "embeddings":[[0.1,0.2,...]] from JSON (avoid pulling in Jackson)
-        Matcher m = Pattern.compile("\"embeddings\":\\s*\\[\\[([^]]+)\\]").matcher(resp);
-        if (!m.find()) {
-            // try "embedding":[...] (older Ollama)
-            m = Pattern.compile("\"embedding\":\\s*\\[([^]]+)\\]").matcher(resp);
-            assertThat(m.find()).as("No embedding found in response: " + resp.substring(0, Math.min(200, resp.length()))).isTrue();
-        }
+        // Parse OpenAI-compatible response: "data":[{"embedding":[0.1,0.2,...]}]
+        Matcher m = Pattern.compile("\"embedding\":\\s*\\[([^]]+)\\]").matcher(resp);
+        assertThat(m.find()).as("No embedding found in response: " + resp.substring(0, Math.min(200, resp.length()))).isTrue();
         String[] parts = m.group(1).split(",");
         float[] vec = new float[parts.length];
         for (int i = 0; i < parts.length; i++) vec[i] = Float.parseFloat(parts[i].trim());
@@ -165,7 +161,7 @@ class MerchantEmbeddingManualTest {
         String sql = """
                 INSERT INTO ai_merchant_embeddings
                     (id, merchant_id, distributor_id, embedding, feature_summary, model_version, created_at, updated_at)
-                VALUES (?, ?, ?, CAST(? AS vector), ?, 'nomic-embed-text', NOW(), NOW())
+                VALUES (?, ?, ?, CAST(? AS vector), ?, 'text-embedding-ada-002', NOW(), NOW())
                 """;
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setObject(1, UUID.randomUUID());

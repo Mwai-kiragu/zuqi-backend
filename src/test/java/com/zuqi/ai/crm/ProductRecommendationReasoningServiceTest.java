@@ -22,7 +22,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for ProductRecommendationReasoningService.
- * Mocks ChatLanguageModel.generate(List<ChatMessage>) — no Ollama required.
+ * Mocks ChatLanguageModel.generate(List<ChatMessage>) — no RBS AI required.
  */
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
