@@ -217,53 +217,14 @@ public class AssistantService {
      */
     private String getRoleScopeInstruction(String role) {
         return switch (role.toUpperCase()) {
-            case "DRIVER" ->
-                "You are assisting a DRIVER. Only answer questions about: " +
-                "deliveries, assigned orders, routes, and navigation. " +
-                "Politely decline any question about finance, credit, inventory management, " +
-                "sales performance, customer analytics, or accounting. " +
-                "Say: 'That topic is outside your access level. Please contact your manager.'";
-
-            case "SALES_REP" ->
-                "You are assisting a SALES REP. Only answer questions about: " +
-                "sales performance, customer orders, demand forecasts, customer health, churn risk, " +
-                "invoices, and deliveries relevant to your customers. " +
-                "Decline questions about finance, accounting, GL, expenses, warehouse operations, " +
-                "or other reps' detailed data.";
-
-            case "WAREHOUSE_MANAGER" ->
-                "You are assisting a WAREHOUSE MANAGER. Only answer questions about: " +
-                "inventory levels, stock transfers, stock takes, procurement, POS sales, " +
-                "reorder suggestions, expiry risk, and anomaly alerts. " +
-                "Decline questions about financial statements, credit scoring, " +
-                "GL accounts, or detailed sales rep performance.";
-
-            case "FINANCE" ->
-                "You are assisting a FINANCE user. Only answer questions about: " +
-                "payments, invoices, credit limits, expenses, funds transfers, " +
-                "GL accounts, balance sheet, profit & loss, trial balance, cash flow, " +
-                "accounts receivable, accounts payable, and supplier risk. " +
-                "Decline questions about warehouse operations, route planning, or driver activities.";
-
-            case "MERCHANT" ->
-                "You are assisting a MERCHANT (retail customer). Only answer questions about: " +
-                "their own orders, their own payments, their own invoices, " +
-                "their credit score, and order suggestions for their business. " +
-                "Never share data about other merchants or internal distributor operations.";
-
-            case "CUSTOMER" ->
-                "You are assisting a CUSTOMER. Only answer questions about: " +
-                "their own orders, their own payments, and their own invoices. " +
-                "Never share data about other customers or internal operations.";
-
-            case "MERCHANT_ADMIN" ->
-                "You are assisting a MERCHANT ADMIN. You have broad access to your " +
-                "organisation's sales, inventory, payments, invoices, expenses, and procurement data. " +
-                "You cannot access other distributors' data.";
-
-            // DISTRIBUTOR_ADMIN, SUPER_ADMIN → full access, no restriction
-            default ->
-                "You have full access to all available data tools for this distributor.";
+            case "DRIVER"            -> "Scope: deliveries, assigned orders, routes only. Refuse all other topics.";
+            case "SALES_REP"         -> "Scope: sales, customers, orders, demand forecasts, invoices, deliveries. Refuse finance/accounting/warehouse topics.";
+            case "WAREHOUSE_MANAGER" -> "Scope: inventory, stock transfers, procurement, POS, reorder, expiry, anomaly alerts. Refuse financial statements and credit topics.";
+            case "FINANCE"           -> "Scope: payments, invoices, credit, expenses, funds transfers, GL, P&L, balance sheet, cash flow, AR/AP aging. Refuse warehouse and routing topics.";
+            case "MERCHANT"          -> "Scope: this merchant's own orders, payments, invoices, credit score, and order suggestions only. Never expose other merchants' data.";
+            case "CUSTOMER"          -> "Scope: this customer's own orders, payments, and invoices only.";
+            case "MERCHANT_ADMIN"    -> "Scope: full access to this organisation's sales, inventory, payments, invoices, expenses, and procurement.";
+            default                  -> "Scope: full access to all tools for this distributor.";
         };
     }
 
