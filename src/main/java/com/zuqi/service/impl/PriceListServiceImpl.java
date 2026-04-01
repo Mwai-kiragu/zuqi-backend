@@ -10,6 +10,7 @@ import com.zuqi.domain.product.Product;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.DistributorRepository;
+import com.zuqi.repository.PriceListItemRepository;
 import com.zuqi.repository.PriceListRepository;
 import com.zuqi.repository.ProductRepository;
 import com.zuqi.service.ApprovalService;
@@ -34,11 +35,12 @@ import java.util.stream.Collectors;
 @Slf4j
 public class PriceListServiceImpl implements PriceListService {
 
-    private final PriceListRepository  priceListRepository;
-    private final ProductRepository    productRepository;
-    private final DistributorRepository distributorRepository;
-    private final SecurityUtils        securityUtils;
-    private final ApprovalService      approvalService;
+    private final PriceListRepository     priceListRepository;
+    private final PriceListItemRepository priceListItemRepository;
+    private final ProductRepository       productRepository;
+    private final DistributorRepository   distributorRepository;
+    private final SecurityUtils           securityUtils;
+    private final ApprovalService         approvalService;
 
     @Override
     @Transactional
@@ -108,6 +110,19 @@ public class PriceListServiceImpl implements PriceListService {
             return priceListRepository.findByDistributorMerchantId(merchantId, pageable).map(this::toResponse);
         }
         return priceListRepository.findAll(pageable).map(this::toResponse);
+    }
+
+    @Override
+    public Page<PriceListResponse.ItemResponse> getItems(UUID priceListId, String search, Pageable pageable) {
+        String searchParam = (search == null || search.isBlank()) ? "" : search.trim();
+        return priceListItemRepository.findByPriceListIdAndSearch(priceListId, searchParam, pageable)
+                .map(i -> PriceListResponse.ItemResponse.builder()
+                        .id(i.getId())
+                        .productId(i.getProduct().getId())
+                        .productName(i.getProduct().getName())
+                        .unitPrice(i.getUnitPrice())
+                        .discountPercent(i.getDiscountPercent())
+                        .build());
     }
 
     @Override

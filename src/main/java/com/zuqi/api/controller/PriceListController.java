@@ -43,6 +43,16 @@ public class PriceListController {
         return ResponseEntity.ok(ApiResponse.success("Price list", priceListService.getById(id)));
     }
 
+    @GetMapping("/{id}/items")
+    public ResponseEntity<ApiResponse<Page<PriceListResponse.ItemResponse>>> getItems(
+            @PathVariable UUID id,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return ResponseEntity.ok(ApiResponse.success("Price list items",
+                priceListService.getItems(id, search, PageRequest.of(page, size, Sort.by("id")))));
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<PriceListResponse>> update(
             @PathVariable UUID id,

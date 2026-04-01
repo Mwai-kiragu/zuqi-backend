@@ -12,5 +12,6 @@ public interface PriceListService {
     PriceListResponse update(UUID id, CreatePriceListRequest request);
     PriceListResponse getById(UUID id);
     Page<PriceListResponse> getAll(Pageable pageable);
+    Page<PriceListResponse.ItemResponse> getItems(UUID priceListId, String search, Pageable pageable);
     void delete(UUID id);
 }
