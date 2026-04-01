@@ -118,7 +118,7 @@ public class DemandForecastController {
      * Get order suggestions for a merchant (for sales rep).
      */
     @GetMapping("/suggestions/{merchantId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SALES_REP')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SALES_REP', 'MERCHANT')")
     @Operation(
             summary = "Get AI-powered order suggestions",
             description = "Returns ranked list of suggested products with quantities for sales rep"
