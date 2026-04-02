@@ -250,8 +250,9 @@ public class FundsTransferServiceImpl implements FundsTransferService {
             FtAmountRange range = ranges.get(0);
             ft.setAmountRangeId(range.getId());
             ft.setRequiredApprovalLevels(range.getRequiredLevels());
+        } else {
+            ft.setRequiredApprovalLevels(1); // Default: 1 level required
         }
-        // If no range configured → 1 level (default)
 
         ft.setCurrentApprovalLevel(1);
         ft.setStatus(FundsTransferStatus.PENDING_APPROVAL);
@@ -267,6 +268,24 @@ public class FundsTransferServiceImpl implements FundsTransferService {
 
         UUID approverId = securityUtils.getCurrentUserId();
         int level = ft.getCurrentApprovalLevel();
+
+        // Maker-checker: submitter cannot approve their own transfer
+        if (ft.getInitiatorId() != null && ft.getInitiatorId().equals(approverId)) {
+            throw new ValidationException("You cannot approve a transfer you submitted");
+        }
+
+        // When no amount range configured, require an approval role
+        if (ft.getAmountRangeId() == null) {
+            boolean canApprove = securityUtils.currentUserHasRole("VERIFIER")
+                    || securityUtils.currentUserHasRole("AUTHORIZER")
+                    || securityUtils.currentUserHasRole("DISTRIBUTOR_ADMIN")
+                    || securityUtils.currentUserHasRole("MERCHANT_ADMIN")
+                    || securityUtils.currentUserHasRole("SUPER_ADMIN")
+                    || securityUtils.currentUserHasRole("FINANCE");
+            if (!canApprove) {
+                throw new ValidationException("You are not authorised to approve funds transfers");
+            }
+        }
 
         // Prevent double-approving
         if (approvalRepository.findByTransferIdAndLevelNumberAndApproverId(ft.getId(), level, approverId).isPresent()) {
