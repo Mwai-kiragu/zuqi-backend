@@ -20,6 +20,8 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
 
     Optional<Invoice> findByInvoiceNumber(String invoiceNumber);
 
+    Optional<Invoice> findByInvoiceNumberAndDistributorId(String invoiceNumber, UUID distributorId);
+
     Optional<Invoice> findByOrderId(UUID orderId);
 
     Optional<Invoice> findByPosOrderId(UUID posOrderId);
@@ -73,11 +75,12 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
            "FROM Invoice i WHERE i.invoiceNumber LIKE CONCAT(:prefix, '%')")
     Integer findMaxInvoiceNumberByPrefix(@Param("prefix") String prefix);
 
-    /** Safely finds the max sequential number for INV-XXXX format, ignoring old date-based entries. */
-    @Query(value = "SELECT COALESCE(MAX(CAST(SUBSTRING(invoice_number, 5) AS INTEGER)), 0) " +
-                   "FROM invoices WHERE invoice_number ~ '^INV-[0-9]+$'",
-           nativeQuery = true)
-    Integer findMaxStandardInvoiceNumber();
+    /** Per-distributor max sequence for a given prefix (e.g. "GN-INV-"). */
+    @Query("SELECT COALESCE(MAX(CAST(SUBSTRING(i.invoiceNumber, LENGTH(:prefix) + 1) AS integer)), 0) " +
+           "FROM Invoice i WHERE i.invoiceNumber LIKE CONCAT(:prefix, '%') AND i.distributor.id = :distributorId")
+    Integer findMaxInvoiceNumberByDistributorAndPrefix(
+            @Param("distributorId") UUID distributorId,
+            @Param("prefix") String prefix);
 
     long countByDistributorIdAndStatus(UUID distributorId, InvoiceStatus status);
 

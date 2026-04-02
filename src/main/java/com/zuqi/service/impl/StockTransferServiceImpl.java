@@ -23,7 +23,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 @Service
@@ -42,7 +41,6 @@ public class StockTransferServiceImpl implements StockTransferService {
     private final UserRepository userRepository;
     private final com.zuqi.util.SecurityUtils securityUtils;
 
-    private static final AtomicInteger transferCounter = new AtomicInteger(1);
 
     @Override
     @Transactional
@@ -70,7 +68,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         }
 
         StockTransfer transfer = StockTransfer.builder()
-                .referenceNumber(generateTransferRef())
+                .referenceNumber(generateTransferRef(sourceWarehouse.getDistributor().getName()))
                 .sourceWarehouse(sourceWarehouse)
                 .destinationWarehouse(destinationWarehouse)
                 .sourceBranch(sourceBranch)
@@ -246,9 +244,26 @@ public class StockTransferServiceImpl implements StockTransferService {
                 .orElseThrow(() -> new ResourceNotFoundException("StockTransfer", "id", id));
     }
 
-    private String generateTransferRef() {
-        return "TRF-" + DateTimeFormatter.ofPattern("yyyyMMdd").format(LocalDateTime.now())
-                + "-" + String.format("%05d", transferCounter.getAndIncrement());
+    private String generateTransferRef(String distributorName) {
+        String prefix = initials(distributorName) + "-TRF-";
+        Integer maxNum = transferRepository.findMaxTransferNumberByPrefix(prefix);
+        int nextNum = (maxNum != null ? maxNum : 0) + 1;
+        return prefix + String.format("%02d", nextNum);
+    }
+
+    /** Extracts uppercase initials — e.g. "Menace Distributor" → "MD". */
+    static String initials(String name) {
+        if (name == null || name.isBlank()) return "ORG";
+        String[] words = name.trim().split("\\s+");
+        StringBuilder sb = new StringBuilder();
+        for (String w : words) {
+            if (!w.isBlank()) sb.append(Character.toUpperCase(w.charAt(0)));
+        }
+        String result = sb.toString();
+        if (result.length() == 1 && words[0].length() >= 2) {
+            result = words[0].substring(0, 2).toUpperCase();
+        }
+        return result.isEmpty() ? "ORG" : result;
     }
 
     private StockTransferResponse mapToResponse(StockTransfer transfer) {

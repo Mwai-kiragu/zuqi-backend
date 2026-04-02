@@ -75,4 +75,8 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, UU
             @Param("from") LocalDateTime from,
             @Param("to") LocalDateTime to,
             Pageable pageable);
+
+    @Query("SELECT COALESCE(MAX(CAST(SUBSTRING(t.referenceNumber, LENGTH(:prefix) + 1) AS integer)), 0) " +
+            "FROM StockTransfer t WHERE t.referenceNumber LIKE CONCAT(:prefix, '%')")
+    Integer findMaxTransferNumberByPrefix(@Param("prefix") String prefix);
 }

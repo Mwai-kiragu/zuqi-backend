@@ -63,6 +63,15 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
             @Param("searchTerm") String searchTerm,
             Pageable pageable);
 
+    /** Like searchByDistributor but also excludes parent templates (hasVariants=true) — for listable dropdowns. */
+    @Query("SELECT p FROM Product p WHERE p.distributor.id = :distributorId AND p.active = true AND p.hasVariants = false AND " +
+            "(LOWER(p.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+            "LOWER(p.sku) LIKE LOWER(CONCAT('%', :searchTerm, '%')))")
+    Page<Product> searchListableByDistributor(
+            @Param("distributorId") UUID distributorId,
+            @Param("searchTerm") String searchTerm,
+            Pageable pageable);
+
     long countByDistributorIdAndActiveTrue(UUID distributorId);
 
     long countByCategoryIdAndActiveTrue(Long categoryId);

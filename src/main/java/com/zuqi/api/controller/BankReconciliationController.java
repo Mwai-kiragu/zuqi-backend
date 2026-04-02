@@ -14,7 +14,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -33,7 +32,6 @@ public class BankReconciliationController {
     private final SecurityUtils securityUtils;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Create a bank reconciliation")
     public ResponseEntity<ApiResponse<BankReconciliationResponse>> create(@Valid @RequestBody BankReconciliationRequest request) {
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
@@ -41,7 +39,6 @@ public class BankReconciliationController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Update a bank reconciliation")
     public ResponseEntity<ApiResponse<BankReconciliationResponse>> update(
             @PathVariable UUID id,
@@ -50,21 +47,18 @@ public class BankReconciliationController {
     }
 
     @PostMapping("/{id}/reconcile")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Mark a bank reconciliation as reconciled")
     public ResponseEntity<ApiResponse<BankReconciliationResponse>> reconcile(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(bankReconciliationService.reconcile(id)));
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get a bank reconciliation by ID")
     public ResponseEntity<ApiResponse<BankReconciliationResponse>> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(bankReconciliationService.getById(id)));
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "List bank reconciliations")
     public ResponseEntity<ApiResponse<Page<BankReconciliationResponse>>> getAll(Pageable pageable) {
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
@@ -72,7 +66,6 @@ public class BankReconciliationController {
     }
 
     @PostMapping(value = "/{id}/upload-receipt", consumes = "multipart/form-data")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Upload a bank receipt photo for reconciliation")
     public ResponseEntity<ApiResponse<BankReconciliationResponse>> uploadReceipt(
             @PathVariable UUID id,
@@ -82,7 +75,6 @@ public class BankReconciliationController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Delete a bank reconciliation")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
         bankReconciliationService.delete(id);

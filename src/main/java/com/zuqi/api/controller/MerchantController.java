@@ -28,7 +28,6 @@ public class MerchantController {
     private final MerchantService merchantService;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MERCHANT_ADMIN')")
     @Operation(summary = "Get all merchant brands")
     public ResponseEntity<ApiResponse<Page<MerchantResponse>>> getAllMerchants(
             @RequestParam(required = false) Boolean active,
@@ -37,7 +36,6 @@ public class MerchantController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<MerchantResponse>> getMerchantById(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(merchantService.getMerchantById(id)));
     }
@@ -50,7 +48,6 @@ public class MerchantController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<MerchantResponse>> updateMerchant(@PathVariable UUID id,
             @Valid @RequestBody MerchantRequest request) {
         return ResponseEntity.ok(ApiResponse.success("Merchant brand updated successfully",

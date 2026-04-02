@@ -12,7 +12,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -28,7 +27,6 @@ public class TaxRateController {
     private final SecurityUtils securityUtils;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Create a tax rate")
     public ResponseEntity<ApiResponse<TaxRateResponse>> create(@Valid @RequestBody TaxRateRequest request) {
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
@@ -36,7 +34,6 @@ public class TaxRateController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Update a tax rate")
     public ResponseEntity<ApiResponse<TaxRateResponse>> update(
             @PathVariable UUID id, @Valid @RequestBody TaxRateRequest request) {
@@ -64,7 +61,6 @@ public class TaxRateController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN')")
     @Operation(summary = "Delete a tax rate")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
         taxRateService.delete(id);
