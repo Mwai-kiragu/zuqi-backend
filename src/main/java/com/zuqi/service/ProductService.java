@@ -33,6 +33,9 @@ public interface ProductService {
 
     Page<ProductResponse> searchProducts(String searchTerm, UUID distributorId, Pageable pageable);
 
+    /** Search only listable products (active=true, hasVariants=false) — for dropdowns like PR/PO forms. */
+    Page<ProductResponse> searchListableProducts(String searchTerm, UUID distributorId, Pageable pageable);
+
     ProductResponse getProductById(UUID id);
 
     ProductResponse getProductBySku(String sku, UUID distributorId);

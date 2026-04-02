@@ -34,7 +34,6 @@ public class KcbController {
 
     @PostMapping("/activate")
     @Operation(summary = "Activate KCB config for the current merchant")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<KcbConfigResponse>> activateConfig(
             @Valid @RequestBody KcbActivateRequest request) {
 
@@ -71,7 +70,6 @@ public class KcbController {
 
     @DeleteMapping("/configs/{configId}")
     @Operation(summary = "Deactivate a KCB config")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<KcbConfigResponse>> deactivateConfig(
             @PathVariable UUID configId) {
 

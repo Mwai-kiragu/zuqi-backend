@@ -55,7 +55,12 @@ public class ProductController {
         if (branchId != null && distributorId != null) {
             products = productService.getProductsForBranch(distributorId, branchId, search, categoryId, pageable);
         } else if (search != null && !search.isBlank()) {
-            products = productService.searchProducts(search, distributorId, pageable);
+            // When listableOnly=true, search must also exclude parent templates
+            if (Boolean.TRUE.equals(listableOnly)) {
+                products = productService.searchListableProducts(search, distributorId, pageable);
+            } else {
+                products = productService.searchProducts(search, distributorId, pageable);
+            }
         } else if (active != null && !active) {
             // Return inactive products
             if (distributorId != null) {

@@ -135,7 +135,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                 : (customer.getPaymentTermsDays() != null ? customer.getPaymentTermsDays() : 30);
 
         Invoice invoice = Invoice.builder()
-                .invoiceNumber(generateInvoiceNumber(distributor.getName()))
+                .invoiceNumber(generateInvoiceNumber(distributor.getId(), distributor.getName()))
                 .sourceType("MANUAL")
                 .distributor(distributor)
                 .merchant(customer)
@@ -243,7 +243,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         }
 
         // Generate invoice number
-        String invoiceNumber = generateInvoiceNumber(order.getDistributor().getName());
+        String invoiceNumber = generateInvoiceNumber(order.getDistributor().getId(), order.getDistributor().getName());
 
         // Calculate due date based on payment terms
         LocalDate dueDate = LocalDate.now();
@@ -347,7 +347,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         }
 
         // Create new invoice
-        String invoiceNumber = generateInvoiceNumber(sale.getBranch().getDistributor().getName());
+        String invoiceNumber = generateInvoiceNumber(sale.getBranch().getDistributor().getId(), sale.getBranch().getDistributor().getName());
         Invoice invoice = Invoice.builder()
                 .invoiceNumber(invoiceNumber)
                 .sourceType("POS_SALE")
@@ -713,10 +713,11 @@ public class InvoiceServiceImpl implements InvoiceService {
         }
     }
 
-    private String generateInvoiceNumber(String distributorName) {
-        Integer maxNum = invoiceRepository.findMaxStandardInvoiceNumber();
+    private String generateInvoiceNumber(UUID distributorId, String distributorName) {
+        String prefix = initials(distributorName) + "-INV-";
+        Integer maxNum = invoiceRepository.findMaxInvoiceNumberByDistributorAndPrefix(distributorId, prefix);
         int nextNum = (maxNum != null ? maxNum : 0) + 1;
-        return "INV-" + String.format("%02d", nextNum);
+        return prefix + String.format("%02d", nextNum);
     }
 
     /** Extracts uppercase initials — e.g. "Menace Distributor" → "MD". */

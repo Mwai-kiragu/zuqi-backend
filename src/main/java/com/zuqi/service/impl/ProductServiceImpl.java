@@ -166,6 +166,17 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<ProductResponse> searchListableProducts(String searchTerm, UUID distributorId, Pageable pageable) {
+        log.debug("Searching listable products with term: {}, distributor: {}", searchTerm, distributorId);
+        UUID effectiveDistributorId = distributorId != null ? distributorId : securityUtils.getDistributorIdForFiltering();
+        if (effectiveDistributorId != null) {
+            return enrichWithStockAndBranchPrices(productRepository.searchListableByDistributor(effectiveDistributorId, searchTerm, pageable));
+        }
+        return enrichWithStockAndBranchPrices(productRepository.searchByNameOrSku(searchTerm, pageable));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Page<ProductResponse> getProductsForBranch(UUID distributorId, UUID branchId, String search, Long categoryId, Pageable pageable) {
         log.debug("Fetching products for distributor: {} branch: {} search: {} category: {}", distributorId, branchId, search, categoryId);
 
@@ -709,9 +720,11 @@ public class ProductServiceImpl implements ProductService {
                 .parentProduct(parent)
                 .variantName(request.getVariantName())
                 .variantAttributes(request.getVariantAttributes())
-                .approvalStatus("APPROVED")
                 .createdById(securityUtils.getCurrentUserId())
                 .build();
+
+        boolean needsApproval = securityUtils.currentUserRequiresApprovalFor("PRODUCTS");
+        variant.setApprovalStatus(needsApproval ? "PENDING_APPROVAL" : "APPROVED");
 
         if (request.getCategoryId() != null) {
             ProductCategory category = categoryRepository.findById(request.getCategoryId())
@@ -721,7 +734,24 @@ public class ProductServiceImpl implements ProductService {
             variant.setCategory(parent.getCategory());
         }
 
+        UUID currentUserId = securityUtils.getCurrentUserId();
         Product saved = productRepository.save(variant);
+
+        if (needsApproval && currentUserId != null) {
+            approvalService.createRequest(currentUserId, CreateApprovalRequestDto.builder()
+                    .workflowType(ApprovalWorkflowType.PRODUCT_PRICE_EDIT)
+                    .entityType("PRODUCT")
+                    .entityId(saved.getId())
+                    .entityName(saved.getName())
+                    .description("New product variant: " + saved.getName())
+                    .requestedValues(Map.of(
+                            "name", saved.getName(),
+                            "sku", saved.getSku(),
+                            "unitPrice", Objects.toString(saved.getUnitPrice(), "")))
+                    .requiredApprovals(1)
+                    .build());
+        }
+
         addToDefaultPriceList(saved);
         log.info("Variant created successfully: {}", saved.getId());
         return ProductResponse.fromEntity(saved);

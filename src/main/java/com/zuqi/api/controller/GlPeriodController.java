@@ -12,7 +12,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -29,7 +28,6 @@ public class GlPeriodController {
     private final SecurityUtils securityUtils;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get all accounting periods")
     public ResponseEntity<ApiResponse<List<GlPeriodResponse>>> getAll(
             @RequestParam(required = false) UUID distributorId) {
@@ -38,7 +36,6 @@ public class GlPeriodController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','FINANCE')")
     @Operation(summary = "Create an accounting period")
     public ResponseEntity<ApiResponse<GlPeriodResponse>> create(
             @Valid @RequestBody GlPeriodRequest request,
@@ -50,7 +47,6 @@ public class GlPeriodController {
     }
 
     @PostMapping("/{id}/close")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','FINANCE')")
     @Operation(summary = "Close an accounting period")
     public ResponseEntity<ApiResponse<GlPeriodResponse>> close(
             @PathVariable UUID id,
@@ -59,7 +55,6 @@ public class GlPeriodController {
     }
 
     @PostMapping("/{id}/lock")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN')")
     @Operation(summary = "Lock an accounting period (irreversible)")
     public ResponseEntity<ApiResponse<GlPeriodResponse>> lock(
             @PathVariable UUID id,
@@ -68,7 +63,6 @@ public class GlPeriodController {
     }
 
     @PostMapping("/{id}/reopen")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN')")
     @Operation(summary = "Reopen a closed accounting period")
     public ResponseEntity<ApiResponse<GlPeriodResponse>> reopen(
             @PathVariable UUID id,

@@ -6,7 +6,6 @@ import com.zuqi.service.FinancialOverviewService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -17,7 +16,6 @@ import java.time.LocalDate;
 @RestController
 @RequestMapping("/v1/financial-overview")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('SUPER_ADMIN','DISTRIBUTOR_ADMIN','MERCHANT_ADMIN','FINANCE')")
 public class FinancialOverviewController {
 
     private final FinancialOverviewService financialOverviewService;

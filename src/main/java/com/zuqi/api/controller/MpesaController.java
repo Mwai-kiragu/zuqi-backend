@@ -29,7 +29,6 @@ public class MpesaController {
 
     @PostMapping("/activate")
     @Operation(summary = "Activate M-Pesa config", description = "Register a Paybill or Till for the current merchant")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<MpesaConfigResponse>> activateConfig(
             @Valid @RequestBody MpesaActivateRequest request) {
 
@@ -67,7 +66,6 @@ public class MpesaController {
 
     @DeleteMapping("/configs/{configId}")
     @Operation(summary = "Deactivate an M-Pesa config")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<MpesaConfigResponse>> deactivateConfig(
             @PathVariable UUID configId) {
 
@@ -103,7 +101,6 @@ public class MpesaController {
 
     @PatchMapping("/cash")
     @Operation(summary = "Enable or disable cash payments for current merchant")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<Boolean>> setCashEnabled(
             @RequestParam(required = false) UUID merchantId,
             @RequestBody java.util.Map<String, Boolean> body) {
