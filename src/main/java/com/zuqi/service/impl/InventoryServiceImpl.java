@@ -55,8 +55,8 @@ public class InventoryServiceImpl implements InventoryService {
 
 
     @Override
-    public Page<StockResponse> getStock(UUID distributorId, UUID warehouseId, Pageable pageable) {
-        return stockRepository.findByFilters(distributorId, warehouseId, pageable)
+    public Page<StockResponse> getStock(UUID distributorId, UUID warehouseId, UUID branchId, Pageable pageable) {
+        return stockRepository.findByFilters(distributorId, warehouseId, branchId, pageable)
                 .map(this::mapToStockResponse);
     }
 

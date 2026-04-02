@@ -44,14 +44,12 @@ public class TaxRateController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get a tax rate by ID")
     public ResponseEntity<ApiResponse<TaxRateResponse>> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(taxRateService.getById(id)));
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "List all tax rates")
     public ResponseEntity<ApiResponse<Page<TaxRateResponse>>> getAll(Pageable pageable) {
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
@@ -59,7 +57,6 @@ public class TaxRateController {
     }
 
     @GetMapping("/active")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE','SALES')")
     @Operation(summary = "Get active tax rates (for dropdowns)")
     public ResponseEntity<ApiResponse<List<TaxRateResponse>>> getActive() {
         UUID distributorId = securityUtils.getDistributorIdForFiltering();

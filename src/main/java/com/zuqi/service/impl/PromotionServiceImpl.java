@@ -119,6 +119,14 @@ public class PromotionServiceImpl implements PromotionService {
 
     @Override
     @Transactional
+    public PromotionResponse deactivate(UUID id) {
+        Promotion promotion = findOrThrow(id);
+        promotion.setActive(false);
+        return toResponse(promotionRepository.save(promotion));
+    }
+
+    @Override
+    @Transactional
     public void delete(UUID id) {
         promotionRepository.delete(findOrThrow(id));
     }
