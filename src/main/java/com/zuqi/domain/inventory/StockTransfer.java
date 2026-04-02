@@ -83,6 +83,7 @@ public class StockTransfer {
     @Column(name = "received_at")
     private LocalDateTime receivedAt;
 
+    @Builder.Default
     @Column(name = "approval_status", length = 30)
     private String approvalStatus = "NOT_REQUIRED";
 
