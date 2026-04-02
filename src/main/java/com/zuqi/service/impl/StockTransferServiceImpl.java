@@ -1,6 +1,8 @@
 package com.zuqi.service.impl;
 
+import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
 import com.zuqi.api.dto.inventory.*;
+import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.branch.DistributorBranch;
 import com.zuqi.domain.inventory.*;
 import com.zuqi.domain.product.Product;
@@ -8,9 +10,12 @@ import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
+import com.zuqi.service.ApprovalService;
 import com.zuqi.service.StockTransferService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -40,6 +45,9 @@ public class StockTransferServiceImpl implements StockTransferService {
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
     private final com.zuqi.util.SecurityUtils securityUtils;
+
+    @Lazy @Autowired
+    private ApprovalService approvalService;
 
 
     @Override
@@ -91,8 +99,24 @@ public class StockTransferServiceImpl implements StockTransferService {
             transfer.getItems().add(item);
         }
 
+        boolean needsApproval = securityUtils.currentUserRequiresApprovalFor("STOCK_TRANSFERS");
+        transfer.setApprovalStatus(needsApproval ? "PENDING_APPROVAL" : "NOT_REQUIRED");
+
         transfer = transferRepository.save(transfer);
         log.info("Created stock transfer {}", transfer.getReferenceNumber());
+
+        if (needsApproval && requestedByUserId != null) {
+            approvalService.createRequest(requestedByUserId, CreateApprovalRequestDto.builder()
+                    .workflowType(ApprovalWorkflowType.STOCK_TRANSFER)
+                    .entityType("STOCK_TRANSFER")
+                    .entityId(transfer.getId())
+                    .entityName(transfer.getReferenceNumber())
+                    .description("Stock transfer " + transfer.getReferenceNumber() + " from "
+                            + sourceWarehouse.getName() + " to " + destinationWarehouse.getName())
+                    .requiredApprovals(1)
+                    .build());
+        }
+
         return mapToResponse(transfer);
     }
 

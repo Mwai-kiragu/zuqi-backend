@@ -22,6 +22,7 @@ public enum ApprovalWorkflowType {
     STOCK_ADJUSTMENT,
     STOCK_WRITE_OFF,
     STOCK_TAKE_POSTING,
+    STOCK_TRANSFER,
 
     // Procurement
     PURCHASE_REQUISITION,

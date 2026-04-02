@@ -33,6 +33,7 @@ import com.zuqi.repository.PromotionRepository;
 import com.zuqi.repository.PurchaseRequisitionRepository;
 import com.zuqi.repository.StockMovementRepository;
 import com.zuqi.repository.StockRepository;
+import com.zuqi.repository.StockTransferRepository;
 import com.zuqi.repository.SupplierRepository;
 import com.zuqi.repository.WarehouseRepository;
 import com.zuqi.domain.inventory.Warehouse;
@@ -80,6 +81,7 @@ public class ApprovalServiceImpl implements ApprovalService {
     private final PromotionRepository promotionRepository;
     private final StockMovementRepository stockMovementRepository;
     private final StockRepository stockRepository;
+    private final StockTransferRepository stockTransferRepository;
     private final WarehouseRepository warehouseRepository;
     private final PosShiftRepository posShiftRepository;
     private final PurchaseRequisitionRepository purchaseRequisitionRepository;
@@ -365,6 +367,7 @@ public class ApprovalServiceImpl implements ApprovalService {
                     invoiceRepository.save(invoice);
                 }
             });
+            case "STOCK_TRANSFER" -> stockTransferRepository.updateApprovalStatus(entityId, status);
             default -> { /* no-op for other entity types */ }
         }
     }
