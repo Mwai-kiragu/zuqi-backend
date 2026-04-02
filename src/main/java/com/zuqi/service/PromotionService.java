@@ -12,5 +12,6 @@ public interface PromotionService {
     PromotionResponse update(UUID id, CreatePromotionRequest request);
     PromotionResponse getById(UUID id);
     Page<PromotionResponse> getAll(Pageable pageable);
+    PromotionResponse deactivate(UUID id);
     void delete(UUID id);
 }

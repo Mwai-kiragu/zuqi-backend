@@ -282,7 +282,8 @@ public class OrderServiceImpl implements OrderService {
 
         // Auto-apply default active tax rate
         List<TaxRate> taxRates = taxRateRepository.findByDistributorIdAndActiveTrue(distributor.getId());
-        TaxRate defaultTax = taxRates.stream().filter(TaxRate::isDefault).findFirst().orElse(null);
+        TaxRate defaultTax = taxRates.stream().filter(TaxRate::isDefault).findFirst()
+                .orElseGet(() -> taxRates.stream().filter(t -> TaxType.PERCENTAGE == t.getTaxType()).findFirst().orElse(null));
         if (defaultTax != null && TaxType.PERCENTAGE == defaultTax.getTaxType()) {
             BigDecimal taxAmount = order.getSubtotal()
                     .multiply(defaultTax.getRate())

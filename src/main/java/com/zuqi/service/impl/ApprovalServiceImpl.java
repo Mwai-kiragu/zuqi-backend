@@ -39,6 +39,7 @@ import com.zuqi.domain.inventory.Warehouse;
 import com.zuqi.repository.UserRepository;
 import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.ApprovalService;
+import com.zuqi.service.ApprovalThresholdService;
 import com.zuqi.service.ApprovalWorkflowConfigService;
 import com.zuqi.service.EmailService;
 import com.zuqi.service.GlAutoPostingService;
@@ -96,6 +97,9 @@ public class ApprovalServiceImpl implements ApprovalService {
 
     @Lazy @Autowired
     private NotificationService notificationService;
+
+    @Lazy @Autowired
+    private ApprovalThresholdService approvalThresholdService;
 
     private final AtomicLong sequenceCounter = new AtomicLong(0);
 
@@ -197,7 +201,26 @@ public class ApprovalServiceImpl implements ApprovalService {
 
         if (dto.getDecision() == ApprovalDecision.APPROVED) {
             request.setReceivedApprovals(request.getReceivedApprovals() + 1);
-            if (request.isFullyApproved()) {
+            // Re-check against current threshold in case requiredApprovals was frozen with a
+            // stale/misconfigured value. Use whichever is lower (frozen vs current threshold).
+            boolean complete = request.isFullyApproved();
+            if (!complete && request.getDistributorId() != null
+                    && request.getAmount() != null && request.getWorkflowType() != null) {
+                try {
+                    int currentRequired = approvalThresholdService.getRequiredApprovals(
+                            request.getDistributorId(), request.getWorkflowType(), request.getAmount());
+                    if (request.getReceivedApprovals() >= currentRequired) {
+                        complete = true;
+                        // Align stored value so UI shows correct numbers
+                        request.setRequiredApprovals(currentRequired);
+                        log.info("Approval request {} completed via updated threshold ({} approvals)",
+                                request.getRequestNumber(), currentRequired);
+                    }
+                } catch (Exception e) {
+                    log.warn("Could not re-check threshold for {}: {}", request.getRequestNumber(), e.getMessage());
+                }
+            }
+            if (complete) {
                 request.setStatus(ApprovalStatus.APPROVED);
                 request.setApprovedAt(LocalDateTime.now());
                 log.info("Approval request {} fully approved", request.getRequestNumber());
