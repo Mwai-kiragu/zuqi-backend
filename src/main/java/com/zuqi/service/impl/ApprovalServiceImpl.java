@@ -23,6 +23,8 @@ import com.zuqi.domain.procurement.PrStatus;
 import com.zuqi.repository.ApprovalActionRepository;
 import com.zuqi.repository.ApprovalRequestRepository;
 import com.zuqi.repository.CustomerRepository;
+import com.zuqi.domain.invoice.InvoiceStatus;
+import com.zuqi.repository.InvoiceRepository;
 import com.zuqi.repository.OrderRepository;
 import com.zuqi.repository.PosShiftRepository;
 import com.zuqi.repository.PriceListRepository;
@@ -31,13 +33,20 @@ import com.zuqi.repository.PromotionRepository;
 import com.zuqi.repository.PurchaseRequisitionRepository;
 import com.zuqi.repository.StockMovementRepository;
 import com.zuqi.repository.StockRepository;
+import com.zuqi.repository.StockTransferRepository;
 import com.zuqi.repository.SupplierRepository;
+import com.zuqi.repository.WarehouseRepository;
+import com.zuqi.domain.inventory.Warehouse;
 import com.zuqi.repository.UserRepository;
 import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.ApprovalService;
+import com.zuqi.service.ApprovalThresholdService;
 import com.zuqi.service.ApprovalWorkflowConfigService;
 import com.zuqi.service.EmailService;
+import com.zuqi.service.GlAutoPostingService;
 import com.zuqi.service.InvoiceService;
+import com.zuqi.service.NotificationService;
+import com.zuqi.util.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import lombok.RequiredArgsConstructor;
@@ -72,16 +81,27 @@ public class ApprovalServiceImpl implements ApprovalService {
     private final PromotionRepository promotionRepository;
     private final StockMovementRepository stockMovementRepository;
     private final StockRepository stockRepository;
+    private final StockTransferRepository stockTransferRepository;
+    private final WarehouseRepository warehouseRepository;
     private final PosShiftRepository posShiftRepository;
     private final PurchaseRequisitionRepository purchaseRequisitionRepository;
     private final OrderRepository orderRepository;
+    private final InvoiceRepository invoiceRepository;
     private final ActivityLogService activityLogService;
     private final EmailService emailService;
     private final EmailConfig emailConfig;
     private final ApprovalWorkflowConfigService approvalWorkflowConfigService;
+    private final GlAutoPostingService glAutoPostingService;
+    private final SecurityUtils securityUtils;
 
     @Lazy @Autowired
     private InvoiceService invoiceService;
+
+    @Lazy @Autowired
+    private NotificationService notificationService;
+
+    @Lazy @Autowired
+    private ApprovalThresholdService approvalThresholdService;
 
     private final AtomicLong sequenceCounter = new AtomicLong(0);
 
@@ -111,12 +131,13 @@ public class ApprovalServiceImpl implements ApprovalService {
                 .entityType(dto.getEntityType())
                 .entityId(dto.getEntityId())
                 .entityName(dto.getEntityName())
+                .distributorId(requester.getDistributorId())
                 .requestedById(requesterId)
                 .requestedByEmail(requester.getEmail())
                 .requestedByName(requester.getFirstName() + " " + requester.getLastName())
                 .description(dto.getDescription())
                 .currentValues(dto.getCurrentValues() != null ? dto.getCurrentValues() : new HashMap<>())
-                .requestedValues(dto.getRequestedValues())
+                .requestedValues(dto.getRequestedValues() != null ? dto.getRequestedValues() : new HashMap<>())
                 .requiredApprovals(requiredApprovals)
                 .amount(dto.getAmount())
                 .expiresAt(LocalDateTime.now().plusDays(7))
@@ -182,7 +203,26 @@ public class ApprovalServiceImpl implements ApprovalService {
 
         if (dto.getDecision() == ApprovalDecision.APPROVED) {
             request.setReceivedApprovals(request.getReceivedApprovals() + 1);
-            if (request.isFullyApproved()) {
+            // Re-check against current threshold in case requiredApprovals was frozen with a
+            // stale/misconfigured value. Use whichever is lower (frozen vs current threshold).
+            boolean complete = request.isFullyApproved();
+            if (!complete && request.getDistributorId() != null
+                    && request.getAmount() != null && request.getWorkflowType() != null) {
+                try {
+                    int currentRequired = approvalThresholdService.getRequiredApprovals(
+                            request.getDistributorId(), request.getWorkflowType(), request.getAmount());
+                    if (request.getReceivedApprovals() >= currentRequired) {
+                        complete = true;
+                        // Align stored value so UI shows correct numbers
+                        request.setRequiredApprovals(currentRequired);
+                        log.info("Approval request {} completed via updated threshold ({} approvals)",
+                                request.getRequestNumber(), currentRequired);
+                    }
+                } catch (Exception e) {
+                    log.warn("Could not re-check threshold for {}: {}", request.getRequestNumber(), e.getMessage());
+                }
+            }
+            if (complete) {
                 request.setStatus(ApprovalStatus.APPROVED);
                 request.setApprovedAt(LocalDateTime.now());
                 log.info("Approval request {} fully approved", request.getRequestNumber());
@@ -204,7 +244,10 @@ public class ApprovalServiceImpl implements ApprovalService {
                 request.getRequestNumber(), "APPROVAL",
                 dto.getDecision().name() + " approval request: " + request.getRequestNumber());
 
-        notifyRequesterAsync(updated, approver);
+        // Only notify the requester when a final decision has been reached (not on intermediate approvals)
+        if (updated.getStatus() == ApprovalStatus.APPROVED || updated.getStatus() == ApprovalStatus.REJECTED) {
+            notifyRequesterAsync(updated, approver);
+        }
 
         if (updated.getStatus() == ApprovalStatus.APPROVED) {
             updateEntityApprovalStatus(updated, "APPROVED", approverId);
@@ -221,7 +264,62 @@ public class ApprovalServiceImpl implements ApprovalService {
         switch (request.getEntityType()) {
             case "CUSTOMER"       -> customerRepository.updateApprovalStatus(entityId, status);
             case "SUPPLIER"       -> supplierRepository.updateApprovalStatus(entityId, status);
-            case "PRODUCT"        -> productRepository.updateApprovalStatus(entityId, status);
+            case "PRODUCT"        -> {
+                if ("APPROVED".equals(status)) {
+                    productRepository.approveAndActivate(entityId);
+                    productRepository.findById(entityId).ifPresent(product -> {
+                        if (product.getDistributor() == null) return;
+                        UUID distributorId = product.getDistributor().getId();
+
+                        // Prefer the HQ-branch warehouse; fall back to the first warehouse created
+                        List<Warehouse> hqWarehouses = warehouseRepository
+                                .findByDistributorIdAndBranchHeadquartersTrueAndActiveTrue(distributorId);
+                        Warehouse defaultWarehouse = hqWarehouses.isEmpty()
+                                ? warehouseRepository
+                                        .findFirstByDistributorIdAndActiveTrueOrderByCreatedAtAsc(distributorId)
+                                        .orElse(null)
+                                : hqWarehouses.get(0);
+
+                        if (defaultWarehouse == null) return;
+
+                        if (product.isHasVariants()) {
+                            // Parent template: create stock for each variant child instead of the parent
+                            List<com.zuqi.domain.product.Product> variants =
+                                    productRepository.findByParentProductId(entityId);
+                            for (com.zuqi.domain.product.Product variant : variants) {
+                                boolean exists = stockRepository.existsByWarehouseIdAndProductId(
+                                        defaultWarehouse.getId(), variant.getId());
+                                if (!exists) {
+                                    stockRepository.save(Stock.builder()
+                                            .warehouse(defaultWarehouse)
+                                            .product(variant)
+                                            .quantity(java.math.BigDecimal.ZERO)
+                                            .reservedQuantity(java.math.BigDecimal.ZERO)
+                                            .build());
+                                    log.info("Created zero-stock entry for variant {} in warehouse {}",
+                                            variant.getName(), defaultWarehouse.getName());
+                                }
+                            }
+                        } else {
+                            // Standalone product: create stock for the product itself
+                            boolean exists = stockRepository.existsByWarehouseIdAndProductId(
+                                    defaultWarehouse.getId(), product.getId());
+                            if (!exists) {
+                                stockRepository.save(Stock.builder()
+                                        .warehouse(defaultWarehouse)
+                                        .product(product)
+                                        .quantity(java.math.BigDecimal.ZERO)
+                                        .reservedQuantity(java.math.BigDecimal.ZERO)
+                                        .build());
+                                log.info("Created zero-stock entry for approved product {} in warehouse {}",
+                                        product.getName(), defaultWarehouse.getName());
+                            }
+                        }
+                    });
+                } else {
+                    productRepository.updateApprovalStatus(entityId, status);
+                }
+            }
             case "PRICE_LIST"     -> priceListRepository.updateApprovalStatus(entityId, status);
             case "PROMOTION"      -> promotionRepository.updateApprovalStatus(entityId, status);
             case "STOCK_MOVEMENT" -> {
@@ -257,6 +355,19 @@ public class ApprovalServiceImpl implements ApprovalService {
                     }
                 });
             }
+            case "INVOICE" -> invoiceRepository.findById(entityId).ifPresent(invoice -> {
+                if ("APPROVED".equals(status)) {
+                    invoice.setStatus(InvoiceStatus.UNPAID);
+                    invoiceRepository.save(invoice);
+                    try { glAutoPostingService.postInvoiceCreated(invoice); } catch (Exception e) {
+                        log.warn("GL posting failed for approved invoice {}: {}", invoice.getInvoiceNumber(), e.getMessage());
+                    }
+                } else {
+                    invoice.setStatus(InvoiceStatus.CANCELLED);
+                    invoiceRepository.save(invoice);
+                }
+            });
+            case "STOCK_TRANSFER" -> stockTransferRepository.updateApprovalStatus(entityId, status);
             default -> { /* no-op for other entity types */ }
         }
     }
@@ -342,7 +453,8 @@ public class ApprovalServiceImpl implements ApprovalService {
     public PageResponse<ApprovalRequestResponse> getAll(ApprovalStatus status, ApprovalWorkflowType workflowType,
                                                          String entityType, int page, int size) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<ApprovalRequest> result = approvalRequestRepository.findWithFilters(status, workflowType, entityType, pageable);
+        UUID distributorId = securityUtils.getCurrentUserDistributorId(); // null for SUPER_ADMIN → sees all
+        Page<ApprovalRequest> result = approvalRequestRepository.findWithFilters(status, workflowType, entityType, distributorId, pageable);
         return toPageResponse(result);
     }
 
@@ -350,8 +462,9 @@ public class ApprovalServiceImpl implements ApprovalService {
     @Transactional(readOnly = true)
     public PageResponse<ApprovalRequestResponse> getMyRequests(UUID requesterId, ApprovalStatus status, int page, int size) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<ApprovalRequest> result = status != null
-                ? approvalRequestRepository.findByRequestedById(requesterId, pageable)
+        UUID distributorId = securityUtils.getCurrentUserDistributorId();
+        Page<ApprovalRequest> result = distributorId != null
+                ? approvalRequestRepository.findByRequestedByIdAndDistributorId(requesterId, distributorId, pageable)
                 : approvalRequestRepository.findByRequestedById(requesterId, pageable);
         return toPageResponse(result);
     }
@@ -360,14 +473,20 @@ public class ApprovalServiceImpl implements ApprovalService {
     @Transactional(readOnly = true)
     public PageResponse<ApprovalRequestResponse> getPendingForApprover(int page, int size) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").ascending());
-        Page<ApprovalRequest> result = approvalRequestRepository.findByStatus(ApprovalStatus.PENDING, pageable);
+        UUID distributorId = securityUtils.getCurrentUserDistributorId();
+        Page<ApprovalRequest> result = distributorId != null
+                ? approvalRequestRepository.findByStatusAndDistributorId(ApprovalStatus.PENDING, distributorId, pageable)
+                : approvalRequestRepository.findByStatus(ApprovalStatus.PENDING, pageable); // SUPER_ADMIN sees all
         return toPageResponse(result);
     }
 
     @Override
     @Transactional(readOnly = true)
     public long countPending() {
-        return approvalRequestRepository.countByStatus(ApprovalStatus.PENDING);
+        UUID distributorId = securityUtils.getCurrentUserDistributorId();
+        return distributorId != null
+                ? approvalRequestRepository.countByStatusAndDistributorId(ApprovalStatus.PENDING, distributorId)
+                : approvalRequestRepository.countByStatus(ApprovalStatus.PENDING); // SUPER_ADMIN sees all
     }
 
     @Override
@@ -397,9 +516,7 @@ public class ApprovalServiceImpl implements ApprovalService {
 
     private void notifyApproversAsync(ApprovalRequest request) {
         try {
-            // Notify all ADMIN/DISTRIBUTOR_ADMIN users — in production, query by role
-            // For now, log the intent; wired notification goes through email template
-            log.info("Notifying approvers for request: {}", request.getRequestNumber());
+            notificationService.notifyApprovers(request);
         } catch (Exception e) {
             log.error("Failed to notify approvers for request: {}", request.getRequestNumber(), e);
         }
@@ -422,6 +539,8 @@ public class ApprovalServiceImpl implements ApprovalService {
                     "approval-decision",
                     vars
             );
+
+            notificationService.notifyRequester(request, approver.getFirstName() + " " + approver.getLastName());
         } catch (Exception e) {
             log.error("Failed to notify requester for request: {}", request.getRequestNumber(), e);
         }

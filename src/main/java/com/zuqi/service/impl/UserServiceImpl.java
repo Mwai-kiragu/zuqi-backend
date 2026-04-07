@@ -121,20 +121,13 @@ public class UserServiceImpl implements UserService {
                     .map(this::mapToUserResponse);
         }
 
-        List<User> allUsers = userRepository.findAll();
-        List<User> filteredUsers = allUsers;
-        if (active != null) {
-            filteredUsers = allUsers.stream()
-                    .filter(u -> u.isActive() == active)
-                    .toList();
+        if (active == null) {
+            return userRepository.findAll(pageable).map(this::mapToUserResponse);
+        } else if (active) {
+            return userRepository.findByActiveTrue(pageable).map(this::mapToUserResponse);
+        } else {
+            return userRepository.findByActiveFalse(pageable).map(this::mapToUserResponse);
         }
-
-        int start = (int) pageable.getOffset();
-        int end = Math.min((start + pageable.getPageSize()), filteredUsers.size());
-        List<UserResponse> responseList = filteredUsers.subList(start, end).stream()
-                .map(this::mapToUserResponse)
-                .toList();
-        return new PageImpl<>(responseList, pageable, filteredUsers.size());
     }
 
     @Override
@@ -163,21 +156,13 @@ public class UserServiceImpl implements UserService {
                     .map(this::mapToUserResponse);
         }
 
-        List<User> users;
         if (active == null) {
-            users = userRepository.findByDistributorId(distributorId);
+            return userRepository.findByDistributorId(distributorId, pageable).map(this::mapToUserResponse);
         } else if (active) {
-            users = userRepository.findByDistributorIdAndActiveTrue(distributorId);
+            return userRepository.findByDistributorIdAndActiveTrue(distributorId, pageable).map(this::mapToUserResponse);
         } else {
-            users = userRepository.findByDistributorIdAndActiveFalse(distributorId);
+            return userRepository.findByDistributorIdAndActiveFalse(distributorId, pageable).map(this::mapToUserResponse);
         }
-
-        int start = (int) pageable.getOffset();
-        int end = Math.min((start + pageable.getPageSize()), users.size());
-        List<UserResponse> responseList = users.subList(start, end).stream()
-                .map(this::mapToUserResponse)
-                .toList();
-        return new PageImpl<>(responseList, pageable, users.size());
     }
 
     @Override
@@ -240,15 +225,26 @@ public class UserServiceImpl implements UserService {
             userGroup = userGroupRepository.findByIdWithUserType(request.getUserGroupId()).orElse(null);
         }
 
-        // Determine effective role: UserGroup.userType.baseRole takes priority; fall back to explicit request.role
-        String effectiveRole = request.getRole();
+        // Determine effective system role:
+        // Priority: UserGroup.userType.baseRole > explicit request.role > UserGroup.workflowTier (fallback for tier-only users)
+        String effectiveRole = null;
         if (userGroup != null && userGroup.getUserType() != null
                 && userGroup.getUserType().getBaseRole() != null
                 && !userGroup.getUserType().getBaseRole().isBlank()) {
             effectiveRole = userGroup.getUserType().getBaseRole();
+        } else if (request.getRole() != null && !request.getRole().isBlank()) {
+            effectiveRole = request.getRole();
+        } else if (userGroup != null && userGroup.getWorkflowTier() != null && !userGroup.getWorkflowTier().isBlank()) {
+            // Tier-only user: take the first tier as the primary system role
+            // (workflowTier may be comma-separated, e.g. "INITIATOR,VERIFIER")
+            effectiveRole = userGroup.getWorkflowTier().split(",")[0].trim();
         }
         if (effectiveRole == null || effectiveRole.isBlank()) {
-            throw new ValidationException("User Group is required and must have a base role configured in its User Type.");
+            String typeName = (userGroup != null && userGroup.getUserType() != null)
+                    ? userGroup.getUserType().getName() : "Unknown";
+            throw new ValidationException(
+                "The User Type '" + typeName + "' has no Base System Role configured and the User Group has no workflow tier. " +
+                "Go to Access Control → User Types and set a Base System Role.");
         }
 
         final String resolvedRole = effectiveRole;
@@ -307,10 +303,22 @@ public class UserServiceImpl implements UserService {
         Set<Role> roles = new HashSet<>();
         roles.add(role);
 
-        // Optionally add a workflow tier role (INITIATOR / VERIFIER / AUTHORIZER)
-        if (request.getWorkflowTierRole() != null && !request.getWorkflowTierRole().isBlank()) {
-            roleRepository.findByName(RoleName.valueOf(request.getWorkflowTierRole()))
-                    .ifPresent(roles::add);
+        // Add workflow tier roles (INITIATOR / VERIFIER / AUTHORIZER)
+        // Auto-derive from UserGroup.workflowTier (may be comma-separated); override with explicit request value
+        String tierRawValue = (request.getWorkflowTierRole() != null && !request.getWorkflowTierRole().isBlank())
+                ? request.getWorkflowTierRole()
+                : (userGroup != null ? userGroup.getWorkflowTier() : null);
+        if (tierRawValue != null && !tierRawValue.isBlank()) {
+            for (String tier : tierRawValue.split(",")) {
+                String trimmedTier = tier.trim();
+                if (trimmedTier.isEmpty() || trimmedTier.equals(effectiveRole)) continue;
+                try {
+                    roleRepository.findByName(RoleName.valueOf(trimmedTier)).ifPresent(roles::add);
+                } catch (IllegalArgumentException e) {
+                    log.warn("Unknown workflow tier role '{}' on UserGroup {}, skipping", trimmedTier,
+                            userGroup != null ? userGroup.getId() : "null");
+                }
+            }
         }
 
         // UserGroup already resolved above (with UserType fetch)

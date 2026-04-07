@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Purchase Order</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f0f0f0;font-family:'Segoe UI',Arial,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color:#f0f0f0;">
+    <tr>
+        <td style="padding:40px 20px;">
+            <table role="presentation" width="620" cellspacing="0" cellpadding="0" style="margin:0 auto;background-color:#ffffff;">
+
+                <!-- ── HEADER ── -->
+                <tr>
+                    <td style="padding:32px 40px 0 40px;">
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                            <tr>
+                                <td style="vertical-align:top;">
+                                    <img th:src="${logoUrl}" src="" alt="Zuqi" style="height:48px;max-width:160px;display:block;" />
+                                </td>
+                                <td style="text-align:right;vertical-align:top;">
+                                    <div style="display:inline-block;color:#1565c0;font-size:16px;font-weight:800;letter-spacing:2px;margin-bottom:4px;">
+                                        PURCHASE ORDER
+                                    </div>
+                                    <br>
+                                    <span style="font-size:13px;color:#666666;">PO No:&nbsp;<strong th:text="${poNumber}">PO-001</strong></span>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                <!-- ── DIVIDER ── -->
+                <tr><td style="padding:16px 40px 0 40px;"><hr style="border:none;border-top:1px solid #dddddd;margin:0;"></td></tr>
+
+                <!-- ── FROM (distributor) ── -->
+                <tr>
+                    <td style="padding:20px 40px 0 40px;">
+                        <p style="margin:0 0 2px 0;font-size:12px;color:#888888;">From:</p>
+                        <p style="margin:0;font-size:15px;font-weight:700;color:#111111;" th:text="${distributorName}">Company Name</p>
+                    </td>
+                </tr>
+
+                <!-- ── DIVIDER ── -->
+                <tr><td style="padding:20px 40px 0 40px;"><hr style="border:none;border-top:1px solid #dddddd;margin:0;"></td></tr>
+
+                <!-- ── TO (supplier) + DETAILS ── -->
+                <tr>
+                    <td style="padding:20px 40px 0 40px;">
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                            <tr>
+                                <!-- To -->
+                                <td style="vertical-align:top;width:55%;">
+                                    <p style="margin:0 0 6px 0;font-size:12px;color:#888888;">To:</p>
+                                    <p style="margin:0;font-size:15px;font-weight:700;color:#111111;" th:text="${supplierName}">Supplier Name</p>
+                                </td>
+                                <!-- Dates -->
+                                <td style="vertical-align:top;text-align:right;">
+                                    <table role="presentation" cellspacing="0" cellpadding="0" style="margin-left:auto;">
+                                        <tr>
+                                            <td style="padding:3px 12px 3px 0;font-size:13px;color:#888888;">Order Date:</td>
+                                            <td style="padding:3px 0;font-size:13px;font-weight:700;color:#111111;" th:text="${sentAt}">—</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="padding:3px 12px 3px 0;font-size:13px;color:#888888;">Expected Delivery:</td>
+                                            <td style="padding:3px 0;font-size:13px;font-weight:700;color:#111111;" th:text="${expectedDeliveryDate}">—</td>
+                                        </tr>
+                                        <tr th:if="${paymentTermsDays != null}">
+                                            <td style="padding:3px 12px 3px 0;font-size:13px;color:#888888;">Payment Terms:</td>
+                                            <td style="padding:3px 0;font-size:13px;font-weight:700;color:#111111;">
+                                                <span th:text="${paymentTermsDays}">30</span> days
+                                            </td>
+                                        </tr>
+                                    </table>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                <!-- Delivery address -->
+                <tr th:if="${deliveryAddress != null and deliveryAddress != ''}">
+                    <td style="padding:12px 40px 0 40px;">
+                        <p style="margin:0 0 2px 0;font-size:12px;color:#888888;">Delivery Address:</p>
+                        <p style="margin:0;font-size:13px;color:#333333;" th:text="${deliveryAddress}">Address</p>
+                    </td>
+                </tr>
+
+                <!-- ── DIVIDER ── -->
+                <tr><td style="padding:20px 40px 0 40px;"><hr style="border:none;border-top:1px solid #dddddd;margin:0;"></td></tr>
+
+                <!-- ── ITEMS TABLE ── -->
+                <tr>
+                    <td style="padding:24px 40px 0 40px;">
+                        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #dddddd;">
+                            <tr style="background-color:#f7f7f7;">
+                                <th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:700;color:#333333;border-bottom:1px solid #dddddd;">#</th>
+                                <th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:700;color:#333333;border-bottom:1px solid #dddddd;">Product</th>
+                                <th style="padding:10px 12px;text-align:center;font-size:12px;font-weight:700;color:#333333;border-bottom:1px solid #dddddd;">Qty</th>
+                                <th style="padding:10px 12px;text-align:left;font-size:12px;font-weight:700;color:#333333;border-bottom:1px solid #dddddd;">Unit</th>
+                                <th style="padding:10px 12px;text-align:right;font-size:12px;font-weight:700;color:#333333;border-bottom:1px solid #dddddd;white-space:nowrap;">Unit Cost (KES)</th>
+                                <th style="padding:10px 12px;text-align:right;font-size:12px;font-weight:700;color:#333333;border-bottom:1px solid #dddddd;white-space:nowrap;">Total (KES)</th>
+                            </tr>
+                            <tr th:each="item, stat : ${items}">
+                                <td style="padding:10px 12px;font-size:13px;color:#444444;border-bottom:1px dashed #eeeeee;"
+                                    th:text="${stat.count}">1</td>
+                                <td style="padding:10px 12px;font-size:13px;color:#222222;border-bottom:1px dashed #eeeeee;">
+                                    <span th:text="${item['productName']}">Product</span>
+                                    <span th:if="${item['sku'] != null}" style="display:block;font-size:11px;color:#888888;" th:text="'SKU: ' + ${item['sku']}"></span>
+                                    <span th:if="${item['notes'] != null}" style="display:block;font-size:11px;color:#888888;font-style:italic;" th:text="${item['notes']}"></span>
+                                </td>
+                                <td style="padding:10px 12px;text-align:center;font-size:13px;color:#444444;border-bottom:1px dashed #eeeeee;"
+                                    th:text="${item['quantity']}">1</td>
+                                <td style="padding:10px 12px;font-size:13px;color:#444444;border-bottom:1px dashed #eeeeee;"
+                                    th:text="${item['unitOfMeasure'] ?: '—'}">pcs</td>
+                                <td style="padding:10px 12px;text-align:right;font-size:13px;color:#444444;border-bottom:1px dashed #eeeeee;"
+                                    th:text="${item['unitCost'] != null ? #numbers.formatDecimal(item['unitCost'], 1, 2) : (item['estimatedUnitCost'] != null ? #numbers.formatDecimal(item['estimatedUnitCost'], 1, 2) : '—')}">0.00</td>
+                                <td style="padding:10px 12px;text-align:right;font-size:13px;font-weight:600;color:#111111;border-bottom:1px dashed #eeeeee;">
+                                    <th:block th:with="cost=${item['unitCost'] ?: item['estimatedUnitCost']}, qty=${item['quantity']}">
+                                        <span th:if="${cost != null and qty != null}" th:text="${#numbers.formatDecimal(cost * qty, 1, 2)}">0.00</span>
+                                        <span th:if="${cost == null or qty == null}">—</span>
+                                    </th:block>
+                                </td>
+                            </tr>
+                            <tr th:if="${items == null or #lists.isEmpty(items)}">
+                                <td colspan="6" style="padding:16px 12px;text-align:center;font-size:13px;color:#888888;">No items</td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                <!-- ── TOTAL ── -->
+                <tr>
+                    <td style="padding:16px 40px 0 40px;">
+                        <table role="presentation" width="220" cellspacing="0" cellpadding="0" style="margin-left:auto;">
+                            <tr>
+                                <td colspan="2" style="padding:4px 0;"><hr style="border:none;border-top:1px solid #cccccc;margin:0;"></td>
+                            </tr>
+                            <tr>
+                                <td style="padding:6px 0;font-size:15px;font-weight:800;color:#1565c0;letter-spacing:1px;">ORDER TOTAL</td>
+                                <td style="padding:6px 0;text-align:right;font-size:15px;font-weight:800;color:#1565c0;"
+                                    th:text="'KES ' + ${totalAmount != null ? #numbers.formatDecimal(totalAmount, 1, 2) : '0.00'}">KES 0.00</td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+
+                <!-- ── DIVIDER ── -->
+                <tr><td style="padding:24px 40px 0 40px;"><hr style="border:none;border-top:1px solid #dddddd;margin:0;"></td></tr>
+
+                <!-- ── NOTES ── -->
+                <tr th:if="${notes != null and notes != ''}">
+                    <td style="padding:20px 40px 0 40px;">
+                        <p style="margin:0 0 6px 0;font-size:13px;font-weight:700;color:#333333;">Notes:</p>
+                        <p style="margin:0;font-size:13px;color:#555555;line-height:1.6;" th:text="${notes}">Note text</p>
+                    </td>
+                </tr>
+
+                <!-- ── CALL TO ACTION ── -->
+                <tr>
+                    <td style="padding:24px 40px 32px 40px;">
+                        <div style="background-color:#f0f7ff;border:1px solid #c2d9f5;border-radius:6px;padding:20px;">
+                            <p style="margin:0 0 8px 0;font-size:14px;font-weight:700;color:#1565c0;">Please Confirm Availability</p>
+                            <p style="margin:0 0 16px 0;font-size:13px;color:#444444;line-height:1.6;">
+                                Please review this purchase order and confirm that you can supply the requested goods
+                                by the expected delivery date. Reply to this email or contact
+                                <strong th:text="${distributorName}">the company</strong> to acknowledge.
+                            </p>
+                            <p style="margin:0;font-size:12px;color:#888888;">
+                                PO Reference: <strong th:text="${poNumber}">PO-001</strong>
+                            </p>
+                        </div>
+                    </td>
+                </tr>
+
+                <!-- ── FOOTER ── -->
+                <tr>
+                    <td style="background-color:#f7f7f7;padding:20px 40px;border-top:1px solid #eeeeee;">
+                        <p style="margin:0;font-size:12px;color:#999999;text-align:center;line-height:1.6;">
+                            &copy; <span th:text="${distributorName ?: companyName}">Zuqi</span>
+                            &bull; This is an automated purchase order notification. Please do not reply directly to this email.
+                        </p>
+                    </td>
+                </tr>
+
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

@@ -1,6 +1,8 @@
 package com.zuqi.service.impl;
 
+import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
 import com.zuqi.api.dto.inventory.*;
+import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.branch.DistributorBranch;
 import com.zuqi.domain.inventory.*;
 import com.zuqi.domain.product.Product;
@@ -8,9 +10,12 @@ import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
+import com.zuqi.service.ApprovalService;
 import com.zuqi.service.StockTransferService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -23,7 +28,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 @Service
@@ -42,7 +46,9 @@ public class StockTransferServiceImpl implements StockTransferService {
     private final UserRepository userRepository;
     private final com.zuqi.util.SecurityUtils securityUtils;
 
-    private static final AtomicInteger transferCounter = new AtomicInteger(1);
+    @Lazy @Autowired
+    private ApprovalService approvalService;
+
 
     @Override
     @Transactional
@@ -70,7 +76,7 @@ public class StockTransferServiceImpl implements StockTransferService {
         }
 
         StockTransfer transfer = StockTransfer.builder()
-                .referenceNumber(generateTransferRef())
+                .referenceNumber(generateTransferRef(sourceWarehouse.getDistributor().getName()))
                 .sourceWarehouse(sourceWarehouse)
                 .destinationWarehouse(destinationWarehouse)
                 .sourceBranch(sourceBranch)
@@ -93,8 +99,24 @@ public class StockTransferServiceImpl implements StockTransferService {
             transfer.getItems().add(item);
         }
 
+        boolean needsApproval = securityUtils.currentUserRequiresApprovalFor("STOCK_TRANSFERS");
+        transfer.setApprovalStatus(needsApproval ? "PENDING_APPROVAL" : "NOT_REQUIRED");
+
         transfer = transferRepository.save(transfer);
         log.info("Created stock transfer {}", transfer.getReferenceNumber());
+
+        if (needsApproval && requestedByUserId != null) {
+            approvalService.createRequest(requestedByUserId, CreateApprovalRequestDto.builder()
+                    .workflowType(ApprovalWorkflowType.STOCK_TRANSFER)
+                    .entityType("STOCK_TRANSFER")
+                    .entityId(transfer.getId())
+                    .entityName(transfer.getReferenceNumber())
+                    .description("Stock transfer " + transfer.getReferenceNumber() + " from "
+                            + sourceWarehouse.getName() + " to " + destinationWarehouse.getName())
+                    .requiredApprovals(1)
+                    .build());
+        }
+
         return mapToResponse(transfer);
     }
 
@@ -246,9 +268,26 @@ public class StockTransferServiceImpl implements StockTransferService {
                 .orElseThrow(() -> new ResourceNotFoundException("StockTransfer", "id", id));
     }
 
-    private String generateTransferRef() {
-        return "TRF-" + DateTimeFormatter.ofPattern("yyyyMMdd").format(LocalDateTime.now())
-                + "-" + String.format("%05d", transferCounter.getAndIncrement());
+    private String generateTransferRef(String distributorName) {
+        String prefix = initials(distributorName) + "-TRF-";
+        Integer maxNum = transferRepository.findMaxTransferNumberByPrefix(prefix);
+        int nextNum = (maxNum != null ? maxNum : 0) + 1;
+        return prefix + String.format("%02d", nextNum);
+    }
+
+    /** Extracts uppercase initials — e.g. "Menace Distributor" → "MD". */
+    static String initials(String name) {
+        if (name == null || name.isBlank()) return "ORG";
+        String[] words = name.trim().split("\\s+");
+        StringBuilder sb = new StringBuilder();
+        for (String w : words) {
+            if (!w.isBlank()) sb.append(Character.toUpperCase(w.charAt(0)));
+        }
+        String result = sb.toString();
+        if (result.length() == 1 && words[0].length() >= 2) {
+            result = words[0].substring(0, 2).toUpperCase();
+        }
+        return result.isEmpty() ? "ORG" : result;
     }
 
     private StockTransferResponse mapToResponse(StockTransfer transfer) {

@@ -39,7 +39,7 @@ public class PromotionServiceImpl implements PromotionService {
     public PromotionResponse create(CreatePromotionRequest request) {
         Distributor distributor = resolveDistributor();
         UUID currentUserId = securityUtils.getCurrentUserId();
-        boolean needsApproval = securityUtils.currentUserHasWorkflowTier("INITIATOR");
+        boolean needsApproval = securityUtils.currentUserRequiresApprovalFor("PROMOTIONS");
 
         Product product = request.getProductId() != null
                 ? productRepository.findById(request.getProductId())
@@ -115,6 +115,14 @@ public class PromotionServiceImpl implements PromotionService {
             return promotionRepository.findByDistributorMerchantId(merchantId, pageable).map(this::toResponse);
         }
         return promotionRepository.findAll(pageable).map(this::toResponse);
+    }
+
+    @Override
+    @Transactional
+    public PromotionResponse deactivate(UUID id) {
+        Promotion promotion = findOrThrow(id);
+        promotion.setActive(false);
+        return toResponse(promotionRepository.save(promotion));
     }
 
     @Override

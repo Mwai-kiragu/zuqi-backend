@@ -9,7 +9,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -25,7 +24,6 @@ public class GlReportController {
     private final SecurityUtils securityUtils;
 
     @GetMapping("/trial-balance")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get trial balance for a period")
     public ResponseEntity<ApiResponse<TrialBalanceResponse>> getTrialBalance(
             @RequestParam UUID periodId,
@@ -35,7 +33,6 @@ public class GlReportController {
     }
 
     @GetMapping("/budget-variance")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get budget vs actual variance report")
     public ResponseEntity<ApiResponse<BudgetVarianceResponse>> getBudgetVariance(
             @RequestParam int year,
@@ -46,7 +43,6 @@ public class GlReportController {
     }
 
     @GetMapping("/general-ledger")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get general ledger report for a date range")
     public ResponseEntity<ApiResponse<GeneralLedgerResponse>> getGeneralLedger(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
@@ -57,7 +53,6 @@ public class GlReportController {
     }
 
     @GetMapping("/balance-sheet")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get balance sheet as of a date")
     public ResponseEntity<ApiResponse<BalanceSheetResponse>> getBalanceSheet(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOfDate,
@@ -67,7 +62,6 @@ public class GlReportController {
     }
 
     @GetMapping("/profit-loss")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get profit & loss statement for a date range")
     public ResponseEntity<ApiResponse<ProfitLossResponse>> getProfitAndLoss(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
@@ -78,7 +72,6 @@ public class GlReportController {
     }
 
     @GetMapping("/cash-flow")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get cash flow statement (indirect method) for a date range")
     public ResponseEntity<ApiResponse<CashFlowResponse>> getCashFlowStatement(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,

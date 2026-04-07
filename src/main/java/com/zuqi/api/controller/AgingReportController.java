@@ -10,7 +10,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -26,7 +25,6 @@ public class AgingReportController {
     private final SecurityUtils securityUtils;
 
     @GetMapping("/ar")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get Accounts Receivable aging report")
     public ResponseEntity<ApiResponse<ArAgingResponse>> getArAging(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOfDate,
@@ -37,7 +35,6 @@ public class AgingReportController {
     }
 
     @GetMapping("/ap")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get Accounts Payable aging report")
     public ResponseEntity<ApiResponse<ApAgingResponse>> getApAging(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate asOfDate,

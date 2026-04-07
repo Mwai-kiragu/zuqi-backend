@@ -24,7 +24,19 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
 
     Page<Product> findByDistributorIdAndActiveTrue(UUID distributorId, Pageable pageable);
 
+    /** Top-level only — excludes variant children (parentProduct IS NULL). */
+    Page<Product> findByDistributorIdAndActiveTrueAndParentProductIsNull(UUID distributorId, Pageable pageable);
+
+    /** Excludes parent templates (hasVariants=false) — shows standalone + variant children. */
+    Page<Product> findByDistributorIdAndActiveTrueAndHasVariantsFalse(UUID distributorId, Pageable pageable);
+
     Page<Product> findByDistributorIdAndActiveTrueAndCreatedAtBetween(UUID distributorId, LocalDateTime from, LocalDateTime to, Pageable pageable);
+
+    /** Top-level only with date range. */
+    Page<Product> findByDistributorIdAndActiveTrueAndParentProductIsNullAndCreatedAtBetween(UUID distributorId, LocalDateTime from, LocalDateTime to, Pageable pageable);
+
+    /** Excludes parent templates with date range. */
+    Page<Product> findByDistributorIdAndActiveTrueAndHasVariantsFalseAndCreatedAtBetween(UUID distributorId, LocalDateTime from, LocalDateTime to, Pageable pageable);
 
     Page<Product> findByActiveFalse(Pageable pageable);
 
@@ -51,6 +63,15 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
             @Param("searchTerm") String searchTerm,
             Pageable pageable);
 
+    /** Like searchByDistributor but also excludes parent templates (hasVariants=true) — for listable dropdowns. */
+    @Query("SELECT p FROM Product p WHERE p.distributor.id = :distributorId AND p.active = true AND p.hasVariants = false AND " +
+            "(LOWER(p.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
+            "LOWER(p.sku) LIKE LOWER(CONCAT('%', :searchTerm, '%')))")
+    Page<Product> searchListableByDistributor(
+            @Param("distributorId") UUID distributorId,
+            @Param("searchTerm") String searchTerm,
+            Pageable pageable);
+
     long countByDistributorIdAndActiveTrue(UUID distributorId);
 
     long countByCategoryIdAndActiveTrue(Long categoryId);
@@ -67,7 +88,17 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
     /** Scope to a merchant brand (MERCHANT_ADMIN). */
     Page<Product> findByDistributorMerchantIdAndActiveTrue(UUID merchantId, Pageable pageable);
 
+    /** Top-level only for a merchant brand. */
+    Page<Product> findByDistributorMerchantIdAndActiveTrueAndParentProductIsNull(UUID merchantId, Pageable pageable);
+
+    /** Excludes parent templates for a merchant brand. */
+    Page<Product> findByDistributorMerchantIdAndActiveTrueAndHasVariantsFalse(UUID merchantId, Pageable pageable);
+
     Page<Product> findByDistributorMerchantIdAndActiveTrueAndCreatedAtBetween(UUID merchantId, LocalDateTime from, LocalDateTime to, Pageable pageable);
+
+    Page<Product> findByDistributorMerchantIdAndActiveTrueAndParentProductIsNullAndCreatedAtBetween(UUID merchantId, LocalDateTime from, LocalDateTime to, Pageable pageable);
+
+    Page<Product> findByDistributorMerchantIdAndActiveTrueAndHasVariantsFalseAndCreatedAtBetween(UUID merchantId, LocalDateTime from, LocalDateTime to, Pageable pageable);
 
     Page<Product> findByDistributorMerchantIdAndActiveFalse(UUID merchantId, Pageable pageable);
 
@@ -141,6 +172,10 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
     @Modifying
     @Query("UPDATE Product p SET p.approvalStatus = :status WHERE p.id = :id")
     void updateApprovalStatus(@Param("id") UUID id, @Param("status") String status);
+
+    @Modifying
+    @Query("UPDATE Product p SET p.approvalStatus = 'APPROVED', p.active = true WHERE p.id = :id")
+    void approveAndActivate(@Param("id") UUID id);
 
     // Non-paginated exports
     List<Product> findByDistributorMerchantIdAndActiveTrue(UUID merchantId);

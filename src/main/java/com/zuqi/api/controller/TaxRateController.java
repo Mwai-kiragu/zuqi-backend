@@ -12,7 +12,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -28,7 +27,6 @@ public class TaxRateController {
     private final SecurityUtils securityUtils;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Create a tax rate")
     public ResponseEntity<ApiResponse<TaxRateResponse>> create(@Valid @RequestBody TaxRateRequest request) {
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
@@ -36,7 +34,6 @@ public class TaxRateController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Update a tax rate")
     public ResponseEntity<ApiResponse<TaxRateResponse>> update(
             @PathVariable UUID id, @Valid @RequestBody TaxRateRequest request) {
@@ -44,14 +41,12 @@ public class TaxRateController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get a tax rate by ID")
     public ResponseEntity<ApiResponse<TaxRateResponse>> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(taxRateService.getById(id)));
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "List all tax rates")
     public ResponseEntity<ApiResponse<Page<TaxRateResponse>>> getAll(Pageable pageable) {
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
@@ -59,7 +54,6 @@ public class TaxRateController {
     }
 
     @GetMapping("/active")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE','SALES')")
     @Operation(summary = "Get active tax rates (for dropdowns)")
     public ResponseEntity<ApiResponse<List<TaxRateResponse>>> getActive() {
         UUID distributorId = securityUtils.getDistributorIdForFiltering();
@@ -67,7 +61,6 @@ public class TaxRateController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN')")
     @Operation(summary = "Delete a tax rate")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
         taxRateService.delete(id);

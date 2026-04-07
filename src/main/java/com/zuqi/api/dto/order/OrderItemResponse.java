@@ -24,6 +24,7 @@ public class OrderItemResponse {
     private BigDecimal unitPrice;
     private BigDecimal discountPercent;
     private BigDecimal totalAmount;
+    private String promotionName;
 
     public static OrderItemResponse fromEntity(OrderItem item) {
         return OrderItemResponse.builder()
@@ -36,6 +37,7 @@ public class OrderItemResponse {
                 .unitPrice(item.getUnitPrice())
                 .discountPercent(item.getDiscountPercent())
                 .totalAmount(item.getTotalAmount())
+                .promotionName(item.getPromotionName())
                 .build();
     }
 }

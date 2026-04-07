@@ -21,9 +21,12 @@ import com.zuqi.exception.ValidationException;
 import com.zuqi.api.dto.inventory.StockAdjustmentRequest;
 import com.zuqi.domain.inventory.Stock;
 import com.zuqi.domain.inventory.StockMovement;
+import com.zuqi.domain.pricing.PriceList;
+import com.zuqi.domain.pricing.PriceListItem;
 import com.zuqi.repository.DistributorBranchRepository;
 import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.GlAccountRepository;
+import com.zuqi.repository.PriceListRepository;
 import com.zuqi.repository.ProductBranchPriceRepository;
 import com.zuqi.repository.ProductCategoryRepository;
 import com.zuqi.repository.ProductRepository;
@@ -63,6 +66,7 @@ public class ProductServiceImpl implements ProductService {
     private final StockRepository stockRepository;
     private final WarehouseRepository warehouseRepository;
     private final GlAccountRepository glAccountRepository;
+    private final PriceListRepository priceListRepository;
     private final SecurityUtils securityUtils;
     private final ApprovalService approvalService;
     private final InventoryService inventoryService;
@@ -108,6 +112,32 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<ProductResponse> getTopLevelProductsByDistributor(UUID distributorId, java.time.LocalDate startDate, java.time.LocalDate endDate, Pageable pageable) {
+        log.debug("Fetching top-level products for distributor: {}", distributorId);
+        boolean hasDates = startDate != null && endDate != null;
+        if (hasDates) {
+            java.time.LocalDateTime from = startDate.atStartOfDay();
+            java.time.LocalDateTime to = endDate.plusDays(1).atStartOfDay();
+            return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndActiveTrueAndParentProductIsNullAndCreatedAtBetween(distributorId, from, to, pageable));
+        }
+        return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndActiveTrueAndParentProductIsNull(distributorId, pageable));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProductResponse> getListableProductsByDistributor(UUID distributorId, java.time.LocalDate startDate, java.time.LocalDate endDate, Pageable pageable) {
+        log.debug("Fetching listable (non-template) products for distributor: {}", distributorId);
+        boolean hasDates = startDate != null && endDate != null;
+        if (hasDates) {
+            java.time.LocalDateTime from = startDate.atStartOfDay();
+            java.time.LocalDateTime to = endDate.plusDays(1).atStartOfDay();
+            return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndActiveTrueAndHasVariantsFalseAndCreatedAtBetween(distributorId, from, to, pageable));
+        }
+        return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndActiveTrueAndHasVariantsFalse(distributorId, pageable));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Page<ProductResponse> getProductsByCategory(Long categoryId, Pageable pageable) {
         log.debug("Fetching products for category: {}", categoryId);
         return enrichWithStockAndBranchPrices(productRepository.findByCategoryIdAndActiveTrue(categoryId, pageable));
@@ -131,6 +161,17 @@ public class ProductServiceImpl implements ProductService {
             return enrichWithStockAndBranchPrices(productRepository.searchByDistributor(effectiveDistributorId, searchTerm, pageable));
         }
 
+        return enrichWithStockAndBranchPrices(productRepository.searchByNameOrSku(searchTerm, pageable));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProductResponse> searchListableProducts(String searchTerm, UUID distributorId, Pageable pageable) {
+        log.debug("Searching listable products with term: {}, distributor: {}", searchTerm, distributorId);
+        UUID effectiveDistributorId = distributorId != null ? distributorId : securityUtils.getDistributorIdForFiltering();
+        if (effectiveDistributorId != null) {
+            return enrichWithStockAndBranchPrices(productRepository.searchListableByDistributor(effectiveDistributorId, searchTerm, pageable));
+        }
         return enrichWithStockAndBranchPrices(productRepository.searchByNameOrSku(searchTerm, pageable));
     }
 
@@ -234,7 +275,7 @@ public class ProductServiceImpl implements ProductService {
             product.setCategory(category);
         }
 
-        boolean needsApproval = securityUtils.currentUserHasWorkflowTier("INITIATOR");
+        boolean needsApproval = securityUtils.currentUserRequiresApprovalFor("PRODUCTS");
         product.setApprovalStatus(needsApproval ? "PENDING_APPROVAL" : "APPROVED");
         UUID currentUserId = securityUtils.getCurrentUserId();
         product.setCreatedById(currentUserId);
@@ -300,6 +341,9 @@ public class ProductServiceImpl implements ProductService {
             });
         }
 
+        // Auto-add product to the distributor's default price list
+        addToDefaultPriceList(savedProduct);
+
         ProductResponse response = ProductResponse.fromEntity(savedProduct);
         List<ProductBranchPrice> prices = branchPriceRepository.findByProductId(savedProduct.getId());
         if (!prices.isEmpty()) {
@@ -308,6 +352,45 @@ public class ProductServiceImpl implements ProductService {
                     .collect(Collectors.toList()));
         }
         return response;
+    }
+
+    private void addToDefaultPriceList(Product product) {
+        try {
+            // Skip parent templates — only add directly-sellable products (standalone or variants)
+            if (product.isHasVariants()) return;
+            Distributor distributor = product.getDistributor();
+            if (distributor == null) return;
+
+            PriceList priceList = priceListRepository
+                    .findByDistributorIdAndIsDefaultTrue(distributor.getId())
+                    .orElseGet(() -> {
+                        PriceList newList = PriceList.builder()
+                                .distributor(distributor)
+                                .name("Standard Price List")
+                                .isDefault(true)
+                                .active(true)
+                                .approvalStatus("APPROVED")
+                                .build();
+                        return priceListRepository.save(newList);
+                    });
+
+            boolean alreadyExists = priceList.getItems().stream()
+                    .anyMatch(i -> i.getProduct().getId().equals(product.getId()));
+            if (alreadyExists) return;
+
+            BigDecimal price = product.getUnitPrice() != null ? product.getUnitPrice() : BigDecimal.ZERO;
+            PriceListItem item = PriceListItem.builder()
+                    .priceList(priceList)
+                    .product(product)
+                    .unitPrice(price)
+                    .discountPercent(BigDecimal.ZERO)
+                    .build();
+            priceList.getItems().add(item);
+            priceListRepository.save(priceList);
+            log.info("Auto-added product {} to default price list {}", product.getId(), priceList.getId());
+        } catch (Exception e) {
+            log.warn("Could not auto-add product {} to default price list: {}", product.getId(), e.getMessage());
+        }
     }
 
     @Override
@@ -637,9 +720,11 @@ public class ProductServiceImpl implements ProductService {
                 .parentProduct(parent)
                 .variantName(request.getVariantName())
                 .variantAttributes(request.getVariantAttributes())
-                .approvalStatus("APPROVED")
                 .createdById(securityUtils.getCurrentUserId())
                 .build();
+
+        boolean needsApproval = securityUtils.currentUserRequiresApprovalFor("PRODUCTS");
+        variant.setApprovalStatus(needsApproval ? "PENDING_APPROVAL" : "APPROVED");
 
         if (request.getCategoryId() != null) {
             ProductCategory category = categoryRepository.findById(request.getCategoryId())
@@ -649,7 +734,25 @@ public class ProductServiceImpl implements ProductService {
             variant.setCategory(parent.getCategory());
         }
 
+        UUID currentUserId = securityUtils.getCurrentUserId();
         Product saved = productRepository.save(variant);
+
+        if (needsApproval && currentUserId != null) {
+            approvalService.createRequest(currentUserId, CreateApprovalRequestDto.builder()
+                    .workflowType(ApprovalWorkflowType.PRODUCT_PRICE_EDIT)
+                    .entityType("PRODUCT")
+                    .entityId(saved.getId())
+                    .entityName(saved.getName())
+                    .description("New product variant: " + saved.getName())
+                    .requestedValues(Map.of(
+                            "name", saved.getName(),
+                            "sku", saved.getSku(),
+                            "unitPrice", Objects.toString(saved.getUnitPrice(), "")))
+                    .requiredApprovals(1)
+                    .build());
+        }
+
+        addToDefaultPriceList(saved);
         log.info("Variant created successfully: {}", saved.getId());
         return ProductResponse.fromEntity(saved);
     }

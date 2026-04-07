@@ -12,7 +12,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -29,7 +28,6 @@ public class CostCenterController {
     private final SecurityUtils securityUtils;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get all cost centers")
     public ResponseEntity<ApiResponse<List<CostCenterResponse>>> getAll(
             @RequestParam(required = false) UUID distributorId) {
@@ -38,14 +36,12 @@ public class CostCenterController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get cost center by ID")
     public ResponseEntity<ApiResponse<CostCenterResponse>> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(costCenterService.getById(id)));
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','FINANCE')")
     @Operation(summary = "Create a cost center")
     public ResponseEntity<ApiResponse<CostCenterResponse>> create(
             @Valid @RequestBody CostCenterRequest request,
@@ -57,7 +53,6 @@ public class CostCenterController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','FINANCE')")
     @Operation(summary = "Update a cost center")
     public ResponseEntity<ApiResponse<CostCenterResponse>> update(
             @PathVariable UUID id,
@@ -67,7 +62,6 @@ public class CostCenterController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','FINANCE')")
     @Operation(summary = "Deactivate a cost center")
     public ResponseEntity<ApiResponse<Void>> deactivate(
             @PathVariable UUID id,

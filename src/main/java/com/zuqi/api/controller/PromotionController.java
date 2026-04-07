@@ -50,6 +50,11 @@ public class PromotionController {
         return ResponseEntity.ok(ApiResponse.success("Promotion updated", promotionService.update(id, request)));
     }
 
+    @PostMapping("/{id}/deactivate")
+    public ResponseEntity<ApiResponse<PromotionResponse>> deactivate(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponse.success("Promotion deactivated", promotionService.deactivate(id)));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable UUID id) {
         promotionService.delete(id);

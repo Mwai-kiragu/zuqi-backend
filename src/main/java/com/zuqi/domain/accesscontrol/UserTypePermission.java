@@ -45,4 +45,9 @@ public class UserTypePermission {
     @Column(name = "can_approve", nullable = false)
     @Builder.Default
     private boolean canApprove = false;
+
+    /** When true, CREATE actions by this UserType on this module are routed through approval. */
+    @Column(name = "requires_approval", nullable = false)
+    @Builder.Default
+    private boolean requiresApproval = false;
 }

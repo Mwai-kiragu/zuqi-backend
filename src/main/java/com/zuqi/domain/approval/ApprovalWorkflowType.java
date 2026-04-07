@@ -22,6 +22,7 @@ public enum ApprovalWorkflowType {
     STOCK_ADJUSTMENT,
     STOCK_WRITE_OFF,
     STOCK_TAKE_POSTING,
+    STOCK_TRANSFER,
 
     // Procurement
     PURCHASE_REQUISITION,
@@ -36,6 +37,8 @@ public enum ApprovalWorkflowType {
     CREDIT_NOTE,
     WRITE_OFF_APPROVAL,
     JOURNAL_ENTRY,
+    INVOICE_CREATION,
+    CUSTOMER_CREATION,
 
     // User Management
     USER_CREATION,

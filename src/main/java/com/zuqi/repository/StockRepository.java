@@ -74,10 +74,12 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
 
     @Query("SELECT s FROM Stock s WHERE " +
             "(:distributorId IS NULL OR s.warehouse.distributor.id = :distributorId) AND " +
-            "(:warehouseId IS NULL OR s.warehouse.id = :warehouseId)")
+            "(:warehouseId IS NULL OR s.warehouse.id = :warehouseId) AND " +
+            "(:branchId IS NULL OR s.warehouse.branch.id = :branchId)")
     Page<Stock> findByFilters(
             @Param("distributorId") UUID distributorId,
             @Param("warehouseId") UUID warehouseId,
+            @Param("branchId") UUID branchId,
             Pageable pageable);
 
     @Query("SELECT s FROM Stock s JOIN FETCH s.warehouse JOIN FETCH s.product WHERE s.warehouse.distributor.id = :distributorId")

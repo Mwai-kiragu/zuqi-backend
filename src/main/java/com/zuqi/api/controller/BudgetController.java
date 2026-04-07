@@ -11,7 +11,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -28,7 +27,6 @@ public class BudgetController {
     private final SecurityUtils securityUtils;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get budgets by year and optional month")
     public ResponseEntity<ApiResponse<List<BudgetResponse>>> getBudgets(
             @RequestParam int year,
@@ -42,7 +40,6 @@ public class BudgetController {
     }
 
     @PostMapping("/bulk")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','FINANCE')")
     @Operation(summary = "Bulk create or update budgets for a period")
     public ResponseEntity<ApiResponse<List<BudgetResponse>>> bulkUpsert(
             @Valid @RequestBody BudgetBulkRequest request,

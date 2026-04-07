@@ -2,7 +2,9 @@ package com.zuqi.util;
 
 import com.zuqi.domain.accesscontrol.UserTypePermission;
 import com.zuqi.domain.user.User;
+import java.util.Optional;
 import com.zuqi.repository.DistributorRepository;
+import com.zuqi.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -16,6 +18,7 @@ import java.util.UUID;
 public class SecurityUtils {
 
     private final DistributorRepository distributorRepository;
+    private final UserRepository userRepository;
 
     private static final String ROLE_SUPER_ADMIN = "SUPER_ADMIN";
 
@@ -110,13 +113,12 @@ public class SecurityUtils {
     public String getCurrentUserWorkflowTier() {
         User user = getCurrentUser();
         if (user == null) return null;
-        // UserGroup-based tier (new system)
-        if (user.getUserGroup() != null && user.getUserGroup().getWorkflowTier() != null) {
-            return user.getUserGroup().getWorkflowTier();
-        }
+        // UserGroup-based tier — query DB to avoid LazyInitializationException on detached proxy
+        Optional<String> tier = userRepository.findWorkflowTierByUserId(user.getId());
+        if (tier.isPresent() && tier.get() != null) return tier.get();
         // Legacy role-based tier (for existing INITIATOR/VERIFIER/AUTHORIZER role users)
-        for (String tier : List.of("INITIATOR", "VERIFIER", "AUTHORIZER")) {
-            if (hasRole(user, tier)) return tier;
+        for (String t : List.of("INITIATOR", "VERIFIER", "AUTHORIZER")) {
+            if (hasRole(user, t)) return t;
         }
         return null;
     }
@@ -125,7 +127,14 @@ public class SecurityUtils {
      * Returns true if the current user's workflow tier matches the given tier.
      */
     public boolean currentUserHasWorkflowTier(String tier) {
-        return tier != null && tier.equals(getCurrentUserWorkflowTier());
+        if (tier == null) return false;
+        String stored = getCurrentUserWorkflowTier();
+        if (stored == null) return false;
+        // Support comma-separated multi-tier values (e.g. "INITIATOR,VERIFIER")
+        for (String t : stored.split(",")) {
+            if (tier.equals(t.trim())) return true;
+        }
+        return false;
     }
 
     /**
@@ -140,9 +149,8 @@ public class SecurityUtils {
         for (String adminRole : List.of("SUPER_ADMIN", "DISTRIBUTOR_ADMIN", "MERCHANT_ADMIN")) {
             if (hasRole(user, adminRole)) return true;
         }
-        // Check UserType permissions
-        if (user.getUserGroup() == null || user.getUserGroup().getUserType() == null) return false;
-        return user.getUserGroup().getUserType().getPermissions().stream()
+        List<UserTypePermission> permissions = userRepository.findUserTypePermissionsByUserId(user.getId());
+        return permissions.stream()
                 .filter(p -> p.getModule().equalsIgnoreCase(module))
                 .findFirst()
                 .map(p -> switch (action.toUpperCase()) {
@@ -156,21 +164,31 @@ public class SecurityUtils {
                 .orElse(false);
     }
 
-    /**
-     * Returns the active branch UUID from the JWT, or null if no branch context.
-     */
+    public boolean currentUserRequiresApprovalFor(String module) {
+        User user = getCurrentUser();
+        if (user == null) return false;
+
+        // System admins bypass approval
+        for (String adminRole : List.of("SUPER_ADMIN", "DISTRIBUTOR_ADMIN", "MERCHANT_ADMIN")) {
+            if (hasRole(user, adminRole)) return false;
+        }
+
+        if (getCurrentUserWorkflowTier() != null) return true;
+
+        // Fallback: check per-module requiresApproval flag on UserType
+        List<UserTypePermission> permissions = userRepository.findUserTypePermissionsByUserId(user.getId());
+        return permissions.stream()
+                .filter(p -> p.getModule().equalsIgnoreCase(module))
+                .findFirst()
+                .map(UserTypePermission::isRequiresApproval)
+                .orElse(false);
+    }
+
     public UUID getCurrentBranchId() {
         User user = getCurrentUser();
         return user != null ? user.getActiveBranchId() : null;
     }
 
-    /**
-     * Returns the effective branch filter to use in queries:
-     * - null  →  no branch filter (show all branches) for SUPER_ADMIN, HQ branch, or no branch selected
-     * - UUID  →  filter to this specific branch
-     *
-     * Business rule: the HQ branch represents the whole business, so it sees everything.
-     */
     public UUID getEffectiveBranchId() {
         if (canAccessAllData()) {
             return null; // SUPER_ADMIN always sees everything

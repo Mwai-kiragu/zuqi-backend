@@ -28,11 +28,16 @@ import com.zuqi.repository.PosSaleRepository;
 import com.zuqi.repository.ProductRepository;
 import com.zuqi.repository.StockRepository;
 import com.zuqi.repository.WarehouseRepository;
+import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
+import com.zuqi.domain.approval.ApprovalWorkflowType;
+import com.zuqi.service.ApprovalService;
 import com.zuqi.service.EmailService;
 import com.zuqi.service.GlAutoPostingService;
 import com.zuqi.service.InvoiceService;
 import com.zuqi.service.PaymentService;
 import com.zuqi.util.SecurityUtils;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -75,6 +80,9 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final SecurityUtils securityUtils;
     private final PaymentService paymentService;
     private final GlAutoPostingService glAutoPostingService;
+
+    @Lazy @Autowired
+    private ApprovalService approvalService;
 
     @Override
     @Transactional
@@ -127,7 +135,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                 : (customer.getPaymentTermsDays() != null ? customer.getPaymentTermsDays() : 30);
 
         Invoice invoice = Invoice.builder()
-                .invoiceNumber(generateInvoiceNumber(distributor.getName()))
+                .invoiceNumber(generateInvoiceNumber(distributor.getId(), distributor.getName()))
                 .sourceType("MANUAL")
                 .distributor(distributor)
                 .merchant(customer)
@@ -152,6 +160,28 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoiceItemRepository.saveAll(items);
         saved.setInvoiceItems(items);
 
+        // Approval routing: if user requires approval for INVOICES, leave invoice as DRAFT and queue
+        UUID currentUserId = securityUtils.getCurrentUserId();
+        if (securityUtils.currentUserRequiresApprovalFor("INVOICES") && currentUserId != null) {
+            approvalService.createRequest(currentUserId, CreateApprovalRequestDto.builder()
+                    .workflowType(ApprovalWorkflowType.INVOICE_CREATION)
+                    .entityType("INVOICE")
+                    .entityId(saved.getId())
+                    .entityName(saved.getInvoiceNumber())
+                    .description("Manual invoice " + saved.getInvoiceNumber() + " for " + customer.getBusinessName()
+                            + " — total KES " + saved.getTotalAmount())
+                    .amount(saved.getTotalAmount())
+                    .requiredApprovals(1)
+                    .build());
+            log.info("Invoice {} queued for approval (status: DRAFT)", saved.getInvoiceNumber());
+            return InvoiceResponse.fromEntity(saved);
+        }
+
+        // No approval needed — activate immediately
+        saved.setStatus(InvoiceStatus.UNPAID);
+        final Invoice activatedInvoice = invoiceRepository.save(saved);
+        saved = activatedInvoice;
+
         // Deduct stock if warehouse specified
         if (request.getWarehouseId() != null) {
             warehouseRepository.findById(request.getWarehouseId()).ifPresent(warehouse -> {
@@ -162,7 +192,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                                     stock.setQuantity(stock.getQuantity().subtract(BigDecimal.valueOf(item.getQuantity())));
                                     stockRepository.save(stock);
                                     log.info("Deducted {} of '{}' for manual invoice {}",
-                                            item.getQuantity(), item.getProduct().getName(), saved.getInvoiceNumber());
+                                            item.getQuantity(), item.getProduct().getName(), activatedInvoice.getInvoiceNumber());
                                 });
                     }
                 }
@@ -213,7 +243,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         }
 
         // Generate invoice number
-        String invoiceNumber = generateInvoiceNumber(order.getDistributor().getName());
+        String invoiceNumber = generateInvoiceNumber(order.getDistributor().getId(), order.getDistributor().getName());
 
         // Calculate due date based on payment terms
         LocalDate dueDate = LocalDate.now();
@@ -230,6 +260,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                 .amount(order.getTotalAmount())
                 .subtotal(order.getSubtotal())
                 .discountAmount(order.getDiscountAmount())
+                .taxAmount(order.getTaxAmount() != null ? order.getTaxAmount() : BigDecimal.ZERO)
                 .totalAmount(order.getTotalAmount())
                 .paidAmount(order.getPaidAmount() != null ? order.getPaidAmount() : BigDecimal.ZERO)
                 .status(InvoiceStatus.DRAFT)
@@ -316,7 +347,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         }
 
         // Create new invoice
-        String invoiceNumber = generateInvoiceNumber(sale.getBranch().getDistributor().getName());
+        String invoiceNumber = generateInvoiceNumber(sale.getBranch().getDistributor().getId(), sale.getBranch().getDistributor().getName());
         Invoice invoice = Invoice.builder()
                 .invoiceNumber(invoiceNumber)
                 .sourceType("POS_SALE")
@@ -682,10 +713,11 @@ public class InvoiceServiceImpl implements InvoiceService {
         }
     }
 
-    private String generateInvoiceNumber(String distributorName) {
-        Integer maxNum = invoiceRepository.findMaxStandardInvoiceNumber();
+    private String generateInvoiceNumber(UUID distributorId, String distributorName) {
+        String prefix = initials(distributorName) + "-INV-";
+        Integer maxNum = invoiceRepository.findMaxInvoiceNumberByDistributorAndPrefix(distributorId, prefix);
         int nextNum = (maxNum != null ? maxNum : 0) + 1;
-        return "INV-" + String.format("%02d", nextNum);
+        return prefix + String.format("%02d", nextNum);
     }
 
     /** Extracts uppercase initials — e.g. "Menace Distributor" → "MD". */

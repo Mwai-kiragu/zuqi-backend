@@ -12,7 +12,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -29,7 +28,6 @@ public class GlAccountController {
     private final SecurityUtils securityUtils;
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get all GL accounts")
     public ResponseEntity<ApiResponse<List<GlAccountResponse>>> getAll(
             @RequestParam(required = false) UUID distributorId) {
@@ -39,14 +37,12 @@ public class GlAccountController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN','FINANCE')")
     @Operation(summary = "Get GL account by ID")
     public ResponseEntity<ApiResponse<GlAccountResponse>> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success(glAccountService.getById(id)));
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','FINANCE')")
     @Operation(summary = "Create a GL account")
     public ResponseEntity<ApiResponse<GlAccountResponse>> create(
             @Valid @RequestBody GlAccountRequest request,
@@ -58,7 +54,6 @@ public class GlAccountController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','FINANCE')")
     @Operation(summary = "Update a GL account")
     public ResponseEntity<ApiResponse<GlAccountResponse>> update(
             @PathVariable UUID id,
@@ -68,7 +63,6 @@ public class GlAccountController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','FINANCE')")
     @Operation(summary = "Deactivate a GL account")
     public ResponseEntity<ApiResponse<Void>> deactivate(
             @PathVariable UUID id,
@@ -78,7 +72,6 @@ public class GlAccountController {
     }
 
     @PostMapping("/seed")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','MERCHANT_ADMIN','DISTRIBUTOR_ADMIN')")
     @Operation(summary = "Seed default chart of accounts",
                description = "Creates a standard chart of accounts with system account types pre-tagged for auto-posting. Skips any account whose code already exists.")
     public ResponseEntity<ApiResponse<List<GlAccountResponse>>> seedDefaultAccounts(

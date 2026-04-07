@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.LockedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -56,7 +57,15 @@ public class GlobalExceptionHandler {
         log.warn("Account locked: {}", ex.getMessage());
         return ResponseEntity
                 .status(HttpStatus.UNAUTHORIZED)
-                .body(ApiResponse.error("Your account has been locked. Please contact support."));
+                .body(ApiResponse.error("Your account has been locked. Please contact your administrator."));
+    }
+
+    @ExceptionHandler(DisabledException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDisabledException(DisabledException ex) {
+        log.warn("Account disabled: {}", ex.getMessage());
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error("Your account has been disabled. Please contact your administrator."));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

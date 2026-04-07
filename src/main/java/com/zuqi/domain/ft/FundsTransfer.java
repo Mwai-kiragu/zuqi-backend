@@ -105,6 +105,7 @@ public class FundsTransfer {
     @JoinColumn(name = "supplier_bill_id")
     private SupplierBill supplierBill;
 
+    @Builder.Default
     @Column(name = "approval_status", length = 30)
     private String approvalStatus = "NOT_REQUIRED";
 

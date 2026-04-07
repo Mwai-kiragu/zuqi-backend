@@ -49,7 +49,6 @@ public class DemandForecastController {
      * List all stored demand forecasts for a distributor (paginated).
      */
     @GetMapping("/forecasts")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SALES_REP', 'DISTRIBUTOR_ADMIN')")
     @Operation(
             summary = "List demand forecasts",
             description = "Paginated list of stored demand forecasts for the distributor"
@@ -79,7 +78,6 @@ public class DemandForecastController {
      * Get demand forecast for a specific merchant-product combination.
      */
     @GetMapping("/forecasts/{merchantId}/{productId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SALES_REP', 'DISTRIBUTOR_ADMIN')")
     @Operation(
             summary = "Get demand forecast for merchant-product",
             description = "Returns AI-predicted demand quantity for next week with confidence score"
@@ -202,7 +200,6 @@ public class DemandForecastController {
      * Get demand forecasting model health status.
      */
     @GetMapping("/health")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SALES_REP', 'DISTRIBUTOR_ADMIN')")
     @Operation(
             summary = "Check demand forecasting model health",
             description = "Returns model status and availability"

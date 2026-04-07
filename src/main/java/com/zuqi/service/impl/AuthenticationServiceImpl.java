@@ -468,12 +468,20 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         log.info("Authenticating user: {}", request.getEmail());
 
         // Authenticate with Spring Security
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(
-                        request.getEmail(),
-                        request.getPassword()
-                )
-        );
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            request.getEmail(),
+                            request.getPassword()
+                    )
+            );
+        } catch (org.springframework.security.authentication.LockedException e) {
+            throw new AuthenticationException("Your account has been locked. Please contact your administrator.");
+        } catch (org.springframework.security.authentication.DisabledException e) {
+            throw new AuthenticationException("Your account has been disabled. Please contact your administrator.");
+        } catch (org.springframework.security.core.AuthenticationException e) {
+            throw new AuthenticationException("Invalid email or password");
+        }
 
         // Find user
         User user = userRepository.findByEmail(request.getEmail())
@@ -500,6 +508,13 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 ActivityAction.LOGIN, "USER", user.getId(),
                 user.getEmail(), "AUTH", "User logged in successfully");
 
+        String distName = user.getDistributorId() != null
+                ? distributorRepository.findById(user.getDistributorId()).map(d -> d.getName()).orElse(null)
+                : null;
+        String mName = user.getMerchantId() != null
+                ? merchantRepository.findById(user.getMerchantId()).map(m -> m.getName()).orElse(null)
+                : null;
+
         return AuthenticationResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
@@ -519,6 +534,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .workflowTier(resolveWorkflowTier(user))
                 .userGroupId(user.getUserGroup() != null ? user.getUserGroup().getId() : null)
                 .userGroupName(user.getUserGroup() != null ? user.getUserGroup().getName() : null)
+                .distributorName(distName)
+                .merchantName(mName)
                 .build();
     }
 
@@ -547,6 +564,13 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         String accessToken = jwtService.generateUserAccessToken(user);
         String newRefreshToken = createRefreshToken(user);
 
+        String distName = user.getDistributorId() != null
+                ? distributorRepository.findById(user.getDistributorId()).map(d -> d.getName()).orElse(null)
+                : null;
+        String mName = user.getMerchantId() != null
+                ? merchantRepository.findById(user.getMerchantId()).map(m -> m.getName()).orElse(null)
+                : null;
+
         return AuthenticationResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(newRefreshToken)
@@ -565,6 +589,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 .workflowTier(resolveWorkflowTier(user))
                 .userGroupId(user.getUserGroup() != null ? user.getUserGroup().getId() : null)
                 .userGroupName(user.getUserGroup() != null ? user.getUserGroup().getName() : null)
+                .distributorName(distName)
+                .merchantName(mName)
                 .build();
     }
 

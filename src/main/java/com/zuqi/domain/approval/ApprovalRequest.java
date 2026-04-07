@@ -22,7 +22,8 @@ import java.util.UUID;
         @Index(name = "idx_approval_requests_type", columnList = "workflow_type"),
         @Index(name = "idx_approval_requests_entity", columnList = "entity_type, entity_id"),
         @Index(name = "idx_approval_requests_requester", columnList = "requested_by_id"),
-        @Index(name = "idx_approval_requests_created", columnList = "created_at")
+        @Index(name = "idx_approval_requests_created", columnList = "created_at"),
+        @Index(name = "idx_approval_requests_distributor", columnList = "distributor_id")
 })
 @EntityListeners(AuditingEntityListener.class)
 @Getter
@@ -51,6 +52,9 @@ public class ApprovalRequest {
 
     @Column(name = "entity_name", length = 255)
     private String entityName;
+
+    @Column(name = "distributor_id")
+    private UUID distributorId;
 
     @Column(name = "requested_by_id", nullable = false)
     private UUID requestedById;

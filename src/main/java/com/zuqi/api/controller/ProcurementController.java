@@ -20,7 +20,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
@@ -55,7 +54,6 @@ public class ProcurementController {
 
     @PostMapping("/v1/purchase-requisitions")
     @Operation(summary = "Create purchase requisition")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN', 'FINANCE', 'WAREHOUSE_MANAGER', 'INITIATOR')")
     public ResponseEntity<ApiResponse<PurchaseRequisitionResponse>> createPurchaseRequisition(
             @Valid @RequestBody PurchaseRequisitionRequest request,
             @AuthenticationPrincipal User currentUser) {
@@ -75,7 +73,6 @@ public class ProcurementController {
 
     @PostMapping("/v1/purchase-requisitions/{id}/approve")
     @Operation(summary = "Approve purchase requisition")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN', 'FINANCE', 'AUTHORIZER', 'VERIFIER')")
     public ResponseEntity<ApiResponse<PurchaseRequisitionResponse>> approvePurchaseRequisition(
             @PathVariable UUID id,
             @AuthenticationPrincipal User currentUser) {
@@ -85,7 +82,6 @@ public class ProcurementController {
 
     @PostMapping("/v1/purchase-requisitions/{id}/reject")
     @Operation(summary = "Reject purchase requisition")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN', 'FINANCE', 'AUTHORIZER', 'VERIFIER')")
     public ResponseEntity<ApiResponse<PurchaseRequisitionResponse>> rejectPurchaseRequisition(
             @PathVariable UUID id,
             @RequestBody RejectBody body,
@@ -105,7 +101,6 @@ public class ProcurementController {
 
     @PostMapping("/v1/purchase-requisitions/{id}/convert-to-po")
     @Operation(summary = "Convert approved requisition to purchase order")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN', 'FINANCE', 'WAREHOUSE_MANAGER')")
     public ResponseEntity<ApiResponse<PurchaseOrderResponse>> convertToPo(
             @PathVariable UUID id,
             @Valid @RequestBody PurchaseOrderRequest request,
@@ -137,7 +132,6 @@ public class ProcurementController {
 
     @PostMapping("/v1/purchase-orders")
     @Operation(summary = "Create purchase order")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN', 'FINANCE', 'WAREHOUSE_MANAGER', 'INITIATOR')")
     public ResponseEntity<ApiResponse<PurchaseOrderResponse>> createPurchaseOrder(
             @Valid @RequestBody PurchaseOrderRequest request,
             @AuthenticationPrincipal User currentUser) {
@@ -148,7 +142,6 @@ public class ProcurementController {
 
     @PostMapping("/v1/purchase-orders/{id}/send")
     @Operation(summary = "Send purchase order to supplier")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN', 'FINANCE', 'WAREHOUSE_MANAGER')")
     public ResponseEntity<ApiResponse<PurchaseOrderResponse>> sendPurchaseOrder(
             @PathVariable UUID id,
             @AuthenticationPrincipal User currentUser) {
@@ -158,7 +151,6 @@ public class ProcurementController {
 
     @PostMapping("/v1/purchase-orders/{id}/confirm")
     @Operation(summary = "Confirm purchase order (supplier acknowledged)")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN', 'FINANCE', 'WAREHOUSE_MANAGER')")
     public ResponseEntity<ApiResponse<PurchaseOrderResponse>> confirmPurchaseOrder(
             @PathVariable UUID id,
             @AuthenticationPrincipal User currentUser) {
@@ -168,7 +160,6 @@ public class ProcurementController {
 
     @PostMapping("/v1/purchase-orders/{id}/cancel")
     @Operation(summary = "Cancel purchase order")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN', 'FINANCE', 'WAREHOUSE_MANAGER')")
     public ResponseEntity<ApiResponse<PurchaseOrderResponse>> cancelPurchaseOrder(
             @PathVariable UUID id,
             @AuthenticationPrincipal User currentUser) {

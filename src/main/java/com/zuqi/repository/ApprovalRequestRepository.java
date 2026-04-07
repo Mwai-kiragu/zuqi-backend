@@ -42,15 +42,23 @@ public interface ApprovalRequestRepository extends JpaRepository<ApprovalRequest
             WHERE (:status IS NULL OR ar.status = :status)
             AND (:workflowType IS NULL OR ar.workflowType = :workflowType)
             AND (:entityType IS NULL OR ar.entityType = :entityType)
+            AND (:distributorId IS NULL OR ar.distributorId = :distributorId)
             ORDER BY ar.createdAt DESC
             """)
     Page<ApprovalRequest> findWithFilters(
             @Param("status") ApprovalStatus status,
             @Param("workflowType") ApprovalWorkflowType workflowType,
             @Param("entityType") String entityType,
+            @Param("distributorId") UUID distributorId,
             Pageable pageable);
 
+    Page<ApprovalRequest> findByRequestedByIdAndDistributorId(UUID requestedById, UUID distributorId, Pageable pageable);
+
+    Page<ApprovalRequest> findByStatusAndDistributorId(ApprovalStatus status, UUID distributorId, Pageable pageable);
+
     long countByStatus(ApprovalStatus status);
+
+    long countByStatusAndDistributorId(ApprovalStatus status, UUID distributorId);
 
     long countByRequestedByIdAndStatus(UUID requestedById, ApprovalStatus status);
 }

@@ -36,6 +36,8 @@ public class OrderResponse {
     private OrderType orderType;
     private BigDecimal subtotal;
     private BigDecimal discountAmount;
+    private BigDecimal taxAmount;
+    private String taxRateName;
     private BigDecimal totalAmount;
     private BigDecimal paidAmount;
     private PaymentStatus paymentStatus;
@@ -48,6 +50,7 @@ public class OrderResponse {
     private UUID assignedDriverId;
     private String assignedDriverName;
     private LocalDateTime assignedAt;
+    private String approvalStatus;
     private List<OrderItemResponse> items;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -69,6 +72,8 @@ public class OrderResponse {
                 .orderType(order.getOrderType())
                 .subtotal(order.getSubtotal())
                 .discountAmount(order.getDiscountAmount())
+                .taxAmount(order.getTaxAmount())
+                .taxRateName(order.getTaxRateName())
                 .totalAmount(order.getTotalAmount())
                 .paidAmount(order.getPaidAmount())
                 .paymentStatus(order.getPaymentStatus())
@@ -81,6 +86,7 @@ public class OrderResponse {
                 .assignedDriverId(order.getAssignedDriver() != null ? order.getAssignedDriver().getId() : null)
                 .assignedDriverName(order.getAssignedDriver() != null ? order.getAssignedDriver().getFirstName() + " " + order.getAssignedDriver().getLastName() : null)
                 .assignedAt(order.getAssignedAt())
+                .approvalStatus(order.getApprovalStatus())
                 .items(order.getItems() != null
                         ? order.getItems().stream().map(OrderItemResponse::fromEntity).toList()
                         : null)

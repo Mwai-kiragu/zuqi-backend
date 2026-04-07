@@ -5,6 +5,7 @@ import com.zuqi.domain.inventory.StockTransferStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -75,4 +76,12 @@ public interface StockTransferRepository extends JpaRepository<StockTransfer, UU
             @Param("from") LocalDateTime from,
             @Param("to") LocalDateTime to,
             Pageable pageable);
+
+    @Query("SELECT COALESCE(MAX(CAST(SUBSTRING(t.referenceNumber, LENGTH(:prefix) + 1) AS integer)), 0) " +
+            "FROM StockTransfer t WHERE t.referenceNumber LIKE CONCAT(:prefix, '%')")
+    Integer findMaxTransferNumberByPrefix(@Param("prefix") String prefix);
+
+    @Modifying
+    @Query("UPDATE StockTransfer t SET t.approvalStatus = :status WHERE t.id = :id")
+    void updateApprovalStatus(@Param("id") UUID id, @Param("status") String status);
 }

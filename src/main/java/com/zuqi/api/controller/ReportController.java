@@ -11,7 +11,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -27,7 +26,6 @@ public class ReportController {
 
     @GetMapping("/sales")
     @Operation(summary = "Generate sales report", description = "Generates a sales report for the specified period")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN', 'FINANCE')")
     public ResponseEntity<ApiResponse<SalesReportResponse>> getSalesReport(
             @Parameter(description = "Distributor ID") @RequestParam UUID distributorId,
             @Parameter(description = "Start date") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
@@ -39,7 +37,6 @@ public class ReportController {
 
     @GetMapping("/inventory")
     @Operation(summary = "Generate inventory report", description = "Generates an inventory status report")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN', 'WAREHOUSE_MANAGER', 'FINANCE')")
     public ResponseEntity<ApiResponse<InventoryReportResponse>> getInventoryReport(
             @Parameter(description = "Distributor ID") @RequestParam UUID distributorId) {
 
@@ -49,7 +46,6 @@ public class ReportController {
 
     @GetMapping("/payments")
     @Operation(summary = "Generate payment report", description = "Generates a payment/collection report")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'DISTRIBUTOR_ADMIN', 'MERCHANT_ADMIN', 'FINANCE')")
     public ResponseEntity<ApiResponse<PaymentReportResponse>> getPaymentReport(
             @Parameter(description = "Distributor ID") @RequestParam UUID distributorId,
             @Parameter(description = "Start date") @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,

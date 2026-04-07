@@ -1,5 +1,6 @@
 package com.zuqi.repository;
 
+import com.zuqi.domain.accesscontrol.UserTypePermission;
 import com.zuqi.domain.user.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,6 +29,10 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Page<User> findByActiveTrue(Pageable pageable);
 
     Page<User> findByActiveFalse(Pageable pageable);
+
+    Page<User> findByDistributorId(UUID distributorId, Pageable pageable);
+
+    Page<User> findByDistributorIdAndActiveTrue(UUID distributorId, Pageable pageable);
 
     Page<User> findByDistributorIdAndActiveFalse(UUID distributorId, Pageable pageable);
 
@@ -66,6 +71,23 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     // Global queries for SUPER_ADMIN/ADMIN (no distributor filter)
     @Query("SELECT COUNT(u) FROM User u JOIN u.roles r WHERE r.name = :roleName AND u.active = true")
     long countByRole(@Param("roleName") String roleName);
+
+    /** Count all active users belonging to a distributor. */
+    @Query("SELECT COUNT(u) FROM User u WHERE u.distributorId = :distributorId AND u.active = true")
+    long countActiveByDistributorId(@Param("distributorId") UUID distributorId);
+
+    /** Count all active users in the system (SUPER_ADMIN view). */
+    long countByActiveTrue();
+
+    /** Fetch all UserType permissions for a user via their UserGroup → UserType chain. */
+    @Query("SELECT p FROM UserType ut JOIN ut.permissions p " +
+           "WHERE ut.id = (SELECT u.userGroup.userType.id FROM User u WHERE u.id = :userId " +
+           "AND u.userGroup IS NOT NULL AND u.userGroup.userType IS NOT NULL)")
+    List<UserTypePermission> findUserTypePermissionsByUserId(@Param("userId") UUID userId);
+
+    /** Fetch the workflowTier from the user's UserGroup (avoids LazyInitializationException on detached User). */
+    @Query("SELECT ug.workflowTier FROM User u JOIN u.userGroup ug WHERE u.id = :userId")
+    Optional<String> findWorkflowTierByUserId(@Param("userId") UUID userId);
 
     /** Scope to a merchant brand (MERCHANT_ADMIN) — users who belong to the brand or its distributors. */
     @Query("SELECT u FROM User u WHERE u.merchantId = :merchantId OR " +
@@ -125,4 +147,10 @@ public interface UserRepository extends JpaRepository<User, UUID> {
             "LOWER(u.email) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
             "LOWER(u.phoneNumber) LIKE LOWER(CONCAT('%', :search, '%')))")
     Page<User> searchInactiveByMerchantScope(@Param("merchantId") UUID merchantId, @Param("search") String search, Pageable pageable);
+
+    @Query("SELECT DISTINCT u FROM User u LEFT JOIN u.roles r LEFT JOIN u.userGroup ug " +
+            "WHERE u.distributorId = :distributorId AND u.active = true " +
+            "AND (r.name IN ('VERIFIER','AUTHORIZER','DISTRIBUTOR_ADMIN') " +
+            "     OR ug.workflowTier IN ('VERIFIER','AUTHORIZER'))")
+    List<User> findActiveApproversByDistributorId(@Param("distributorId") UUID distributorId);
 }

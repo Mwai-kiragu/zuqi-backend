@@ -3,6 +3,7 @@ package com.zuqi.service.impl;
 import com.zuqi.config.AppConfig;
 import com.zuqi.config.EmailConfig;
 import com.zuqi.domain.customer.Customer;
+import com.zuqi.domain.procurement.PurchaseOrder;
 import com.zuqi.domain.user.User;
 import com.zuqi.service.EmailService;
 import jakarta.mail.MessagingException;
@@ -173,6 +174,44 @@ public class EmailServiceImpl implements EmailService {
                 "customer-onboarding",
                 variables
         );
+    }
+
+    @Override
+    @Async
+    public void sendPurchaseOrderEmail(PurchaseOrder po, String distributorName) {
+        if (po.getSupplier() == null || po.getSupplier().getEmail() == null || po.getSupplier().getEmail().isBlank()) {
+            log.info("PO email skipped — supplier {} has no email address", po.getSupplier() != null ? po.getSupplier().getId() : "null");
+            return;
+        }
+        if (!emailConfig.isEnabled()) {
+            log.info("Email disabled. Would send PO {} to supplier: {}", po.getPoNumber(), po.getSupplier().getEmail());
+            return;
+        }
+
+        try {
+            Map<String, Object> variables = new HashMap<>();
+            variables.put("poNumber", po.getPoNumber());
+            variables.put("supplierName", po.getSupplier().getName());
+            variables.put("distributorName", distributorName != null ? distributorName : emailConfig.getFromName());
+            variables.put("sentAt", po.getSentAt() != null ? po.getSentAt().toLocalDate().toString() : java.time.LocalDate.now().toString());
+            variables.put("expectedDeliveryDate", po.getExpectedDeliveryDate() != null ? po.getExpectedDeliveryDate().toString() : "—");
+            variables.put("deliveryAddress", po.getDeliveryAddress());
+            variables.put("paymentTermsDays", po.getPaymentTermsDays());
+            variables.put("totalAmount", po.getTotalAmount());
+            variables.put("items", po.getItems() != null ? po.getItems() : java.util.Collections.emptyList());
+            variables.put("notes", po.getNotes());
+            variables.put("companyName", emailConfig.getFromName());
+
+            sendTemplatedEmail(
+                    po.getSupplier().getEmail(),
+                    "Purchase Order " + po.getPoNumber() + " from " + (distributorName != null ? distributorName : emailConfig.getFromName()),
+                    "po-notification",
+                    variables
+            );
+            log.info("PO email sent to supplier {} for PO {}", po.getSupplier().getEmail(), po.getPoNumber());
+        } catch (Exception e) {
+            log.error("Failed to send PO email for PO {}: {}", po.getPoNumber(), e.getMessage(), e);
+        }
     }
 
     @Override

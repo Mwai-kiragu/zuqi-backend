@@ -17,7 +17,7 @@ spring:
       idle-timeout: 300000
       connection-timeout: 20000
 
-  # JPA Configuration
+  # JPA Configuration be
   jpa:
     hibernate:
       ddl-auto: validate
@@ -50,7 +50,7 @@ spring:
     type: redis
     redis:
       time-to-live: 3600000
-      cache-null-values: false
+      cache-null-values: falsegi
     cache-names:
       # Feature caches (Phase 1 — original 9 models)
       - merchantFeatures
@@ -104,7 +104,7 @@ langchain4j:
   # RBS AI — primary LLM provider (OpenAI-compatible, vLLM-backed)
   rbs-ai:
     base-url: https://rbsai.rbrc.io
-    api-key: ${RBS_AI_API_KEY}
+    api-key: ${RBS_AI_API_KEY:not-configured}
     chat-model:
       model-name: qwen3-14b
       temperature: 0.1  # Low for consistency in credit scoring

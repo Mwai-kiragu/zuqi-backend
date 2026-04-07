@@ -21,11 +21,20 @@ public interface ProductService {
 
     Page<ProductResponse> getProductsByDistributor(UUID distributorId, LocalDate startDate, LocalDate endDate, Pageable pageable);
 
+    /** Same as getProductsByDistributor but excludes variant children (parentProduct IS NULL). */
+    Page<ProductResponse> getTopLevelProductsByDistributor(UUID distributorId, LocalDate startDate, LocalDate endDate, Pageable pageable);
+
+    /** Excludes parent templates (hasVariants=true) — returns standalone + variant children only. */
+    Page<ProductResponse> getListableProductsByDistributor(UUID distributorId, LocalDate startDate, LocalDate endDate, Pageable pageable);
+
     Page<ProductResponse> getInactiveProductsByDistributor(UUID distributorId, Pageable pageable);
 
     Page<ProductResponse> getProductsByCategory(Long categoryId, Pageable pageable);
 
     Page<ProductResponse> searchProducts(String searchTerm, UUID distributorId, Pageable pageable);
+
+    /** Search only listable products (active=true, hasVariants=false) — for dropdowns like PR/PO forms. */
+    Page<ProductResponse> searchListableProducts(String searchTerm, UUID distributorId, Pageable pageable);
 
     ProductResponse getProductById(UUID id);
 

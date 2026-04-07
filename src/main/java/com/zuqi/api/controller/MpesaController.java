@@ -29,7 +29,6 @@ public class MpesaController {
 
     @PostMapping("/activate")
     @Operation(summary = "Activate M-Pesa config", description = "Register a Paybill or Till for the current merchant")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<MpesaConfigResponse>> activateConfig(
             @Valid @RequestBody MpesaActivateRequest request) {
 
@@ -53,7 +52,6 @@ public class MpesaController {
 
     @GetMapping("/configs")
     @Operation(summary = "Get M-Pesa configs for current merchant (or all for SUPER_ADMIN)")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MERCHANT_ADMIN', 'DISTRIBUTOR_ADMIN', 'CASHIER', 'FINANCE')")
     public ResponseEntity<ApiResponse<List<MpesaConfigResponse>>> getConfigs(
             @RequestParam(required = false) UUID merchantId) {
 
@@ -68,7 +66,6 @@ public class MpesaController {
 
     @DeleteMapping("/configs/{configId}")
     @Operation(summary = "Deactivate an M-Pesa config")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<MpesaConfigResponse>> deactivateConfig(
             @PathVariable UUID configId) {
 
@@ -78,7 +75,6 @@ public class MpesaController {
 
     @PostMapping("/stk-push")
     @Operation(summary = "Initiate STK push", description = "Sends an M-Pesa payment prompt to a customer's phone")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MERCHANT_ADMIN', 'DISTRIBUTOR_ADMIN', 'CASHIER', 'FINANCE')")
     public ResponseEntity<ApiResponse<StkPushResponse>> initiateStk(
             @Valid @RequestBody StkPushRequest request) {
 
@@ -88,7 +84,6 @@ public class MpesaController {
 
     @GetMapping("/stk-push/{stkRequestId}/status")
     @Operation(summary = "Poll STK push status")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MERCHANT_ADMIN', 'DISTRIBUTOR_ADMIN', 'CASHIER', 'FINANCE')")
     public ResponseEntity<ApiResponse<StkPushResponse>> getStkStatus(
             @PathVariable UUID stkRequestId) {
 
@@ -98,7 +93,6 @@ public class MpesaController {
 
     @GetMapping("/cash")
     @Operation(summary = "Get cash payment status for current merchant")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MERCHANT_ADMIN', 'DISTRIBUTOR_ADMIN', 'CASHIER', 'FINANCE')")
     public ResponseEntity<ApiResponse<Boolean>> getCashEnabled(
             @RequestParam(required = false) UUID merchantId) {
         UUID resolvedId = resolveMerchantId(merchantId);
@@ -107,7 +101,6 @@ public class MpesaController {
 
     @PatchMapping("/cash")
     @Operation(summary = "Enable or disable cash payments for current merchant")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'MERCHANT_ADMIN')")
     public ResponseEntity<ApiResponse<Boolean>> setCashEnabled(
             @RequestParam(required = false) UUID merchantId,
             @RequestBody java.util.Map<String, Boolean> body) {
