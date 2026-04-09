@@ -25,10 +25,7 @@ Thumbs.db
 # Redis
 dump.rdb
 
-# Markdown files - ignore all except core documentation
-*.md
-!ai.md
-!CLAUDE.md
-!implementation_plan.md
-!plan.md
+# Markdown files - ignore docs folder, keep root README and CLAUDE
+docs/
 !README.md
+!CLAUDE.md
