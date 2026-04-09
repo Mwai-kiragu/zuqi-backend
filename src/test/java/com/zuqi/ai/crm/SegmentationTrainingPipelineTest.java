@@ -1,6 +1,7 @@
 package com.zuqi.ai.crm;
 
 import com.zuqi.ai.model.ModelRegistry;
+import com.zuqi.ai.pipeline.ModelEvaluator;
 import com.zuqi.ai.synthetic.SyntheticDataBundle;
 import com.zuqi.ai.synthetic.SyntheticDataConfig;
 import com.zuqi.ai.synthetic.SyntheticDataOrchestrator;
@@ -14,11 +15,11 @@ import org.tribuo.Trainer;
 import org.tribuo.clustering.ClusterID;
 
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -31,6 +32,7 @@ class SegmentationTrainingPipelineTest {
     @Mock private SyntheticCustomerAnalyticsFeatureBuilder featureBuilder;
     @Mock private SegmentationFeatureBuilder segmentationFeatureBuilder;
     @Mock private ModelRegistry modelRegistry;
+    @Mock private ModelEvaluator modelEvaluator;
     @Mock private Trainer<ClusterID> kMeansTrainer;
 
     private SegmentationTrainingPipeline pipeline;
@@ -39,7 +41,7 @@ class SegmentationTrainingPipelineTest {
     void setUp() {
         pipeline = new SegmentationTrainingPipeline(
                 orchestrator, featureBuilder, segmentationFeatureBuilder,
-                modelRegistry, kMeansTrainer);
+                modelRegistry, modelEvaluator, kMeansTrainer);
     }
 
     @Test
@@ -88,6 +90,14 @@ class SegmentationTrainingPipelineTest {
         @SuppressWarnings("unchecked")
         org.tribuo.Model<ClusterID> mockModel = mock(org.tribuo.Model.class);
         when(kMeansTrainer.train(any())).thenReturn(mockModel);
+
+        when(modelEvaluator.evaluateSegmentation(any(), any(), anyInt()))
+                .thenReturn(ModelEvaluator.SegmentationEvaluationResult.builder()
+                        .silhouetteScore(0.45)
+                        .passedQualityGate(true)
+                        .numClusters(5)
+                        .minClusterSize(10)
+                        .build());
 
         UUID modelId = UUID.randomUUID();
         AIModelRegistry registryEntry = mock(AIModelRegistry.class);

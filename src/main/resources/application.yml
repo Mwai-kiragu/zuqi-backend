@@ -17,7 +17,7 @@ spring:
       idle-timeout: 300000
       connection-timeout: 20000
 
-  # JPA Configuration be
+  # JPA Configuration
   jpa:
     hibernate:
       ddl-auto: validate
@@ -50,7 +50,7 @@ spring:
     type: redis
     redis:
       time-to-live: 3600000
-      cache-null-values: falsegi
+      cache-null-values: false
     cache-names:
       # Feature caches (Phase 1 — original 9 models)
       - merchantFeatures

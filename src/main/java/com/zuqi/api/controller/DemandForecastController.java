@@ -36,7 +36,14 @@ import java.util.UUID;
 @RequestMapping("/v1/ai/demand")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "AI - Demand Forecasting", description = "AI-powered demand forecasting and order suggestions")
+@Tag(name = "AI - Demand Forecasting", description =
+        "Two distinct AI capabilities share this controller: " +
+        "(1) Demand Forecasting — raw XGBoost regression predictions of how many units a merchant will " +
+        "order in the next 7 days, based on historical order sequences. Use GET /forecasts/{merchantId}/{productId} " +
+        "for a single merchant-SKU prediction, or GET /forecasts for the pre-computed batch stored in ai_demand_forecasts. " +
+        "(2) Order Suggestions — higher-level recommendations for a sales rep's visit. Wraps demand forecasts with " +
+        "safety-stock buffers, lead-time adjustments, and product ranking heuristics. Use GET /suggestions/{merchantId}. " +
+        "Do NOT use the suggestions endpoint as a demand signal for inventory planning — use /forecasts for that.")
 public class DemandForecastController {
 
     private final DemandForecaster demandForecaster;
@@ -80,7 +87,11 @@ public class DemandForecastController {
     @GetMapping("/forecasts/{merchantId}/{productId}")
     @Operation(
             summary = "Get demand forecast for merchant-product",
-            description = "Returns AI-predicted demand quantity for next week with confidence score"
+            description = "Returns the raw XGBoost regression output: predicted order quantity for the next 7 days " +
+                    "along with rolling averages and trend direction. This is the ML model output BEFORE any " +
+                    "safety-stock buffers or business-rule adjustments are applied. " +
+                    "Use this endpoint for inventory planning, replenishment calculations, and model monitoring. " +
+                    "See GET /suggestions/{merchantId} for sales-rep order recommendations with adjustments applied."
     )
     public ResponseEntity<ApiResponse<DemandForecastResponse>> getForecast(
             @Parameter(description = "Merchant ID") @PathVariable UUID merchantId,
@@ -118,8 +129,14 @@ public class DemandForecastController {
     @GetMapping("/suggestions/{merchantId}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'SALES_REP', 'MERCHANT')")
     @Operation(
-            summary = "Get AI-powered order suggestions",
-            description = "Returns ranked list of suggested products with quantities for sales rep"
+            summary = "Get AI-powered order suggestions for sales rep visit",
+            description = "Returns a ranked list of suggested products and quantities for a sales rep's visit to " +
+                    "this merchant. Unlike GET /forecasts/{merchantId}/{productId}, these suggestions have " +
+                    "safety-stock buffers, lead-time adjustments, and a minimum viable order filter applied. " +
+                    "Products with predicted quantity below a threshold are excluded. Results are ranked by " +
+                    "estimated revenue impact. " +
+                    "DO NOT use this endpoint as a raw demand signal — the quantities include business-rule " +
+                    "adjustments that inflate the ML forecast. Use GET /forecasts for demand planning."
     )
     public ResponseEntity<ApiResponse<OrderSuggestionsResponse>> getOrderSuggestions(
             @Parameter(description = "Merchant ID") @PathVariable UUID merchantId,

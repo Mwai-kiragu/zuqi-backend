@@ -16,6 +16,12 @@ import com.zuqi.ai.agent.tools.TrialBalanceTool;
 import com.zuqi.ai.agent.tools.CashFlowTool;
 import com.zuqi.ai.agent.tools.ArAgingTool;
 import com.zuqi.ai.agent.tools.ApAgingTool;
+import com.zuqi.ai.agent.tools.ShrinkageAlertTool;
+import com.zuqi.ai.agent.tools.StockoutAlertTool;
+import com.zuqi.ai.agent.tools.CreditLimitTool;
+import com.zuqi.ai.agent.tools.DataQualityTool;
+import com.zuqi.ai.agent.tools.PaymentDistressTool;
+import com.zuqi.ai.agent.tools.ComplianceReportTool;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -72,6 +78,13 @@ public class RoleAwareToolProvider {
     private final CashFlowTool              cashFlowTool;
     private final ArAgingTool               arAgingTool;
     private final ApAgingTool               apAgingTool;
+    // New tools — anomaly + compliance coverage
+    private final ShrinkageAlertTool        shrinkageAlertTool;
+    private final StockoutAlertTool         stockoutAlertTool;
+    private final CreditLimitTool           creditLimitTool;
+    private final DataQualityTool           dataQualityTool;
+    private final PaymentDistressTool       paymentDistressTool;
+    private final ComplianceReportTool      complianceReportTool;
 
     /** Returns the tool instances permitted for the given role. */
     public List<Object> getToolsForRole(String role) {
@@ -88,14 +101,16 @@ public class RoleAwareToolProvider {
             case "WAREHOUSE_MANAGER" ->
                     List.of(inventoryHealthTool, anomalyAlertsTool, demandForecastSummaryTool,
                             stockTransferTool, procurementTool, posSalesTool,
-                            expiryRiskTool, reorderSuggestionTool, helpTool);
+                            expiryRiskTool, reorderSuggestionTool,
+                            shrinkageAlertTool, stockoutAlertTool, dataQualityTool, helpTool);
 
             case "FINANCE" ->
                     List.of(paymentPerformanceTool, creditSummaryTool, salesTrendTool,
                             invoiceTool, expensesTool, fundsTransferTool,
                             balanceSheetTool, profitLossTool, trialBalanceTool,
                             cashFlowTool, arAgingTool, apAgingTool,
-                            supplierRiskTool, priceTrendTool, helpTool);
+                            supplierRiskTool, priceTrendTool,
+                            paymentDistressTool, creditLimitTool, complianceReportTool, helpTool);
 
             case "MERCHANT_ADMIN" ->
                     List.of(salesTrendTool, inventoryHealthTool, paymentPerformanceTool,
@@ -122,6 +137,9 @@ public class RoleAwareToolProvider {
                 expiryRiskTool, reorderSuggestionTool,
                 customerSegmentTool, customerHealthTool, churnRiskTool,
                 supplierRiskTool, priceTrendTool,
+                // Anomaly + compliance tools
+                shrinkageAlertTool, stockoutAlertTool, creditLimitTool,
+                dataQualityTool, paymentDistressTool, complianceReportTool,
                 helpTool);
     }
 }

@@ -37,7 +37,7 @@ public class UserGroup {
     private UserType userType;
 
     /** Optional workflow tier: INITIATOR, VERIFIER, AUTHORIZER, or null (no approval capability) */
-    @Column(name = "workflow_tier", length = 20)
+    @Column(name = "workflow_tier", length = 100)
     private String workflowTier;
 
     /** Ordering within the same workflow tier (1 = first approver, 2 = second, etc.) */
