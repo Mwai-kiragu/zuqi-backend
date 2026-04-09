@@ -130,32 +130,27 @@ public class MpesaServiceImpl implements MpesaService {
         log.info("M-Pesa config activated for merchant {} — type={} shortCode={}",
                 merchantId, request.transactionType(), request.businessShortCode());
 
-        // Auto-resolve Zed businessId (darajaConfigId) if not provided
+        // Auto-resolve Zed businessId if not already set
         if (saved.getExternalId() == null || saved.getExternalId().isBlank()) {
-            // Try effectiveShortCode first, then storeNumber, then hoNumber as fallbacks
             String zedId = lookupZedBusinessId(effectiveShortCode, request.transactionType());
             if (zedId == null && request.storeNumber() != null && !request.storeNumber().isBlank()
                     && !request.storeNumber().equals(effectiveShortCode)) {
-                log.info("Retrying Zed lookup with storeNumber={}", request.storeNumber());
                 zedId = lookupZedBusinessId(request.storeNumber(), request.transactionType());
             }
             if (zedId == null && request.hoNumber() != null && !request.hoNumber().isBlank()
                     && !request.hoNumber().equals(effectiveShortCode)) {
-                log.info("Retrying Zed lookup with hoNumber={}", request.hoNumber());
                 zedId = lookupZedBusinessId(request.hoNumber(), request.transactionType());
             }
             if (zedId != null) {
                 saved.setExternalId(zedId);
                 saved = mpesaConfigRepository.save(saved);
-                log.info("Auto-resolved Zed businessId={} for shortCode={} type={}", zedId, effectiveShortCode, request.transactionType());
+                log.info("Resolved Zed businessId={} for shortCode={}", zedId, effectiveShortCode);
             } else {
-                log.warn("Could not auto-resolve Zed businessId — tried shortCodes: {}, {}, {}",
-                        effectiveShortCode, request.storeNumber(), request.hoNumber());
-                throw new ValidationException("Failed to set up M-Pesa");
+                log.warn("Zed businessId not found for shortCode={} — config saved without it", effectiveShortCode);
             }
         }
 
-        // Update thirdPartyCallback in Zed's system to point to our callback URL
+        // Push updated credentials + callback to Zed for existing linked configs
         if (saved.getExternalId() != null && !saved.getExternalId().isBlank()) {
             String newExternalId = updateZedCallback(saved);
             if (newExternalId != null && !newExternalId.equals(saved.getExternalId())) {
