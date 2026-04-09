@@ -6,5 +6,6 @@ public enum EntityType {
     SALES_REP,
     PAYMENT,
     ORDER,
-    ROUTE
+    ROUTE,
+    DISTRIBUTOR
 }

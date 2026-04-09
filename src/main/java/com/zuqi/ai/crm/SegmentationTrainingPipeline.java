@@ -1,6 +1,7 @@
 package com.zuqi.ai.crm;
 
 import com.zuqi.ai.model.ModelRegistry;
+import com.zuqi.ai.pipeline.ModelEvaluator;
 import com.zuqi.ai.synthetic.SyntheticDataBundle;
 import com.zuqi.ai.synthetic.SyntheticDataConfig;
 import com.zuqi.ai.synthetic.SyntheticDataOrchestrator;
@@ -57,6 +58,7 @@ public class SegmentationTrainingPipeline {
     private final SyntheticCustomerAnalyticsFeatureBuilder featureBuilder;
     private final SegmentationFeatureBuilder segmentationFeatureBuilder;
     private final ModelRegistry modelRegistry;
+    private final ModelEvaluator modelEvaluator;
     private final Trainer<ClusterID> kMeansTrainer;
 
     @Transactional
@@ -86,14 +88,32 @@ public class SegmentationTrainingPipeline {
             Model<ClusterID> model = kMeansTrainer.train(dataset);
             log.info("K-Means training complete");
 
-            // Step 5: Predict all examples, group by cluster
+            // Step 5: Predict all examples, group by cluster; collect assignments + vectors
+            int n = featuresList.size();
+            int[] assignments   = new int[n];
+            double[][] featureMatrix = new double[n][];
             Map<Integer, List<Double>> clusterRevenues = new HashMap<>();
-            for (CustomerAnalyticsFeatures f : featuresList) {
+
+            for (int i = 0; i < n; i++) {
+                CustomerAnalyticsFeatures f = featuresList.get(i);
                 org.tribuo.Example<ClusterID> ex = segmentationFeatureBuilder.buildExample(f);
                 ClusterID predicted = model.predict(ex).getOutput();
                 int clusterId = predicted.getID();
+                assignments[i]   = clusterId;
+                featureMatrix[i] = segmentationFeatureBuilder.toFeatureVector(f);
                 clusterRevenues.computeIfAbsent(clusterId, k -> new ArrayList<>())
                         .add(f.totalRevenue90d());
+            }
+
+            // Step 5b: Quality gate — silhouette ≥ 0.30
+            ModelEvaluator.SegmentationEvaluationResult eval =
+                    modelEvaluator.evaluateSegmentation(assignments, featureMatrix, 5);
+
+            if (!eval.passedQualityGate()) {
+                log.warn("Segmentation model did NOT pass quality gate (silhouette={:.3f}). Skipping promotion.",
+                        eval.silhouetteScore());
+                return new TrainingResult(false, null, Map.of(),
+                        String.format("Quality gate failed: silhouette=%.3f < 0.30", eval.silhouetteScore()));
             }
 
             // Step 6: Sort clusters by average revenue, assign labels
@@ -101,9 +121,10 @@ public class SegmentationTrainingPipeline {
             log.info("Cluster labels: {}", clusterLabelMap);
 
             // Step 7: Register and promote
-            UUID modelId = promoteModel(model, clusterLabelMap, featuresList.size());
+            UUID modelId = promoteModel(model, clusterLabelMap, eval, featuresList.size());
             long duration = System.currentTimeMillis() - start;
-            log.info("=== Segmentation pipeline complete in {}ms, modelId={} ===", duration, modelId);
+            log.info("=== Segmentation pipeline complete in {}ms, modelId={} silhouette={:.3f} ===",
+                    duration, modelId, eval.silhouetteScore());
 
             return new TrainingResult(true, modelId, clusterLabelMap, null);
 
@@ -137,6 +158,7 @@ public class SegmentationTrainingPipeline {
 
     private UUID promoteModel(Model<ClusterID> model,
                                Map<Integer, String> clusterLabels,
+                               ModelEvaluator.SegmentationEvaluationResult eval,
                                int trainingSize) throws Exception {
         byte[] modelBytes;
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -157,6 +179,8 @@ public class SegmentationTrainingPipeline {
         metrics.put("training_size", trainingSize);
         metrics.put("num_clusters", clusterLabels.size());
         metrics.put("cluster_labels", clusterLabels.toString());
+        metrics.put("silhouette_score", eval.silhouetteScore());
+        metrics.put("min_cluster_size", eval.minClusterSize());
 
         modelRegistry.updateModelAfterTraining(registry.getId(), metrics, modelBytes,
                 Map.of("feature_count", segmentationFeatureBuilder.getFeatureCount()));

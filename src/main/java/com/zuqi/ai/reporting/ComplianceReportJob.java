@@ -1,5 +1,9 @@
 package com.zuqi.ai.reporting;
 
+import com.zuqi.ai.monitoring.PredictionLoggerService;
+import com.zuqi.ai.synthetic.DataPhaseTracker;
+import com.zuqi.domain.ai.DataPhase;
+import com.zuqi.domain.ai.EntityType;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.repository.DistributorRepository;
 import io.micrometer.core.instrument.Counter;
@@ -12,6 +16,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -39,6 +44,12 @@ public class ComplianceReportJob {
     private final ReportTemplateRegistry    reportTemplateRegistry;
     private final DistributorRepository     distributorRepository;
     private final MeterRegistry             meterRegistry;
+    private final PredictionLoggerService   predictionLogger;
+    private final DataPhaseTracker          dataPhaseTracker;
+
+    private static final String COMPLIANCE_MODEL_NAME  = "compliance_reporter";
+    // Proxy model for data maturity — demand_forecaster is representative of overall data phase
+    private static final String DATA_PHASE_PROXY_MODEL = "demand_forecaster";
 
     // ── Scheduled Entry Point ──────────────────────────────────────────────
 
@@ -193,7 +204,39 @@ public class ComplianceReportJob {
                 template.requiredMetrics()
         );
 
-        return complianceReportAiService.generateReport(context);
+        String report = complianceReportAiService.generateReport(context);
+
+        // KCB compliance: audit the generated report to ai_predictions.
+        // dataPhase reflects whether the underlying data feeding this LLM narrative
+        // is from synthetic, hybrid, or real operational data.
+        try {
+            DataPhase dataPhase = dataPhaseTracker.getPhase(DATA_PHASE_PROXY_MODEL, distributor.getId());
+            double confidence = switch (dataPhase) {
+                case REAL     -> 1.0;
+                case HYBRID   -> 0.7;
+                case SYNTHETIC -> 0.6;
+            };
+            predictionLogger.logPrediction(
+                    COMPLIANCE_MODEL_NAME,
+                    EntityType.DISTRIBUTOR,
+                    distributor.getId(),
+                    distributor.getId(),
+                    Map.of(
+                            "principal",      template.principal(),
+                            "period",         period,
+                            "reportDate",     reportDate,
+                            "reportLengthChars", report.length(),
+                            "dataPhase",      dataPhase.name()
+                    ),
+                    confidence,
+                    null
+            );
+        } catch (Exception e) {
+            log.warn("Failed to log compliance report audit for distributor={}: {}",
+                    distributor.getId(), e.getMessage());
+        }
+
+        return report;
     }
 
     private Counter successCounter() {

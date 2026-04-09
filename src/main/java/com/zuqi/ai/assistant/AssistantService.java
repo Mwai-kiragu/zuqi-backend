@@ -73,9 +73,11 @@ public class AssistantService {
 
         try {
             AssistantAgent roleAgent = assistantAgentFactory.buildForRole(primaryRole);
-            // Prefix DISTRIBUTOR_ID so the LLM passes it correctly to every tool
+            // Prefix role context so the LLM stays within scope
             String contextualMessage = "USER ROLE: " + primaryRole +
-                    "\nDISTRIBUTOR_ID: " + distributorId + "\n\n" + userText;
+                    "\nDISTRIBUTOR_ID: " + distributorId +
+                    "\nROLE SCOPE: " + getRoleScopeInstruction(primaryRole) +
+                    "\n\n" + userText;
 
             long t0 = System.currentTimeMillis();
             String reply = roleAgent.chat(conversationId, contextualMessage);
@@ -205,6 +207,25 @@ public class AssistantService {
     private Distributor loadDistributor(UUID id) {
         return distributorRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Distributor not found: " + id));
+    }
+
+    /**
+     * Returns a role-specific scope instruction injected into every chat turn.
+     * This is Layer 2 of the three-layer AI security model — the tool restriction
+     * in RoleAwareToolProvider is Layer 1.  Even if the LLM tries to answer from
+     * training data it is explicitly told not to.
+     */
+    private String getRoleScopeInstruction(String role) {
+        return switch (role.toUpperCase()) {
+            case "DRIVER"            -> "Scope: deliveries, assigned orders, routes only. Refuse all other topics.";
+            case "SALES_REP"         -> "Scope: sales, customers, orders, demand forecasts, invoices, deliveries. Refuse finance/accounting/warehouse topics.";
+            case "WAREHOUSE_MANAGER" -> "Scope: inventory, stock transfers, procurement, POS, reorder, expiry, anomaly alerts. Refuse financial statements and credit topics.";
+            case "FINANCE"           -> "Scope: payments, invoices, credit, expenses, funds transfers, GL, P&L, balance sheet, cash flow, AR/AP aging. Refuse warehouse and routing topics.";
+            case "MERCHANT"          -> "Scope: this merchant's own orders, payments, invoices, credit score, and order suggestions only. Never expose other merchants' data.";
+            case "CUSTOMER"          -> "Scope: this customer's own orders, payments, and invoices only.";
+            case "MERCHANT_ADMIN"    -> "Scope: full access to this organisation's sales, inventory, payments, invoices, expenses, and procurement.";
+            default                  -> "Scope: full access to all tools for this distributor.";
+        };
     }
 
     /**

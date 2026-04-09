@@ -143,6 +143,10 @@ p, MERCHANT, /v1/profile, GET|PUT|PATCH
 p, MERCHANT, /v1/kyc/merchant, POST
 p, MERCHANT, /v1/kyc/status, GET
 p, MERCHANT, /v1/files/upload, POST
+p, MERCHANT, /v1/ai/demand/suggestions/:merchantId, GET
+p, MERCHANT, /v1/ai/credit/score/:merchantId, GET
+p, MERCHANT, /v1/ai/credit/evaluations/:merchantId, GET
+p, MERCHANT, /v1/ai/assistant/chat, POST
 
 # FINANCE - Payment and reconciliation
 p, FINANCE, /v1/roles/name/:name, GET

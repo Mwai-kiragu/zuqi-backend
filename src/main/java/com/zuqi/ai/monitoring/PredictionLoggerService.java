@@ -1,5 +1,6 @@
 package com.zuqi.ai.monitoring;
 
+import com.zuqi.ai.model.ModelRegistry;
 import com.zuqi.domain.ai.AIPrediction;
 import com.zuqi.domain.ai.EntityType;
 import com.zuqi.domain.distributor.Distributor;
@@ -22,7 +23,8 @@ import java.util.UUID;
 public class PredictionLoggerService implements PredictionLogger {
 
     private final AIPredictionRepository predictionRepository;
-    private final DistributorRepository distributorRepository;
+    private final DistributorRepository  distributorRepository;
+    private final ModelRegistry          modelRegistry;
 
     @Override
     @Transactional
@@ -56,6 +58,31 @@ public class PredictionLoggerService implements PredictionLogger {
                 modelName, modelVersion, entityType, entityId, confidenceScore);
 
         return saved;
+    }
+
+    /**
+     * Convenience overload — resolves the active model version from the registry automatically.
+     *
+     * <p>Use this in inference services so that audit logs always capture the exact registry
+     * version rather than a hardcoded integer (KCB traceability requirement).
+     * Falls back to version {@code 0} if no active model is found (e.g. fallback path).
+     */
+    @Transactional
+    public AIPrediction logPrediction(
+            String modelName,
+            EntityType entityType,
+            UUID entityId,
+            UUID distributorId,
+            Map<String, Object> predictionValue,
+            Double confidenceScore,
+            String inputFeaturesHash) {
+
+        Integer version = modelRegistry.getActiveModel(modelName)
+                .map(m -> m.getModelVersion())
+                .orElse(0);
+
+        return logPrediction(modelName, version, entityType, entityId,
+                distributorId, predictionValue, confidenceScore, inputFeaturesHash);
     }
 
     @Override

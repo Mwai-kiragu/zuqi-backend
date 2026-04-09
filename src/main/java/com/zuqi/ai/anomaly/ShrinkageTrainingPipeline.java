@@ -2,6 +2,7 @@ package com.zuqi.ai.anomaly;
 
 import com.zuqi.ai.feature.InventoryFeatures;
 import com.zuqi.ai.model.ModelRegistry;
+import com.zuqi.ai.pipeline.ModelEvaluator;
 import com.zuqi.domain.ai.AIModelRegistry;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
@@ -38,11 +39,11 @@ public class ShrinkageTrainingPipeline {
     private static final String MODEL_NAME   = ShrinkageDetector.MODEL_NAME;
     private static final int    NUM_PRODUCTS = 200;
     private static final int    WINDOW_DAYS  = 30;
-    private static final double FPR_GATE     = 0.20;
 
     private final ShrinkageModelTrainer modelTrainer;
     private final AnomalyFeatureBuilder featureBuilder;
     private final ModelRegistry         modelRegistry;
+    private final ModelEvaluator        modelEvaluator;
 
     @Transactional
     public TrainingPipelineResult runPipeline() {
@@ -75,20 +76,25 @@ public class ShrinkageTrainingPipeline {
 
             // Step 5
             log.info("Step 5/6: Evaluating model…");
-            double fpr    = evaluateFalsePositiveRate(model, testNormal);
-            double tpr    = evaluateTruePositiveRate(model, testAnomalous);
-            boolean passed = fpr < FPR_GATE;
-            log.info("Evaluation: FPR={} TPR={} gate={}",
-                    String.format("%.3f", fpr), String.format("%.3f", tpr), passed ? "PASSED" : "FAILED");
+            double fpr = evaluateFalsePositiveRate(model, testNormal);
+            double tpr = evaluateTruePositiveRate(model, testAnomalous);
+            // Gate on F1 ≥ 0.50 for the ANOMALY class (spec requirement)
+            // FPR < 0.20 is logged for reference but no longer the sole gate
+            ModelEvaluator.AnomalyEvaluationResult eval = modelEvaluator.evaluateAnomalyDetector(
+                    fpr, tpr, testNormal.size(), testAnomalous.size());
+            boolean passed = eval.passedQualityGate();
+            log.info("Evaluation: FPR={} TPR={} F1={} gate={}",
+                    String.format("%.3f", fpr), String.format("%.3f", tpr),
+                    String.format("%.3f", eval.f1Score()), passed ? "PASSED" : "FAILED");
 
             // Step 6
             log.info("Step 6/6: Promoting model…");
             UUID modelId = null;
             if (passed) {
-                modelId = promoteModel(model, fpr, tpr, trainNormal.size());
+                modelId = promoteModel(model, fpr, tpr, eval.f1Score(), trainNormal.size());
                 log.info("Model promoted to ACTIVE: {}", modelId);
             } else {
-                log.warn("Model NOT promoted — FPR {} >= gate {}", String.format("%.3f", fpr), FPR_GATE);
+                log.warn("Model NOT promoted — F1 {} < 0.50", String.format("%.3f", eval.f1Score()));
             }
 
             long durationMs = System.currentTimeMillis() - startTime;
@@ -225,7 +231,7 @@ public class ShrinkageTrainingPipeline {
 
     // ── Promotion ─────────────────────────────────────────────────────────
 
-    private UUID promoteModel(Model<Event> model, double fpr, double tpr, int trainSize) {
+    private UUID promoteModel(Model<Event> model, double fpr, double tpr, double f1, int trainSize) {
         AIModelRegistry registry = modelRegistry.registerModel(
                 MODEL_NAME, "libsvm_one_class",
                 Map.of("algorithm", "one_class_svm", "kernel", "RBF"),
@@ -235,7 +241,7 @@ public class ShrinkageTrainingPipeline {
 
         modelRegistry.updateModelAfterTraining(registry.getId(),
                 Map.of("false_positive_rate", fpr, "true_positive_rate", tpr,
-                        "training_samples", trainSize),
+                        "f1_score", f1, "training_samples", trainSize),
                 binary,
                 Map.of("feature_count", 12, "feature_names", List.of(
                         "discrepancy_pct", "discrepancy_normalized", "manual_adj_count_7d",

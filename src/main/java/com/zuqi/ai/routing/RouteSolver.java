@@ -1,11 +1,15 @@
 package com.zuqi.ai.routing;
 
 import ai.timefold.solver.core.api.solver.SolverManager;
+import com.zuqi.ai.monitoring.PredictionLoggerService;
 import com.zuqi.ai.routing.domain.DeliveryStop;
 import com.zuqi.ai.routing.domain.Location;
 import com.zuqi.ai.routing.domain.RoutePlan;
 import com.zuqi.ai.routing.domain.Vehicle;
+import com.zuqi.ai.synthetic.DataPhaseTracker;
+import com.zuqi.domain.ai.DataPhase;
 import com.zuqi.domain.ai.DeliveryRoute;
+import com.zuqi.domain.ai.EntityType;
 import com.zuqi.domain.ai.RouteStatus;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.customer.Customer;
@@ -49,6 +53,10 @@ public class RouteSolver {
     private final UserRepository                 userRepository;
     private final DeliveryRouteRepository        deliveryRouteRepository;
     private final MeterRegistry                  meterRegistry;
+    private final PredictionLoggerService        predictionLogger;
+    private final DataPhaseTracker               dataPhaseTracker;
+
+    private static final String ROUTE_MODEL_NAME = "route_optimizer";
 
     /** Default vehicle capacity when no fleet data is available (1-tonne truck). */
     private static final double DEFAULT_CAPACITY_KG  = 1000.0;
@@ -108,9 +116,35 @@ public class RouteSolver {
         // 4. Persist results
         List<DeliveryRoute> routes = persistRoutes(solution, distributor, routeDate, (int) durationMs);
 
-        recordMetrics(durationMs, routes.stream().mapToInt(r -> r.getStopSequence().size()).sum());
+        int totalStops = routes.stream().mapToInt(r -> r.getStopSequence().size()).sum();
+        recordMetrics(durationMs, totalStops);
         log.info("Route optimization complete: distributor={} date={} routes={} stops={} durationMs={}",
-                distributorId, routeDate, routes.size(), stops.size(), durationMs);
+                distributorId, routeDate, routes.size(), totalStops, durationMs);
+
+        // KCB compliance: audit each route plan to ai_predictions
+        DataPhase phase = dataPhaseTracker.getPhase(ROUTE_MODEL_NAME, distributorId);
+        for (DeliveryRoute route : routes) {
+            try {
+                predictionLogger.logPrediction(
+                        ROUTE_MODEL_NAME,
+                        EntityType.ROUTE,
+                        route.getId(),
+                        distributorId,
+                        Map.of(
+                                "routeDate",          routeDate.toString(),
+                                "stopCount",          route.getStopSequence().size(),
+                                "totalDistanceKm",    route.getTotalDistanceKm(),
+                                "loadUtilizationPct", route.getLoadUtilizationPct(),
+                                "solverTimeMs",       route.getSolverTimeMs(),
+                                "dataPhase",          phase.name()
+                        ),
+                        1.0,  // Timefold solver — deterministic, confidence always 1.0
+                        null
+                );
+            } catch (Exception e) {
+                log.warn("Failed to log route prediction audit for route={}: {}", route.getId(), e.getMessage());
+            }
+        }
 
         return routes;
     }

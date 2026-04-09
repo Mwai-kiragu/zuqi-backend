@@ -2,6 +2,7 @@ package com.zuqi.ai.anomaly;
 
 import com.zuqi.ai.feature.PaymentFeatures;
 import com.zuqi.ai.model.ModelRegistry;
+import com.zuqi.ai.pipeline.ModelEvaluator;
 import com.zuqi.domain.ai.AIModelRegistry;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
@@ -37,11 +38,11 @@ public class PaymentAnomalyTrainingPipeline {
 
     private static final String MODEL_NAME    = PaymentAnomalyDetector.MODEL_NAME;
     private static final int    NUM_PAYMENTS  = 500;
-    private static final double FPR_GATE      = 0.20;
 
     private final PaymentAnomalyModelTrainer modelTrainer;
     private final AnomalyFeatureBuilder      featureBuilder;
     private final ModelRegistry              modelRegistry;
+    private final ModelEvaluator             modelEvaluator;
 
     @Transactional
     public TrainingPipelineResult runPipeline() {
@@ -70,16 +71,20 @@ public class PaymentAnomalyTrainingPipeline {
 
             // Step 5
             log.info("Step 5/6: Evaluating model…");
-            double fpr    = evaluateFalsePositiveRate(model, testNormal);
-            double tpr    = evaluateTruePositiveRate(model, testAnomalous);
-            boolean passed = fpr < FPR_GATE;
-            log.info("Evaluation: FPR={} TPR={} gate={}",
-                    String.format("%.3f", fpr), String.format("%.3f", tpr), passed ? "PASSED" : "FAILED");
+            double fpr = evaluateFalsePositiveRate(model, testNormal);
+            double tpr = evaluateTruePositiveRate(model, testAnomalous);
+            // Gate on F1 ≥ 0.50 for the ANOMALY class (spec requirement)
+            ModelEvaluator.AnomalyEvaluationResult eval = modelEvaluator.evaluateAnomalyDetector(
+                    fpr, tpr, testNormal.size(), testAnomalous.size());
+            boolean passed = eval.passedQualityGate();
+            log.info("Evaluation: FPR={} TPR={} F1={} gate={}",
+                    String.format("%.3f", fpr), String.format("%.3f", tpr),
+                    String.format("%.3f", eval.f1Score()), passed ? "PASSED" : "FAILED");
 
             // Step 6
             UUID modelId = null;
             if (passed) {
-                modelId = promoteModel(model, fpr, tpr, trainNormal.size());
+                modelId = promoteModel(model, fpr, tpr, eval.f1Score(), trainNormal.size());
                 log.info("Model promoted to ACTIVE: {}", modelId);
             }
 
@@ -194,7 +199,7 @@ public class PaymentAnomalyTrainingPipeline {
 
     // ── Promotion ─────────────────────────────────────────────────────────
 
-    private UUID promoteModel(Model<Event> model, double fpr, double tpr, int trainSize) {
+    private UUID promoteModel(Model<Event> model, double fpr, double tpr, double f1, int trainSize) {
         AIModelRegistry registry = modelRegistry.registerModel(
                 MODEL_NAME, "libsvm_one_class",
                 Map.of("algorithm", "one_class_svm", "kernel", "RBF"),
@@ -202,7 +207,7 @@ public class PaymentAnomalyTrainingPipeline {
 
         byte[] binary = serializeModel(model);
         modelRegistry.updateModelAfterTraining(registry.getId(),
-                Map.of("false_positive_rate", fpr, "true_positive_rate", tpr,
+                Map.of("false_positive_rate", fpr, "true_positive_rate", tpr, "f1_score", f1,
                         "training_samples", trainSize),
                 binary,
                 Map.of("feature_count", 10));

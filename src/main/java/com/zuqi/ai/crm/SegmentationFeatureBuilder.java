@@ -63,6 +63,16 @@ public class SegmentationFeatureBuilder {
         return dataset;
     }
 
+    // ── Public feature extraction ──────────────────────────────────────────────
+
+    /**
+     * Returns the raw feature vector for a given {@link CustomerAnalyticsFeatures}.
+     * Used by {@code ModelEvaluator.evaluateSegmentation()} to compute silhouette scores.
+     */
+    public double[] toFeatureVector(CustomerAnalyticsFeatures f) {
+        return featureValues(f);
+    }
+
     // ── Internal helpers ──────────────────────────────────────────────────────
 
     private double[] featureValues(CustomerAnalyticsFeatures f) {

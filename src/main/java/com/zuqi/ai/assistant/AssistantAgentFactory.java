@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class AssistantAgentFactory {
 
-    private static final int MAX_MESSAGES_IN_WINDOW = 40; // 20 full turns
+    private static final int MAX_MESSAGES_IN_WINDOW = 14; // 7 full turns — keeps history within 4k context
 
     private final ChatLanguageModel     chatLanguageModel;
     private final AssistantChatMemoryStore chatMemoryStore;
