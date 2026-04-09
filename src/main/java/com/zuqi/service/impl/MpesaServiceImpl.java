@@ -132,11 +132,26 @@ public class MpesaServiceImpl implements MpesaService {
 
         // Auto-resolve Zed businessId (darajaConfigId) if not provided
         if (saved.getExternalId() == null || saved.getExternalId().isBlank()) {
+            // Try effectiveShortCode first, then storeNumber, then hoNumber as fallbacks
             String zedId = lookupZedBusinessId(effectiveShortCode, request.transactionType());
+            if (zedId == null && request.storeNumber() != null && !request.storeNumber().isBlank()
+                    && !request.storeNumber().equals(effectiveShortCode)) {
+                log.info("Retrying Zed lookup with storeNumber={}", request.storeNumber());
+                zedId = lookupZedBusinessId(request.storeNumber(), request.transactionType());
+            }
+            if (zedId == null && request.hoNumber() != null && !request.hoNumber().isBlank()
+                    && !request.hoNumber().equals(effectiveShortCode)) {
+                log.info("Retrying Zed lookup with hoNumber={}", request.hoNumber());
+                zedId = lookupZedBusinessId(request.hoNumber(), request.transactionType());
+            }
             if (zedId != null) {
                 saved.setExternalId(zedId);
                 saved = mpesaConfigRepository.save(saved);
                 log.info("Auto-resolved Zed businessId={} for shortCode={} type={}", zedId, effectiveShortCode, request.transactionType());
+            } else {
+                log.warn("Could not auto-resolve Zed businessId — tried shortCodes: {}, {}, {}",
+                        effectiveShortCode, request.storeNumber(), request.hoNumber());
+                throw new ValidationException("Failed to set up M-Pesa");
             }
         }
 
@@ -437,12 +452,15 @@ public class MpesaServiceImpl implements MpesaService {
     private String lookupZedBusinessId(String shortCode, MpesaTransactionType transactionType) {
         try {
             ResponseEntity<Map> response = restTemplate.getForEntity(darajaBusinessConfigUrl, Map.class);
-            log.info("Zed business_config/all status={}", response.getStatusCode());
+            log.info("Zed business_config/all status={} body={}", response.getStatusCode(), response.getBody());
             if (response.getBody() == null) return null;
 
             Object rawData = response.getBody().get("data");
             List<?> items = rawData instanceof List ? (List<?>) rawData : null;
-            if (items == null) return null;
+            if (items == null) {
+                log.warn("Zed business_config/all returned no 'data' list; keys={}", response.getBody().keySet());
+                return null;
+            }
 
             // Map our type to Zed's TransactionType string
             String zedType = (transactionType == MpesaTransactionType.TILL)
@@ -452,9 +470,15 @@ public class MpesaServiceImpl implements MpesaService {
 
             for (Object item : items) {
                 if (item instanceof Map<?, ?> m) {
+                    // Try multiple field names Zed may use for the short code
                     Object scObj = m.get("businessShortCode");
                     if (scObj == null) scObj = m.get("businessNumber");
+                    if (scObj == null) scObj = m.get("tillNumber");
+                    if (scObj == null) scObj = m.get("shortCode");
+                    if (scObj == null) scObj = m.get("till_number");
+                    if (scObj == null) scObj = m.get("short_code");
                     String sc = scObj != null ? String.valueOf(scObj) : "";
+                    log.debug("Zed config entry: shortCode={} id={} keys={}", sc, m.get("_id"), m.keySet());
 
                     if (shortCode != null && shortCode.equals(sc)) {
                         Object id = m.get("_id");
