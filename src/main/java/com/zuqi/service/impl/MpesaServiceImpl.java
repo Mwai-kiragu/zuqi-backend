@@ -510,6 +510,8 @@ public class MpesaServiceImpl implements MpesaService {
         if (phone.startsWith("+")) phone = phone.substring(1);
         if (phone.startsWith("07") || phone.startsWith("01")) {
             phone = "254" + phone.substring(1);
+        } else if (phone.startsWith("7") || phone.startsWith("1")) {
+            phone = "254" + phone;
         }
         return phone;
     }
