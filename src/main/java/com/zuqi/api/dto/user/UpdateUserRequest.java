@@ -27,7 +27,6 @@ public class UpdateUserRequest {
 
     private String phoneNumber;
 
-    @NotBlank(message = "Role is required")
     private String role;
 
     private UUID distributorId;

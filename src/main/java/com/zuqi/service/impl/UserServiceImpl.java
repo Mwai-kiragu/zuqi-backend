@@ -414,29 +414,28 @@ public class UserServiceImpl implements UserService {
             throw new DuplicateResourceException("User", "phoneNumber", request.getPhoneNumber());
         }
 
-        // Validate and get role
-        RoleName roleName;
-        try {
-            roleName = RoleName.valueOf(request.getRole());
-        } catch (IllegalArgumentException e) {
-            throw new ValidationException("Invalid role: " + request.getRole());
-        }
-
-        Role role = roleRepository.findByName(roleName)
-                .orElseThrow(() -> new ResourceNotFoundException("Role", "name", request.getRole()));
-
         // Update user fields
         user.setFirstName(request.getFirstName());
         user.setLastName(request.getLastName());
         user.setEmail(request.getEmail());
         user.setPhoneNumber(request.getPhoneNumber());
 
-        // Update role (clear all, add primary + optional workflow tier)
-        user.getRoles().clear();
-        user.getRoles().add(role);
-        if (request.getWorkflowTierRole() != null && !request.getWorkflowTierRole().isBlank()) {
-            roleRepository.findByName(RoleName.valueOf(request.getWorkflowTierRole()))
-                    .ifPresent(tierRole -> user.getRoles().add(tierRole));
+        // Update roles only when role is explicitly provided; otherwise keep existing roles
+        if (request.getRole() != null && !request.getRole().isBlank()) {
+            RoleName roleName;
+            try {
+                roleName = RoleName.valueOf(request.getRole());
+            } catch (IllegalArgumentException e) {
+                throw new ValidationException("Invalid role: " + request.getRole());
+            }
+            Role newRole = roleRepository.findByName(roleName)
+                    .orElseThrow(() -> new ResourceNotFoundException("Role", "name", request.getRole()));
+            user.getRoles().clear();
+            user.getRoles().add(newRole);
+            if (request.getWorkflowTierRole() != null && !request.getWorkflowTierRole().isBlank()) {
+                roleRepository.findByName(RoleName.valueOf(request.getWorkflowTierRole()))
+                        .ifPresent(tierRole -> user.getRoles().add(tierRole));
+            }
         }
 
         // Update distributor and merchant IDs
