@@ -334,8 +334,8 @@ kcb:
 
 daraja:
   stk-push-url: ${DARAJA_STK_PUSH_URL:https://stk.swerri.io/api/v1/stkPush}
-#  callback-base-url: ${DARAJA_CALLBACK_BASE_URL:https://decimally-aposematic-librada.ngrok-free.dev/api/v1/mpesa/callback}
-  callback-base-url: ${DARAJA_CALLBACK_BASE_URL:https://zuqi.pestoe.com/api/v1/mpesa/callback}
+  callback-base-url: ${DARAJA_CALLBACK_BASE_URL:https://decimally-aposematic-librada.ngrok-free.dev/api/v1/mpesa/callback}
+#  callback-base-url: ${DARAJA_CALLBACK_BASE_URL:https://zuqi.pestoe.com/api/v1/mpesa/callback}
   business-config-url: ${DARAJA_BUSINESS_CONFIG_URL:https://stk.swerri.io/api/v1/business_config/all}
   edit-config-url: ${DARAJA_EDIT_CONFIG_URL:https://stk.swerri.io/api/v1/business_config/edit}
 

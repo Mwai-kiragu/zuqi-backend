@@ -33,6 +33,8 @@ import com.zuqi.repository.PromotionRepository;
 import com.zuqi.repository.PurchaseRequisitionRepository;
 import com.zuqi.repository.StockMovementRepository;
 import com.zuqi.repository.StockRepository;
+import com.zuqi.domain.returns.ReturnStatus;
+import com.zuqi.repository.SalesReturnRepository;
 import com.zuqi.repository.StockTransferRepository;
 import com.zuqi.repository.SupplierRepository;
 import com.zuqi.repository.WarehouseRepository;
@@ -87,6 +89,7 @@ public class ApprovalServiceImpl implements ApprovalService {
     private final PurchaseRequisitionRepository purchaseRequisitionRepository;
     private final OrderRepository orderRepository;
     private final InvoiceRepository invoiceRepository;
+    private final SalesReturnRepository salesReturnRepository;
     private final ActivityLogService activityLogService;
     private final EmailService emailService;
     private final EmailConfig emailConfig;
@@ -368,6 +371,10 @@ public class ApprovalServiceImpl implements ApprovalService {
                 }
             });
             case "STOCK_TRANSFER" -> stockTransferRepository.updateApprovalStatus(entityId, status);
+            case "SALES_RETURN" -> salesReturnRepository.findById(entityId).ifPresent(sr -> {
+                sr.setStatus("APPROVED".equals(status) ? ReturnStatus.CONFIRMED : ReturnStatus.CANCELLED);
+                salesReturnRepository.save(sr);
+            });
             default -> { /* no-op for other entity types */ }
         }
     }

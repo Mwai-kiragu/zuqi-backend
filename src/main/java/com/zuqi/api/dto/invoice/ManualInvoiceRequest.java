@@ -32,6 +32,8 @@ public class ManualInvoiceRequest {
 
     private BigDecimal discountAmount;
     private BigDecimal taxAmount;
+    /** Optional: if provided, overrides taxAmount by looking up the rate and computing subtotal * rate / 100 */
+    private UUID taxRateId;
     private Integer paymentTermsDays;
     private String notes;
     private String termsAndConditions;

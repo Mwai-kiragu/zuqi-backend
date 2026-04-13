@@ -31,6 +31,7 @@ public enum ApprovalWorkflowType {
 
     // Sales
     SALES_ORDER,
+    SALES_RETURN,
 
     // Finance
     PAYMENT_APPROVAL,

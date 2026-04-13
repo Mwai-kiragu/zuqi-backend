@@ -15,6 +15,8 @@ public class SalesReturnResponse {
     private String returnNumber;
     private UUID distributorId;
     private UUID orderId;
+    private UUID invoiceId;
+    private String invoiceNumber;
     private UUID customerId;
     private String customerName;
     private String reason;
