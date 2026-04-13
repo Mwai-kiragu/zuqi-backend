@@ -241,17 +241,6 @@ public class InvoiceServiceImpl implements InvoiceService {
             log.warn("GL COGS posting failed for manual invoice {}: {}", saved.getInvoiceNumber(), e.getMessage());
         }
 
-        // Auto-send email if customer has an email address
-        if (customer.getEmail() != null && !customer.getEmail().isBlank()) {
-            try {
-                sendInvoiceEmailAsync(saved, customer.getEmail());
-                saved.markAsSent(customer.getEmail());
-                invoiceRepository.save(saved);
-            } catch (Exception e) {
-                log.warn("Failed to send manual invoice email to {}: {}", customer.getEmail(), e.getMessage());
-            }
-        }
-
         return InvoiceResponse.fromEntity(saved);
     }
 
