@@ -2,6 +2,7 @@ package com.zuqi.domain.returns;
 
 import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.distributor.Distributor;
+import com.zuqi.domain.invoice.Invoice;
 import com.zuqi.domain.order.Order;
 import com.zuqi.domain.user.User;
 import jakarta.persistence.*;
@@ -44,6 +45,10 @@ public class SalesReturn {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id")
     private Order order;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "invoice_id")
+    private Invoice invoice;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id")

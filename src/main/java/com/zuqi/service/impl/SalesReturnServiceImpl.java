@@ -1,8 +1,11 @@
 package com.zuqi.service.impl;
 
+import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
 import com.zuqi.api.dto.returns.*;
+import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.distributor.Distributor;
+import com.zuqi.domain.invoice.Invoice;
 import com.zuqi.domain.order.Order;
 import com.zuqi.domain.product.Product;
 import com.zuqi.domain.returns.*;
@@ -10,10 +13,13 @@ import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
+import com.zuqi.service.ApprovalService;
 import com.zuqi.service.SalesReturnService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -35,7 +41,11 @@ public class SalesReturnServiceImpl implements SalesReturnService {
     private final ProductRepository       productRepository;
     private final UserRepository          userRepository;
     private final DistributorRepository   distributorRepository;
+    private final InvoiceRepository       invoiceRepository;
     private final SecurityUtils           securityUtils;
+
+    @Lazy @Autowired
+    private ApprovalService approvalService;
 
     @Override
     @Transactional
@@ -51,6 +61,10 @@ public class SalesReturnServiceImpl implements SalesReturnService {
             Order linkedOrder = orderRepository.findById(request.getOrderId())
                     .orElseThrow(() -> new ResourceNotFoundException("Order", "id", request.getOrderId()));
             distributor = linkedOrder.getDistributor();
+        } else if (request.getInvoiceId() != null) {
+            Invoice linkedInvoice = invoiceRepository.findById(request.getInvoiceId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", request.getInvoiceId()));
+            distributor = linkedInvoice.getDistributor();
         }
         if (distributor == null) throw new ValidationException("Cannot determine distributor for return");
 
@@ -58,6 +72,16 @@ public class SalesReturnServiceImpl implements SalesReturnService {
                 ? orderRepository.findById(request.getOrderId())
                         .orElseThrow(() -> new ResourceNotFoundException("Order", "id", request.getOrderId()))
                 : null;
+
+        // Resolve invoice; if no orderId but invoiceId, derive order from invoice
+        Invoice invoice = null;
+        if (request.getInvoiceId() != null) {
+            invoice = invoiceRepository.findById(request.getInvoiceId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", request.getInvoiceId()));
+            if (order == null && invoice.getOrder() != null) {
+                order = invoice.getOrder();
+            }
+        }
 
         Customer customer = request.getCustomerId() != null
                 ? customerRepository.findById(request.getCustomerId())
@@ -72,6 +96,7 @@ public class SalesReturnServiceImpl implements SalesReturnService {
                 .returnNumber(generateNumber("SR"))
                 .distributor(distributor)
                 .order(order)
+                .invoice(invoice)
                 .customer(customer)
                 .reason(request.getReason())
                 .refundMethod(request.getRefundMethod())
@@ -98,7 +123,28 @@ public class SalesReturnServiceImpl implements SalesReturnService {
         sr.setItems(items);
         sr.setTotalAmount(items.stream().map(SalesReturnItem::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
 
-        return toResponse(salesReturnRepository.save(sr));
+        SalesReturn saved = salesReturnRepository.save(sr);
+
+        // Approval routing: if current user requires approval for RETURNS, queue instead of leaving as DRAFT
+        UUID currentUserId = securityUtils.getCurrentUserId();
+        if (securityUtils.currentUserRequiresApprovalFor("RETURNS") && currentUserId != null) {
+            saved.setStatus(ReturnStatus.PENDING_APPROVAL);
+            saved = salesReturnRepository.save(saved);
+            approvalService.createRequest(currentUserId, CreateApprovalRequestDto.builder()
+                    .workflowType(ApprovalWorkflowType.SALES_RETURN)
+                    .entityType("SALES_RETURN")
+                    .entityId(saved.getId())
+                    .entityName(saved.getReturnNumber())
+                    .description("Sales Return " + saved.getReturnNumber()
+                            + (customer != null ? " for " + customer.getBusinessName() : "")
+                            + " — total KES " + saved.getTotalAmount())
+                    .amount(saved.getTotalAmount())
+                    .requiredApprovals(1)
+                    .build());
+            log.info("Sales return {} queued for approval", saved.getReturnNumber());
+        }
+
+        return toResponse(saved);
     }
 
     @Override
@@ -166,6 +212,8 @@ public class SalesReturnServiceImpl implements SalesReturnService {
                 .returnNumber(sr.getReturnNumber())
                 .distributorId(sr.getDistributor().getId())
                 .orderId(sr.getOrder() != null ? sr.getOrder().getId() : null)
+                .invoiceId(sr.getInvoice() != null ? sr.getInvoice().getId() : null)
+                .invoiceNumber(sr.getInvoice() != null ? sr.getInvoice().getInvoiceNumber() : null)
                 .customerId(sr.getCustomer() != null ? sr.getCustomer().getId() : null)
                 .customerName(sr.getCustomer() != null ? sr.getCustomer().getBusinessName() : null)
                 .reason(sr.getReason())

@@ -20,6 +20,7 @@ import com.zuqi.domain.product.Product;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.api.dto.payment.PaymentRequest;
+import com.zuqi.domain.accounting.TaxRate;
 import com.zuqi.repository.CustomerRepository;
 import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.InvoiceItemRepository;
@@ -27,6 +28,7 @@ import com.zuqi.repository.InvoiceRepository;
 import com.zuqi.repository.PosSaleRepository;
 import com.zuqi.repository.ProductRepository;
 import com.zuqi.repository.StockRepository;
+import com.zuqi.repository.TaxRateRepository;
 import com.zuqi.repository.WarehouseRepository;
 import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
 import com.zuqi.domain.approval.ApprovalWorkflowType;
@@ -75,6 +77,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final ProductRepository productRepository;
     private final WarehouseRepository warehouseRepository;
     private final StockRepository stockRepository;
+    private final TaxRateRepository taxRateRepository;
     private final EmailService emailService;
     private final EmailConfig emailConfig;
     private final SecurityUtils securityUtils;
@@ -128,8 +131,33 @@ public class InvoiceServiceImpl implements InvoiceService {
         }
 
         BigDecimal discount = request.getDiscountAmount() != null ? request.getDiscountAmount() : BigDecimal.ZERO;
-        BigDecimal tax = request.getTaxAmount() != null ? request.getTaxAmount() : BigDecimal.ZERO;
+
+        // Compute tax: prefer taxRateId lookup over raw taxAmount
+        BigDecimal tax = BigDecimal.ZERO;
+        if (request.getTaxRateId() != null) {
+            TaxRate taxRate = taxRateRepository.findById(request.getTaxRateId()).orElse(null);
+            if (taxRate != null && taxRate.isActive()) {
+                tax = subtotal.subtract(discount).multiply(taxRate.getRate())
+                        .divide(new java.math.BigDecimal("100"), 2, java.math.RoundingMode.HALF_UP);
+            }
+        } else if (request.getTaxAmount() != null) {
+            tax = request.getTaxAmount();
+        }
+
         BigDecimal total = subtotal.subtract(discount).add(tax);
+
+        // Credit limit check
+        if (customer.getCreditLimit() != null && customer.getCreditLimit().compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal outstanding = invoiceRepository.sumUnpaidByCustomerId(customer.getId());
+            if (outstanding == null) outstanding = BigDecimal.ZERO;
+            if (outstanding.add(total).compareTo(customer.getCreditLimit()) > 0) {
+                throw new ValidationException(
+                        "Invoice would exceed credit limit for " + customer.getBusinessName()
+                        + ". Limit: " + customer.getCreditLimit()
+                        + ", Current outstanding: " + outstanding
+                        + ", Invoice total: " + total);
+            }
+        }
 
         int termsDays = request.getPaymentTermsDays() != null ? request.getPaymentTermsDays()
                 : (customer.getPaymentTermsDays() != null ? customer.getPaymentTermsDays() : 30);
@@ -480,6 +508,11 @@ public class InvoiceServiceImpl implements InvoiceService {
     public InvoiceResponse sendInvoice(UUID invoiceId, String email) {
         Invoice invoice = invoiceRepository.findById(invoiceId)
                 .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
+
+        // Block sending invoices that are still in DRAFT (pending approval)
+        if (invoice.getStatus() == InvoiceStatus.DRAFT) {
+            throw new ValidationException("Invoice cannot be sent — it is pending approval");
+        }
 
         // Determine recipient email
         String recipientEmail = email;

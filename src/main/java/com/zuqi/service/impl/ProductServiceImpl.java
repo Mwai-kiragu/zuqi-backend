@@ -276,6 +276,8 @@ public class ProductServiceImpl implements ProductService {
         }
 
         boolean needsApproval = securityUtils.currentUserRequiresApprovalFor("PRODUCTS");
+        // FINANCE role must always go through approval even if requiresApproval flag is not set on their UserType
+        if (!needsApproval && securityUtils.currentUserHasRole("FINANCE")) needsApproval = true;
         product.setApprovalStatus(needsApproval ? "PENDING_APPROVAL" : "APPROVED");
         UUID currentUserId = securityUtils.getCurrentUserId();
         product.setCreatedById(currentUserId);

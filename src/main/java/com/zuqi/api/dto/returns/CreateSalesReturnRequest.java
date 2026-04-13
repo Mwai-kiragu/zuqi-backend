@@ -10,6 +10,7 @@ import java.util.UUID;
 @Data
 public class CreateSalesReturnRequest {
     private UUID orderId;
+    private UUID invoiceId;
     private UUID customerId;
     private String reason;
     private String refundMethod;
