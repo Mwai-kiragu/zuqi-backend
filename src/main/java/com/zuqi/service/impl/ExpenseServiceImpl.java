@@ -1,8 +1,10 @@
 package com.zuqi.service.impl;
 
+import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
 import com.zuqi.api.dto.expense.ExpenseRequest;
 import com.zuqi.api.dto.expense.ExpenseResponse;
 import com.zuqi.api.dto.gl.JournalEntryResponse;
+import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.expense.Expense;
 import com.zuqi.domain.expense.ExpenseStatus;
 import com.zuqi.domain.gl.JournalSourceModule;
@@ -11,12 +13,15 @@ import com.zuqi.domain.gl.GlAccount;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.repository.ExpenseRepository;
 import com.zuqi.repository.GlAccountRepository;
+import com.zuqi.service.ApprovalService;
 import com.zuqi.service.ExpenseService;
 import com.zuqi.service.GlPostingService;
 import com.zuqi.service.GlPostingService.PostingLine;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -40,6 +45,10 @@ public class ExpenseServiceImpl implements ExpenseService {
     private final GlAccountRepository glAccountRepository;
     private final GlPostingService glPostingService;
     private final SecurityUtils securityUtils;
+
+    @Lazy
+    @Autowired
+    private ApprovalService approvalService;
 
     @Override
     @Transactional(readOnly = true)
@@ -120,6 +129,27 @@ public class ExpenseServiceImpl implements ExpenseService {
         if (expense.getStatus() != ExpenseStatus.DRAFT && expense.getStatus() != ExpenseStatus.REJECTED) {
             throw new IllegalStateException("Only DRAFT or REJECTED expenses can be submitted");
         }
+
+        boolean needsApproval = securityUtils.currentUserRequiresApprovalFor("EXPENSES");
+        if (needsApproval) {
+            expense.setStatus(ExpenseStatus.PENDING_APPROVAL);
+            Expense saved = expenseRepository.save(expense);
+            try {
+                approvalService.createRequest(securityUtils.getCurrentUserId(),
+                    CreateApprovalRequestDto.builder()
+                        .workflowType(ApprovalWorkflowType.EXPENSE)
+                        .entityType("EXPENSE")
+                        .entityId(saved.getId())
+                        .entityName(saved.getTitle())
+                        .description("Expense: " + saved.getTitle() + " — KES " + saved.getAmount())
+                        .requiredApprovals(1)
+                        .build());
+            } catch (Exception e) {
+                log.warn("Failed to create approval request for expense {}: {}", saved.getId(), e.getMessage());
+            }
+            return ExpenseResponse.from(saved);
+        }
+
         expense.setStatus(ExpenseStatus.SUBMITTED);
         return ExpenseResponse.from(expenseRepository.save(expense));
     }
@@ -127,8 +157,8 @@ public class ExpenseServiceImpl implements ExpenseService {
     @Override
     public ExpenseResponse approve(UUID id) {
         Expense expense = findById(id);
-        if (expense.getStatus() != ExpenseStatus.SUBMITTED) {
-            throw new IllegalStateException("Only SUBMITTED expenses can be approved");
+        if (expense.getStatus() != ExpenseStatus.SUBMITTED && expense.getStatus() != ExpenseStatus.PENDING_APPROVAL) {
+            throw new IllegalStateException("Only SUBMITTED or PENDING_APPROVAL expenses can be approved");
         }
         expense.setStatus(ExpenseStatus.APPROVED);
         expense.setApprovedBy(securityUtils.getCurrentUserId());
@@ -144,8 +174,8 @@ public class ExpenseServiceImpl implements ExpenseService {
     @Override
     public ExpenseResponse reject(UUID id, String reason) {
         Expense expense = findById(id);
-        if (expense.getStatus() != ExpenseStatus.SUBMITTED) {
-            throw new IllegalStateException("Only SUBMITTED expenses can be rejected");
+        if (expense.getStatus() != ExpenseStatus.SUBMITTED && expense.getStatus() != ExpenseStatus.PENDING_APPROVAL) {
+            throw new IllegalStateException("Only SUBMITTED or PENDING_APPROVAL expenses can be rejected");
         }
         expense.setStatus(ExpenseStatus.REJECTED);
         // Store reason in description if provided

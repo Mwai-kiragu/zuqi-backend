@@ -47,5 +47,8 @@ public enum ApprovalWorkflowType {
     USER_ROLE_CHANGE,
 
     // POS
-    POS_SHIFT_RECONCILIATION
+    POS_SHIFT_RECONCILIATION,
+
+    // Finance
+    EXPENSE
 }

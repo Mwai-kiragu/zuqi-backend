@@ -6,6 +6,7 @@ import com.zuqi.domain.expense.ExpenseStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -150,6 +151,10 @@ public interface ExpenseRepository extends JpaRepository<Expense, UUID> {
             @Param("to") LocalDate to);
 
     java.util.List<Expense> findByDistributorIdOrderByExpenseDateDesc(UUID distributorId);
+
+    @Modifying
+    @Query("UPDATE Expense e SET e.status = :status WHERE e.id = :id")
+    void updateStatus(@Param("id") UUID id, @Param("status") ExpenseStatus status);
 
     @Query("SELECT e FROM Expense e WHERE e.distributorId IN " +
            "(SELECT d.id FROM Distributor d WHERE d.merchant.id = :merchantId) " +
