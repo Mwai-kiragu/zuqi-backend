@@ -287,9 +287,16 @@ public class FundsTransferServiceImpl implements FundsTransferService {
             }
         }
 
-        // Prevent double-approving
+        // Prevent double-approving at the same level
         if (approvalRepository.findByTransferIdAndLevelNumberAndApproverId(ft.getId(), level, approverId).isPresent()) {
             throw new ValidationException("You have already acted on this transfer at level " + level);
+        }
+
+        // Prevent the same person from approving multiple levels (maker-checker across levels)
+        boolean approvedPreviousLevel = approvalRepository.findByTransferIdAndApproverId(ft.getId(), approverId)
+                .stream().anyMatch(a -> a.getLevelNumber() < level);
+        if (approvedPreviousLevel) {
+            throw new ValidationException("You have already approved a previous level for this transfer. A different approver is required.");
         }
 
         // If amount range is configured, validate approver is in the level rules

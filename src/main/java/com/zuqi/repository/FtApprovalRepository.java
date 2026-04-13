@@ -16,4 +16,6 @@ public interface FtApprovalRepository extends JpaRepository<FtApproval, UUID> {
     Optional<FtApproval> findByTransferIdAndLevelNumberAndApproverId(UUID transferId, int levelNumber, UUID approverId);
 
     long countByTransferIdAndLevelNumberAndStatus(UUID transferId, int levelNumber, String status);
+
+    List<FtApproval> findByTransferIdAndApproverId(UUID transferId, UUID approverId);
 }

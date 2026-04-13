@@ -39,4 +39,18 @@ public interface StockMovementRepository extends JpaRepository<StockMovement, UU
     @Modifying
     @Query("UPDATE StockMovement sm SET sm.approvalStatus = :status WHERE sm.id = :id")
     void updateApprovalStatus(@Param("id") UUID id, @Param("status") String status);
+
+    @Query("SELECT sm FROM StockMovement sm WHERE sm.warehouse.distributor.id = :distributorId " +
+            "AND sm.createdAt BETWEEN :startDate AND :endDate ORDER BY sm.createdAt DESC")
+    Page<StockMovement> findByDistributorIdAndDateRange(
+            @Param("distributorId") UUID distributorId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            Pageable pageable);
+
+    @Query("SELECT sm FROM StockMovement sm WHERE sm.warehouse.distributor.id = :distributorId " +
+            "ORDER BY sm.createdAt DESC")
+    Page<StockMovement> findByDistributorId(
+            @Param("distributorId") UUID distributorId,
+            Pageable pageable);
 }

@@ -217,4 +217,14 @@ public class InventoryController {
         Page<StockMovementResponse> movements = inventoryService.getMovementsByDateRange(warehouseId, startDate, endDate, pageable);
         return ResponseEntity.ok(ApiResponse.success(movements));
     }
+
+    @GetMapping("/movements")
+    @Operation(summary = "Get all movements", description = "Get all stock movements for the distributor with optional date range")
+    public ResponseEntity<ApiResponse<Page<StockMovementResponse>>> getAllMovements(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate,
+            @PageableDefault(size = 50) Pageable pageable) {
+        Page<StockMovementResponse> movements = inventoryService.getAllMovementsForDistributor(startDate, endDate, pageable);
+        return ResponseEntity.ok(ApiResponse.success(movements));
+    }
 }

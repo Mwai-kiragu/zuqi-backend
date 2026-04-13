@@ -33,7 +33,9 @@ import com.zuqi.repository.PromotionRepository;
 import com.zuqi.repository.PurchaseRequisitionRepository;
 import com.zuqi.repository.StockMovementRepository;
 import com.zuqi.repository.StockRepository;
+import com.zuqi.domain.expense.ExpenseStatus;
 import com.zuqi.domain.returns.ReturnStatus;
+import com.zuqi.repository.ExpenseRepository;
 import com.zuqi.repository.SalesReturnRepository;
 import com.zuqi.repository.StockTransferRepository;
 import com.zuqi.repository.SupplierRepository;
@@ -90,6 +92,7 @@ public class ApprovalServiceImpl implements ApprovalService {
     private final OrderRepository orderRepository;
     private final InvoiceRepository invoiceRepository;
     private final SalesReturnRepository salesReturnRepository;
+    private final ExpenseRepository expenseRepository;
     private final ActivityLogService activityLogService;
     private final EmailService emailService;
     private final EmailConfig emailConfig;
@@ -374,6 +377,14 @@ public class ApprovalServiceImpl implements ApprovalService {
             case "SALES_RETURN" -> salesReturnRepository.findById(entityId).ifPresent(sr -> {
                 sr.setStatus("APPROVED".equals(status) ? ReturnStatus.CONFIRMED : ReturnStatus.CANCELLED);
                 salesReturnRepository.save(sr);
+            });
+            case "EXPENSE" -> expenseRepository.findById(entityId).ifPresent(expense -> {
+                expense.setStatus("APPROVED".equals(status) ? ExpenseStatus.APPROVED : ExpenseStatus.REJECTED);
+                if ("APPROVED".equals(status)) {
+                    expense.setApprovedBy(approverId);
+                    expense.setApprovedAt(java.time.LocalDateTime.now());
+                }
+                expenseRepository.save(expense);
             });
             default -> { /* no-op for other entity types */ }
         }

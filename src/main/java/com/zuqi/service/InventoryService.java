@@ -51,4 +51,6 @@ public interface InventoryService {
     Page<StockMovementResponse> getMovementsByWarehouseAndProduct(UUID warehouseId, UUID productId, Pageable pageable);
 
     Page<StockMovementResponse> getMovementsByDateRange(UUID warehouseId, LocalDateTime startDate, LocalDateTime endDate, Pageable pageable);
+
+    Page<StockMovementResponse> getAllMovementsForDistributor(LocalDateTime startDate, LocalDateTime endDate, Pageable pageable);
 }

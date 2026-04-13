@@ -530,6 +530,20 @@ public class InventoryServiceImpl implements InventoryService {
                 .map(this::mapToStockMovementResponse);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Page<StockMovementResponse> getAllMovementsForDistributor(LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
+        UUID distributorId = securityUtils.getDistributorIdForFiltering();
+        if (distributorId == null) {
+            return Page.empty(pageable);
+        }
+        if (startDate != null && endDate != null) {
+            return stockMovementRepository.findByDistributorIdAndDateRange(distributorId, startDate, endDate, pageable)
+                    .map(this::mapToStockMovementResponse);
+        }
+        return stockMovementRepository.findByDistributorId(distributorId, pageable)
+                .map(this::mapToStockMovementResponse);
+    }
 
     private void validateWarehouseExists(UUID warehouseId) {
         if (!warehouseRepository.existsById(warehouseId)) {
