@@ -202,8 +202,7 @@ public class SalesReturnServiceImpl implements SalesReturnService {
             InvoiceStatus currentStatus = invoice.getStatus();
             // Only adjust invoices that still have an open balance
             if (currentStatus != InvoiceStatus.PAID
-                    && currentStatus != InvoiceStatus.CANCELLED
-                    && currentStatus != InvoiceStatus.VOID) {
+                    && currentStatus != InvoiceStatus.CANCELLED) {
                 invoice.recordPayment(sr.getTotalAmount());
                 invoiceRepository.save(invoice);
                 log.info("Invoice {} balance reduced by KES {} due to confirmed return {}",
