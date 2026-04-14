@@ -5,7 +5,11 @@ import com.zuqi.api.dto.returns.*;
 import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.distributor.Distributor;
+import com.zuqi.domain.inventory.Stock;
+import com.zuqi.domain.inventory.StockMovement;
+import com.zuqi.domain.inventory.Warehouse;
 import com.zuqi.domain.invoice.Invoice;
+import com.zuqi.domain.invoice.InvoiceStatus;
 import com.zuqi.domain.order.Order;
 import com.zuqi.domain.product.Product;
 import com.zuqi.domain.returns.*;
@@ -35,14 +39,17 @@ import java.util.stream.Collectors;
 @Slf4j
 public class SalesReturnServiceImpl implements SalesReturnService {
 
-    private final SalesReturnRepository  salesReturnRepository;
-    private final OrderRepository         orderRepository;
-    private final CustomerRepository      customerRepository;
-    private final ProductRepository       productRepository;
-    private final UserRepository          userRepository;
-    private final DistributorRepository   distributorRepository;
-    private final InvoiceRepository       invoiceRepository;
-    private final SecurityUtils           securityUtils;
+    private final SalesReturnRepository    salesReturnRepository;
+    private final OrderRepository          orderRepository;
+    private final CustomerRepository       customerRepository;
+    private final ProductRepository        productRepository;
+    private final UserRepository           userRepository;
+    private final DistributorRepository    distributorRepository;
+    private final InvoiceRepository        invoiceRepository;
+    private final StockRepository          stockRepository;
+    private final StockMovementRepository  stockMovementRepository;
+    private final WarehouseRepository      warehouseRepository;
+    private final SecurityUtils            securityUtils;
 
     @Lazy @Autowired
     private ApprovalService approvalService;
@@ -155,7 +162,56 @@ public class SalesReturnServiceImpl implements SalesReturnService {
             throw new ValidationException("Only DRAFT returns can be confirmed");
         }
         sr.setStatus(ReturnStatus.CONFIRMED);
-        return toResponse(salesReturnRepository.save(sr));
+        SalesReturn saved = salesReturnRepository.save(sr);
+
+        // Restore stock for each returned item
+        Warehouse warehouse = resolveWarehouse(sr);
+        if (warehouse != null) {
+            for (SalesReturnItem item : sr.getItems()) {
+                Product product = item.getProduct();
+                Stock stock = stockRepository.findByWarehouseIdAndProductId(warehouse.getId(), product.getId())
+                        .orElseGet(() -> Stock.builder()
+                                .warehouse(warehouse)
+                                .product(product)
+                                .quantity(BigDecimal.ZERO)
+                                .build());
+                stock.setQuantity(stock.getQuantity().add(item.getQuantity()));
+                stockRepository.save(stock);
+
+                StockMovement movement = StockMovement.builder()
+                        .warehouse(warehouse)
+                        .product(product)
+                        .movementType(StockMovement.MovementType.IN)
+                        .quantity(item.getQuantity())
+                        .referenceType("RETURN")
+                        .referenceId(sr.getId())
+                        .notes("Sales return " + sr.getReturnNumber())
+                        .build();
+                stockMovementRepository.save(movement);
+
+                log.info("Restored {} units of '{}' to warehouse '{}' via return {}",
+                        item.getQuantity(), product.getName(), warehouse.getName(), sr.getReturnNumber());
+            }
+        } else {
+            log.warn("No warehouse found for return {} — stock not restored", sr.getReturnNumber());
+        }
+
+        // Credit the return amount against the linked invoice
+        if (sr.getInvoice() != null) {
+            Invoice invoice = sr.getInvoice();
+            InvoiceStatus currentStatus = invoice.getStatus();
+            // Only adjust invoices that still have an open balance
+            if (currentStatus != InvoiceStatus.PAID
+                    && currentStatus != InvoiceStatus.CANCELLED
+                    && currentStatus != InvoiceStatus.VOID) {
+                invoice.recordPayment(sr.getTotalAmount());
+                invoiceRepository.save(invoice);
+                log.info("Invoice {} balance reduced by KES {} due to confirmed return {}",
+                        invoice.getInvoiceNumber(), sr.getTotalAmount(), sr.getReturnNumber());
+            }
+        }
+
+        return toResponse(saved);
     }
 
     @Override
@@ -189,6 +245,25 @@ public class SalesReturnServiceImpl implements SalesReturnService {
     private SalesReturn findOrThrow(UUID id) {
         return salesReturnRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("SalesReturn", "id", id));
+    }
+
+    /** Returns the warehouse to use for stock restoration: order warehouse → fallback to first distributor warehouse. */
+    private Warehouse resolveWarehouse(SalesReturn sr) {
+        // Prefer order's warehouse
+        if (sr.getOrder() != null && sr.getOrder().getWarehouse() != null) {
+            return sr.getOrder().getWarehouse();
+        }
+        // Try invoice → order → warehouse
+        if (sr.getInvoice() != null && sr.getInvoice().getOrder() != null
+                && sr.getInvoice().getOrder().getWarehouse() != null) {
+            return sr.getInvoice().getOrder().getWarehouse();
+        }
+        // Fallback: first active warehouse for the distributor
+        if (sr.getDistributor() != null) {
+            List<Warehouse> warehouses = warehouseRepository.findByDistributorIdAndActiveTrue(sr.getDistributor().getId());
+            return warehouses.isEmpty() ? null : warehouses.get(0);
+        }
+        return null;
     }
 
     private String generateNumber(String prefix) {

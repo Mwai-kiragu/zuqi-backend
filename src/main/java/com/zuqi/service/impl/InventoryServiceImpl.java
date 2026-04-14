@@ -195,9 +195,11 @@ public class InventoryServiceImpl implements InventoryService {
                 .build();
         stockMovementRepository.save(movement);
 
-        // Auto-create ProductBatch when expiry date is provided on a stock-in
-        if (request.getMovementType() == StockMovement.MovementType.IN && request.getExpiryDate() != null) {
-            String batchNum = (request.getBatchNumber() != null && !request.getBatchNumber().isBlank())
+        // Auto-create ProductBatch when a batch number or expiry date is provided on a stock-in
+        boolean hasBatchNumber = request.getBatchNumber() != null && !request.getBatchNumber().isBlank();
+        boolean hasExpiry     = request.getExpiryDate() != null;
+        if (request.getMovementType() == StockMovement.MovementType.IN && (hasBatchNumber || hasExpiry)) {
+            String batchNum = hasBatchNumber
                     ? request.getBatchNumber()
                     : "BATCH-" + System.currentTimeMillis();
             ProductBatch batch = ProductBatch.builder()
