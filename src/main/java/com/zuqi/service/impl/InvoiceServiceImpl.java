@@ -298,14 +298,6 @@ public class InvoiceServiceImpl implements InvoiceService {
             log.warn("GL auto-post skipped (invoice created) for {}: {}", invoice.getInvoiceNumber(), e.getMessage());
         }
 
-        // Automatically send invoice if merchant has email
-        if (order.getMerchant().getEmail() != null && !order.getMerchant().getEmail().isEmpty()) {
-            sendInvoiceEmailAsync(invoice, order.getMerchant().getEmail());
-            // Mark as sent
-            invoice.markAsSent(order.getMerchant().getEmail());
-            invoice = invoiceRepository.save(invoice);
-        }
-
         return InvoiceResponse.fromEntity(invoice);
     }
 

@@ -50,5 +50,8 @@ public enum ApprovalWorkflowType {
     POS_SHIFT_RECONCILIATION,
 
     // Finance
-    EXPENSE
+    EXPENSE,
+
+    // Accounting
+    CHART_OF_ACCOUNTS
 }
