@@ -392,7 +392,12 @@ public class PosServiceImpl implements PosService {
         // Auto-apply default active tax rate
         BigDecimal taxAmount = BigDecimal.ZERO;
         List<TaxRate> taxRates = taxRateRepository.findByDistributorIdAndActiveTrue(branchDistributorId);
-        TaxRate defaultTax = taxRates.stream().filter(TaxRate::isDefault).findFirst().orElse(null);
+        TaxRate defaultTax = taxRates.stream()
+                .filter(t -> t.isDefault() && TaxType.PERCENTAGE == t.getTaxType())
+                .findFirst()
+                .orElseGet(() -> taxRates.stream()
+                        .filter(t -> TaxType.PERCENTAGE == t.getTaxType())
+                        .findFirst().orElse(null));
         if (defaultTax != null && TaxType.PERCENTAGE == defaultTax.getTaxType()) {
             taxAmount = subtotal.multiply(defaultTax.getRate())
                     .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
