@@ -1,6 +1,7 @@
 package com.zuqi.service.impl;
 
 import com.zuqi.api.dto.ft.*;
+import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.ft.*;
 import com.zuqi.domain.procurement.GrnStatus;
 import com.zuqi.domain.supplier.Supplier;
@@ -42,6 +43,7 @@ public class FundsTransferServiceImpl implements FundsTransferService {
     private final GlAutoPostingService glAutoPostingService;
     private final SupplierBillService supplierBillService;
     private final GoodsReceiptNoteRepository grnRepository;
+    private final ApprovalWorkflowConfigRepository approvalWorkflowConfigRepository;
     private final SecurityUtils securityUtils;
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -251,7 +253,11 @@ public class FundsTransferServiceImpl implements FundsTransferService {
             ft.setAmountRangeId(range.getId());
             ft.setRequiredApprovalLevels(range.getRequiredLevels());
         } else {
-            ft.setRequiredApprovalLevels(1); // Default: 1 level required
+            // Fall back to Business Config approval chain for FUNDS_TRANSFER
+            int configuredLevels = approvalWorkflowConfigRepository
+                    .countByDistributorIdAndWorkflowTypeAndActiveTrue(
+                            ft.getDistributorId(), ApprovalWorkflowType.FUNDS_TRANSFER);
+            ft.setRequiredApprovalLevels(configuredLevels > 0 ? configuredLevels : 1);
         }
 
         ft.setCurrentApprovalLevel(1);
