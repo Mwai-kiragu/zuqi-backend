@@ -53,5 +53,8 @@ public enum ApprovalWorkflowType {
     EXPENSE,
 
     // Accounting
-    CHART_OF_ACCOUNTS
+    CHART_OF_ACCOUNTS,
+
+    // Funds Transfer
+    FUNDS_TRANSFER
 }
