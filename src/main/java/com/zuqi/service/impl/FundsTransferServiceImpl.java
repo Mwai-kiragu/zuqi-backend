@@ -9,6 +9,7 @@ import com.zuqi.domain.supplier.SupplierBill;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
+import com.zuqi.service.ApprovalThresholdService;
 import com.zuqi.service.FundsTransferService;
 import com.zuqi.service.GlAutoPostingService;
 import com.zuqi.service.SupplierBillService;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -44,6 +46,7 @@ public class FundsTransferServiceImpl implements FundsTransferService {
     private final SupplierBillService supplierBillService;
     private final GoodsReceiptNoteRepository grnRepository;
     private final ApprovalWorkflowConfigRepository approvalWorkflowConfigRepository;
+    private final ApprovalThresholdService approvalThresholdService;
     private final SecurityUtils securityUtils;
 
     // ── Helpers ─────────────────────────────────────────────────────────────
@@ -253,11 +256,18 @@ public class FundsTransferServiceImpl implements FundsTransferService {
             ft.setAmountRangeId(range.getId());
             ft.setRequiredApprovalLevels(range.getRequiredLevels());
         } else {
-            // Fall back to Business Config approval chain for FUNDS_TRANSFER
-            int configuredLevels = approvalWorkflowConfigRepository
-                    .countByDistributorIdAndWorkflowTypeAndActiveTrue(
-                            ft.getDistributorId(), ApprovalWorkflowType.FUNDS_TRANSFER);
-            ft.setRequiredApprovalLevels(configuredLevels > 0 ? configuredLevels : 1);
+            // Check general Approval Threshold (PAYMENT_APPROVAL) configured via Approval Thresholds page
+            Optional<Integer> thresholdLevels = approvalThresholdService
+                    .findThresholdApprovals(ft.getDistributorId(), ApprovalWorkflowType.PAYMENT_APPROVAL, ft.getAmount());
+            if (thresholdLevels.isPresent()) {
+                ft.setRequiredApprovalLevels(thresholdLevels.get());
+            } else {
+                // Fall back to Business Config approval chain for FUNDS_TRANSFER
+                int configuredLevels = approvalWorkflowConfigRepository
+                        .countByDistributorIdAndWorkflowTypeAndActiveTrue(
+                                ft.getDistributorId(), ApprovalWorkflowType.FUNDS_TRANSFER);
+                ft.setRequiredApprovalLevels(configuredLevels > 0 ? configuredLevels : 1);
+            }
         }
 
         ft.setCurrentApprovalLevel(1);

@@ -10,6 +10,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Data
@@ -37,4 +38,6 @@ public class GrnItemDto {
     private String unitOfMeasure;
 
     private String notes;
+
+    private LocalDate expiryDate;
 }

@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -73,10 +74,15 @@ public class ApprovalThresholdServiceImpl implements ApprovalThresholdService {
 
     @Override
     public int getRequiredApprovals(UUID distributorId, ApprovalWorkflowType workflowType, BigDecimal amount) {
-        if (distributorId == null || amount == null) return 1;
+        return findThresholdApprovals(distributorId, workflowType, amount).orElse(1);
+    }
+
+    @Override
+    public Optional<Integer> findThresholdApprovals(UUID distributorId, ApprovalWorkflowType workflowType, BigDecimal amount) {
+        if (distributorId == null || amount == null) return Optional.empty();
         List<ApprovalThreshold> matches = repository.findMatchingThresholds(distributorId, workflowType, amount);
-        // Pick the most specific threshold (highest minAmount = narrowest lower bound)
-        return matches.isEmpty() ? 1 : matches.get(0).getRequiredApprovals();
+        if (matches.isEmpty()) return Optional.empty();
+        return Optional.of(matches.get(0).getRequiredApprovals());
     }
 
     private ApprovalThreshold find(UUID id) {

@@ -280,7 +280,8 @@ public class InvoiceServiceImpl implements InvoiceService {
                 .taxAmount(order.getTaxAmount() != null ? order.getTaxAmount() : BigDecimal.ZERO)
                 .totalAmount(order.getTotalAmount())
                 .paidAmount(order.getPaidAmount() != null ? order.getPaidAmount() : BigDecimal.ZERO)
-                .status(InvoiceStatus.DRAFT)
+                // Order was already approved — invoice is ready to send without additional approval
+                .status(InvoiceStatus.UNPAID)
                 .issueDate(LocalDate.now())
                 .dueDate(dueDate)
                 .recipientEmail(order.getMerchant().getEmail())
