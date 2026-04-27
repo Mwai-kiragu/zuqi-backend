@@ -285,12 +285,14 @@ public class OrderServiceImpl implements OrderService {
         TaxRate defaultTax = taxRates.stream().filter(TaxRate::isDefault).findFirst()
                 .orElseGet(() -> taxRates.stream().filter(t -> TaxType.PERCENTAGE == t.getTaxType()).findFirst().orElse(null));
         if (defaultTax != null && TaxType.PERCENTAGE == defaultTax.getTaxType()) {
+            // VAT-inclusive: extract the tax component from the price rather than adding on top
+            BigDecimal divisor = BigDecimal.valueOf(100).add(defaultTax.getRate());
             BigDecimal taxAmount = order.getSubtotal()
                     .multiply(defaultTax.getRate())
-                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+                    .divide(divisor, 2, RoundingMode.HALF_UP);
             order.setTaxAmount(taxAmount);
             order.setTaxRateName(defaultTax.getName() + " (" + defaultTax.getRate().stripTrailingZeros().toPlainString() + "%)");
-            order.calculateTotals(); // recalculate with tax included
+            order.calculateTotals(); // totalAmount = subtotal - discount (tax already in price)
         }
 
         // Set payment due date

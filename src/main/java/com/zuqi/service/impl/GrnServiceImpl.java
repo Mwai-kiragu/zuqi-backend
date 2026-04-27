@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zuqi.api.dto.procurement.GrnItemDto;
 import com.zuqi.api.dto.procurement.GrnRequest;
 import com.zuqi.api.dto.procurement.GrnResponse;
+import com.zuqi.domain.distributor.Distributor;
+import com.zuqi.domain.inventory.ProductBatch;
 import com.zuqi.domain.inventory.Stock;
 import com.zuqi.domain.inventory.StockMovement;
 import com.zuqi.domain.inventory.Warehouse;
@@ -27,6 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -43,6 +46,8 @@ public class GrnServiceImpl implements GrnService {
     private final StockRepository stockRepository;
     private final StockMovementRepository stockMovementRepository;
     private final ProductRepository productRepository;
+    private final ProductBatchRepository productBatchRepository;
+    private final DistributorRepository distributorRepository;
     private final SecurityUtils securityUtils;
     private final ObjectMapper objectMapper;
 
@@ -148,6 +153,26 @@ public class GrnServiceImpl implements GrnService {
 
             stock.setQuantity(stock.getQuantity().add(qty));
             stockRepository.save(stock);
+
+            // Create ProductBatch if expiry date was provided
+            Object expiryObj = itemMap.get("expiryDate");
+            if (expiryObj != null && !expiryObj.toString().isBlank()) {
+                LocalDate expiryDate = LocalDate.parse(expiryObj.toString());
+                String batchNumber = "GRN-" + grn.getGrnNumber() + "-" + productId.toString().substring(0, 8).toUpperCase();
+                Distributor distributor = distributorRepository.findById(grn.getDistributorId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Distributor", "id", grn.getDistributorId()));
+                ProductBatch batch = ProductBatch.builder()
+                        .distributor(distributor)
+                        .warehouse(warehouse)
+                        .product(stock.getProduct())
+                        .batchNumber(batchNumber)
+                        .expiryDate(expiryDate)
+                        .initialQuantity(qty.doubleValue())
+                        .currentQuantity(qty.doubleValue())
+                        .status("ACTIVE")
+                        .build();
+                productBatchRepository.save(batch);
+            }
 
             // Record inbound movement
             StockMovement movement = StockMovement.builder()

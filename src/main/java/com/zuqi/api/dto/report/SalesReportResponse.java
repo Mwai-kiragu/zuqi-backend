@@ -23,7 +23,7 @@ public class SalesReportResponse {
     private BigDecimal averageOrderValue;
     private List<DailyData> dailyData;
     private List<SalesRepData> salesRepPerformance;
-    private List<OrderSummary> orders;
+    private List<InvoiceSummary> invoices;
     private List<ProductSoldData> productsSold;
 
     @Data
@@ -51,14 +51,14 @@ public class SalesReportResponse {
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class OrderSummary {
-        private String orderId;
-        private String orderNumber;
+    public static class InvoiceSummary {
+        private String invoiceId;
+        private String invoiceNumber;
         private String customerName;
-        private LocalDateTime orderDate;
+        private LocalDate issueDate;
+        private LocalDate dueDate;
         private BigDecimal totalAmount;
         private String status;
-        private String paymentStatus;
     }
 
     @Data

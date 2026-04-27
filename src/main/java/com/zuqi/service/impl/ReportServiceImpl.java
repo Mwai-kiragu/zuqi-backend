@@ -29,6 +29,7 @@ import java.util.UUID;
 public class ReportServiceImpl implements ReportService {
 
     private final OrderRepository orderRepository;
+    private final InvoiceRepository invoiceRepository;
     private final StockRepository stockRepository;
     private final PaymentRepository paymentRepository;
     private final ProductRepository productRepository;
@@ -63,19 +64,19 @@ public class ReportServiceImpl implements ReportService {
                         .build())
                 .toList();
 
-        // Get individual orders in period (up to 100)
-        List<com.zuqi.domain.order.Order> rawOrders = orderRepository
-                .findByDistributorIdAndDateRange(distributorId, startDateTime, endDateTime);
-        List<SalesReportResponse.OrderSummary> orderList = rawOrders.stream()
-                .limit(100)
-                .map(o -> SalesReportResponse.OrderSummary.builder()
-                        .orderId(o.getId().toString())
-                        .orderNumber(o.getOrderNumber())
-                        .customerName(o.getMerchant() != null ? o.getMerchant().getBusinessName() : "")
-                        .orderDate(o.getCreatedAt())
-                        .totalAmount(o.getTotalAmount())
-                        .status(o.getStatus() != null ? o.getStatus().name() : "")
-                        .paymentStatus(o.getPaymentStatus() != null ? o.getPaymentStatus().name() : "")
+        // Get invoices in period (up to 200)
+        org.springframework.data.domain.Page<com.zuqi.domain.invoice.Invoice> invoicePage =
+                invoiceRepository.findByFilters(distributorId, null, null, startDate, endDate,
+                        PageRequest.of(0, 200));
+        List<SalesReportResponse.InvoiceSummary> invoiceList = invoicePage.getContent().stream()
+                .map(inv -> SalesReportResponse.InvoiceSummary.builder()
+                        .invoiceId(inv.getId().toString())
+                        .invoiceNumber(inv.getInvoiceNumber())
+                        .customerName(inv.getMerchant() != null ? inv.getMerchant().getBusinessName() : "")
+                        .issueDate(inv.getIssueDate())
+                        .dueDate(inv.getDueDate())
+                        .totalAmount(inv.getTotalAmount())
+                        .status(inv.getStatus() != null ? inv.getStatus().name() : "")
                         .build())
                 .toList();
 
@@ -100,7 +101,7 @@ public class ReportServiceImpl implements ReportService {
                 .averageOrderValue(avgOrderValue)
                 .dailyData(dailyList)
                 .salesRepPerformance(new ArrayList<>())
-                .orders(orderList)
+                .invoices(invoiceList)
                 .productsSold(productList)
                 .build();
     }

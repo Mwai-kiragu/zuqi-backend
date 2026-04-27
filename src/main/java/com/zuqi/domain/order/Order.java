@@ -181,7 +181,7 @@ public class Order {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal discount = this.discountAmount != null ? this.discountAmount : BigDecimal.ZERO;
-        BigDecimal tax = this.taxAmount != null ? this.taxAmount : BigDecimal.ZERO;
-        this.totalAmount = this.subtotal.subtract(discount).add(tax);
+        // Tax is VAT-inclusive (extracted from price for reporting only — not added on top)
+        this.totalAmount = this.subtotal.subtract(discount);
     }
 }

@@ -399,13 +399,16 @@ public class PosServiceImpl implements PosService {
                         .filter(t -> TaxType.PERCENTAGE == t.getTaxType())
                         .findFirst().orElse(null));
         if (defaultTax != null && TaxType.PERCENTAGE == defaultTax.getTaxType()) {
+            // VAT-inclusive: extract tax component from price (not added on top)
+            BigDecimal divisor = BigDecimal.valueOf(100).add(defaultTax.getRate());
             taxAmount = subtotal.multiply(defaultTax.getRate())
-                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+                    .divide(divisor, 2, RoundingMode.HALF_UP);
             sale.setTaxAmount(taxAmount);
         }
 
         sale.setSubtotal(subtotal);
-        sale.setTotalAmount(subtotal.subtract(sale.getDiscountAmount()).add(taxAmount));
+        // Total is just subtotal minus discount — tax is already included in item prices
+        sale.setTotalAmount(subtotal.subtract(sale.getDiscountAmount()));
 
         PosSale savedSale = saleRepository.save(sale);
 

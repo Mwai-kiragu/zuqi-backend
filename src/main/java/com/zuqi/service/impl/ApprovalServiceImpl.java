@@ -67,6 +67,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -120,15 +121,27 @@ public class ApprovalServiceImpl implements ApprovalService {
         User requester = userRepository.findById(requesterId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", requesterId.toString()));
 
-        int requiredApprovals = dto.getRequiredApprovals() != null ? dto.getRequiredApprovals() : 1;
-
-        // Override with the merchant's configured workflow levels if available
+        int requiredApprovals = 1;
         if (dto.getWorkflowType() != null && requester.getDistributorId() != null) {
-            int configuredLevels = approvalWorkflowConfigService.countActiveLevels(
-                    requester.getDistributorId(), dto.getWorkflowType());
-            if (configuredLevels > 0) {
-                requiredApprovals = configuredLevels;
+            UUID distId = requester.getDistributorId();
+            if (dto.getAmount() != null) {
+                // Threshold rule takes full priority when a matching rule exists (even if it says 1)
+                Optional<Integer> thresholdResult = approvalThresholdService.findThresholdApprovals(
+                        distId, dto.getWorkflowType(), dto.getAmount());
+                if (thresholdResult.isPresent()) {
+                    requiredApprovals = thresholdResult.get();
+                } else {
+                    // No threshold rule — fall back to Business Config levels
+                    int configuredLevels = approvalWorkflowConfigService.countActiveLevels(distId, dto.getWorkflowType());
+                    if (configuredLevels > 0) requiredApprovals = configuredLevels;
+                }
+            } else {
+                // No amount — fall back to Business Config levels
+                int configuredLevels = approvalWorkflowConfigService.countActiveLevels(distId, dto.getWorkflowType());
+                if (configuredLevels > 0) requiredApprovals = configuredLevels;
             }
+        } else if (dto.getRequiredApprovals() != null) {
+            requiredApprovals = dto.getRequiredApprovals();
         }
 
         ApprovalRequest request = ApprovalRequest.builder()

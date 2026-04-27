@@ -6,6 +6,7 @@ import com.zuqi.domain.approval.ApprovalWorkflowType;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ApprovalThresholdService {
@@ -25,4 +26,10 @@ public interface ApprovalThresholdService {
      * Defaults to 1 if no matching threshold is configured.
      */
     int getRequiredApprovals(UUID distributorId, ApprovalWorkflowType workflowType, BigDecimal amount);
+
+    /**
+     * Returns the configured approvals if a threshold rule matches, or empty if no rule covers this amount.
+     * Use this when you need to distinguish "no rule configured" from "rule says 1".
+     */
+    Optional<Integer> findThresholdApprovals(UUID distributorId, ApprovalWorkflowType workflowType, BigDecimal amount);
 }
