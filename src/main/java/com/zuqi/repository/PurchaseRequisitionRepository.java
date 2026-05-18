@@ -27,6 +27,9 @@ public interface PurchaseRequisitionRepository extends JpaRepository<PurchaseReq
     @Query("SELECT COUNT(pr) FROM PurchaseRequisition pr")
     long countAll();
 
+    @Query("SELECT COUNT(pr) FROM PurchaseRequisition pr WHERE pr.prNumber LIKE :prefix%")
+    long countByPrNumberPrefix(@Param("prefix") String prefix);
+
     @Modifying
     @Query("UPDATE PurchaseRequisition pr SET pr.status = :status WHERE pr.id = :id")
     void updateStatus(@Param("id") UUID id, @Param("status") PrStatus status);

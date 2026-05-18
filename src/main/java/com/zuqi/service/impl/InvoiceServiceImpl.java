@@ -33,6 +33,7 @@ import com.zuqi.repository.WarehouseRepository;
 import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
 import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.service.ApprovalService;
+import com.zuqi.service.ApprovalWorkflowConfigService;
 import com.zuqi.service.EmailService;
 import com.zuqi.service.GlAutoPostingService;
 import com.zuqi.service.InvoiceService;
@@ -87,6 +88,9 @@ public class InvoiceServiceImpl implements InvoiceService {
     @Lazy @Autowired
     private ApprovalService approvalService;
 
+    @Lazy @Autowired
+    private ApprovalWorkflowConfigService approvalWorkflowConfigService;
+
     @Override
     @Transactional
     public InvoiceResponse createManualInvoice(ManualInvoiceRequest request) {
@@ -132,19 +136,22 @@ public class InvoiceServiceImpl implements InvoiceService {
 
         BigDecimal discount = request.getDiscountAmount() != null ? request.getDiscountAmount() : BigDecimal.ZERO;
 
-        // Compute tax: prefer taxRateId lookup over raw taxAmount
+        // VAT-inclusive: extract tax component from price; do not add it on top
         BigDecimal tax = BigDecimal.ZERO;
         if (request.getTaxRateId() != null) {
             TaxRate taxRate = taxRateRepository.findById(request.getTaxRateId()).orElse(null);
             if (taxRate != null && taxRate.isActive()) {
-                tax = subtotal.subtract(discount).multiply(taxRate.getRate())
-                        .divide(new java.math.BigDecimal("100"), 2, java.math.RoundingMode.HALF_UP);
+                BigDecimal taxable = subtotal.subtract(discount);
+                BigDecimal divisor = java.math.BigDecimal.valueOf(100).add(taxRate.getRate());
+                tax = taxable.multiply(taxRate.getRate())
+                        .divide(divisor, 2, java.math.RoundingMode.HALF_UP);
             }
         } else if (request.getTaxAmount() != null) {
             tax = request.getTaxAmount();
         }
 
-        BigDecimal total = subtotal.subtract(discount).add(tax);
+        // Total is subtotal minus discount; tax is already included in the item prices
+        BigDecimal total = subtotal.subtract(discount);
 
         // Credit limit check
         if (customer.getCreditLimit() != null && customer.getCreditLimit().compareTo(BigDecimal.ZERO) > 0) {
@@ -268,7 +275,13 @@ public class InvoiceServiceImpl implements InvoiceService {
             dueDate = dueDate.plusDays(order.getPaymentTermsDays());
         }
 
-        // Create invoice
+        // Check if INVOICE_CREATION workflow has approval levels configured for this distributor
+        UUID distributorId = order.getDistributor().getId();
+        int invoiceApprovalLevels = approvalWorkflowConfigService.countActiveLevels(
+                distributorId, ApprovalWorkflowType.INVOICE_CREATION);
+        boolean needsApproval = invoiceApprovalLevels > 0;
+
+        // Create invoice — DRAFT if approval is required, UNPAID if not
         Invoice invoice = Invoice.builder()
                 .invoiceNumber(invoiceNumber)
                 .order(order)
@@ -280,8 +293,7 @@ public class InvoiceServiceImpl implements InvoiceService {
                 .taxAmount(order.getTaxAmount() != null ? order.getTaxAmount() : BigDecimal.ZERO)
                 .totalAmount(order.getTotalAmount())
                 .paidAmount(order.getPaidAmount() != null ? order.getPaidAmount() : BigDecimal.ZERO)
-                // Order was already approved — invoice is ready to send without additional approval
-                .status(InvoiceStatus.UNPAID)
+                .status(needsApproval ? InvoiceStatus.DRAFT : InvoiceStatus.UNPAID)
                 .issueDate(LocalDate.now())
                 .dueDate(dueDate)
                 .recipientEmail(order.getMerchant().getEmail())
@@ -290,13 +302,45 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.calculateBalanceDue();
         invoice = invoiceRepository.save(invoice);
 
-        log.info("Invoice created successfully: {}", invoice.getInvoiceNumber());
+        log.info("Invoice {} created from order {} (status: {})",
+                invoice.getInvoiceNumber(), order.getOrderNumber(), invoice.getStatus());
 
-        // Auto-post to GL: DR Accounts Receivable / CR Sales Revenue
-        try {
-            glAutoPostingService.postInvoiceCreated(invoice);
-        } catch (Exception e) {
-            log.warn("GL auto-post skipped (invoice created) for {}: {}", invoice.getInvoiceNumber(), e.getMessage());
+        // Route through approval workflow if levels are configured
+        if (needsApproval) {
+            // Identify the requester: person who submitted the order, or the sales rep
+            UUID requesterId = order.getSubmittedById();
+            if (requesterId == null && order.getSalesRep() != null) {
+                requesterId = order.getSalesRep().getId();
+            }
+            if (requesterId == null) {
+                requesterId = securityUtils.getCurrentUserId();
+            }
+            if (requesterId != null) {
+                try {
+                    approvalService.createRequest(requesterId, CreateApprovalRequestDto.builder()
+                            .workflowType(ApprovalWorkflowType.INVOICE_CREATION)
+                            .entityType("INVOICE")
+                            .entityId(invoice.getId())
+                            .entityName(invoice.getInvoiceNumber())
+                            .description("Invoice " + invoice.getInvoiceNumber()
+                                    + " for " + order.getMerchant().getBusinessName()
+                                    + " — KES " + invoice.getTotalAmount())
+                            .amount(invoice.getTotalAmount())
+                            .requiredApprovals(invoiceApprovalLevels)
+                            .build());
+                    log.info("Invoice {} queued for approval", invoice.getInvoiceNumber());
+                } catch (Exception e) {
+                    log.warn("Could not create approval request for invoice {}: {}",
+                            invoice.getInvoiceNumber(), e.getMessage());
+                }
+            }
+        } else {
+            // No approval needed — auto-post to GL immediately
+            try {
+                glAutoPostingService.postInvoiceCreated(invoice);
+            } catch (Exception e) {
+                log.warn("GL auto-post skipped for {}: {}", invoice.getInvoiceNumber(), e.getMessage());
+            }
         }
 
         return InvoiceResponse.fromEntity(invoice);
