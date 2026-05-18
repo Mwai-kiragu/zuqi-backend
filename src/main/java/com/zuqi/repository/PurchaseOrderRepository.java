@@ -26,6 +26,9 @@ public interface PurchaseOrderRepository extends JpaRepository<PurchaseOrder, UU
     @Query("SELECT COUNT(po) FROM PurchaseOrder po")
     long countAll();
 
+    @Query("SELECT COUNT(po) FROM PurchaseOrder po WHERE po.poNumber LIKE :prefix%")
+    long countByPoNumberPrefix(@Param("prefix") String prefix);
+
     @Query("SELECT po FROM PurchaseOrder po WHERE " +
             "(:distributorId IS NULL OR po.distributorId = :distributorId) AND " +
             "(:status IS NULL OR po.status = :status) AND " +

@@ -256,16 +256,26 @@ public class FundsTransferServiceImpl implements FundsTransferService {
             ft.setAmountRangeId(range.getId());
             ft.setRequiredApprovalLevels(range.getRequiredLevels());
         } else {
-            // Check general Approval Threshold (PAYMENT_APPROVAL) configured via Approval Thresholds page
+            // Resolve effective distributor for threshold lookup (FT may have null distributorId)
+            UUID distId = ft.getDistributorId() != null
+                    ? ft.getDistributorId()
+                    : securityUtils.getCurrentUserDistributorId();
+
+            // Check Approval Threshold — try PAYMENT_APPROVAL first, then FUNDS_TRANSFER type
             Optional<Integer> thresholdLevels = approvalThresholdService
-                    .findThresholdApprovals(ft.getDistributorId(), ApprovalWorkflowType.PAYMENT_APPROVAL, ft.getAmount());
+                    .findThresholdApprovals(distId, ApprovalWorkflowType.PAYMENT_APPROVAL, ft.getAmount());
+            if (!thresholdLevels.isPresent()) {
+                thresholdLevels = approvalThresholdService
+                        .findThresholdApprovals(distId, ApprovalWorkflowType.FUNDS_TRANSFER, ft.getAmount());
+            }
+
             if (thresholdLevels.isPresent()) {
                 ft.setRequiredApprovalLevels(thresholdLevels.get());
             } else {
                 // Fall back to Business Config approval chain for FUNDS_TRANSFER
                 int configuredLevels = approvalWorkflowConfigRepository
                         .countByDistributorIdAndWorkflowTypeAndActiveTrue(
-                                ft.getDistributorId(), ApprovalWorkflowType.FUNDS_TRANSFER);
+                                distId, ApprovalWorkflowType.FUNDS_TRANSFER);
                 ft.setRequiredApprovalLevels(configuredLevels > 0 ? configuredLevels : 1);
             }
         }

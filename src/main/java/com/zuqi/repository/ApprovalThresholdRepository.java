@@ -20,7 +20,8 @@ public interface ApprovalThresholdRepository extends JpaRepository<ApprovalThres
 
     List<ApprovalThreshold> findByDistributorIdAndActiveTrue(UUID distributorId);
 
-    @Query("SELECT t FROM ApprovalThreshold t WHERE t.distributorId = :distributorId " +
+    @Query("SELECT t FROM ApprovalThreshold t WHERE " +
+           "(:distributorId IS NULL AND t.distributorId IS NULL OR t.distributorId = :distributorId) " +
            "AND t.workflowType = :type AND t.active = true " +
            "AND t.minAmount <= :amount AND (t.maxAmount IS NULL OR t.maxAmount >= :amount) " +
            "ORDER BY t.minAmount DESC")

@@ -79,8 +79,12 @@ public class ApprovalThresholdServiceImpl implements ApprovalThresholdService {
 
     @Override
     public Optional<Integer> findThresholdApprovals(UUID distributorId, ApprovalWorkflowType workflowType, BigDecimal amount) {
-        if (distributorId == null || amount == null) return Optional.empty();
+        if (amount == null) return Optional.empty();
         List<ApprovalThreshold> matches = repository.findMatchingThresholds(distributorId, workflowType, amount);
+        if (matches.isEmpty() && distributorId != null) {
+            // Fall back to global (distributor-agnostic) thresholds
+            matches = repository.findMatchingThresholds(null, workflowType, amount);
+        }
         if (matches.isEmpty()) return Optional.empty();
         return Optional.of(matches.get(0).getRequiredApprovals());
     }

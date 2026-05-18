@@ -53,16 +53,34 @@ public class ProcurementServiceImpl implements ProcurementService {
     private final ApprovalService approvalService;
     private final EmailService emailService;
 
-    private String generatePrNumber() {
-        long count = prRepository.countAll();
-        String datePart = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyMMdd"));
-        return String.format("PR-%s%04d", datePart, count + 1);
+    private String generatePrNumber(UUID distributorId) {
+        String initials = resolveInitials(distributorId);
+        String prefix = "PR-" + initials + "-";
+        long count = prRepository.countByPrNumberPrefix(prefix);
+        return String.format("%s%02d", prefix, count + 1);
     }
 
-    private String generatePoNumber() {
-        long count = poRepository.countAll();
-        String datePart = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyMMdd"));
-        return String.format("PO-%s%04d", datePart, count + 1);
+    private String generatePoNumber(UUID distributorId) {
+        String initials = resolveInitials(distributorId);
+        String prefix = "PO-" + initials + "-";
+        long count = poRepository.countByPoNumberPrefix(prefix);
+        return String.format("%s%02d", prefix, count + 1);
+    }
+
+    /** Extracts uppercase initials from each word in the business name, max 4 chars. */
+    private String resolveInitials(UUID distributorId) {
+        if (distributorId == null) return "XX";
+        return distributorRepository.findById(distributorId)
+                .map(d -> {
+                    String[] words = d.getName().trim().split("\\s+");
+                    StringBuilder sb = new StringBuilder();
+                    for (String w : words) {
+                        if (!w.isEmpty()) sb.append(Character.toUpperCase(w.charAt(0)));
+                        if (sb.length() >= 4) break;
+                    }
+                    return sb.length() > 0 ? sb.toString() : "XX";
+                })
+                .orElse("XX");
     }
 
     @SuppressWarnings("unchecked")
@@ -107,7 +125,7 @@ public class ProcurementServiceImpl implements ProcurementService {
                 : securityUtils.getDistributorIdForFiltering();
 
         PurchaseRequisition pr = PurchaseRequisition.builder()
-                .prNumber(generatePrNumber())
+                .prNumber(generatePrNumber(distributorId))
                 .distributorId(distributorId)
                 .requestedBy(currentUser)
                 .description(request.getDescription())
@@ -216,7 +234,7 @@ public class ProcurementServiceImpl implements ProcurementService {
                 : securityUtils.getDistributorIdForFiltering();
 
         PurchaseOrder po = PurchaseOrder.builder()
-                .poNumber(generatePoNumber())
+                .poNumber(generatePoNumber(distributorId))
                 .supplier(supplier)
                 .distributorId(distributorId)
                 .items(itemsToMaps(request.getItems()))
