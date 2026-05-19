@@ -339,6 +339,13 @@ daraja:
   business-config-url: ${DARAJA_BUSINESS_CONFIG_URL:https://stk.swerri.io/api/v1/business_config/all}
   edit-config-url: ${DARAJA_EDIT_CONFIG_URL:https://stk.swerri.io/api/v1/business_config/edit}
 
+ncba:
+  config-url: ${NCBA_CONFIG_URL:https://zuqipayment.dev.zed.business/api/v1/configurations}
+  stk-push-url: ${NCBA_STK_PUSH_URL:https://zuqipayment.dev.zed.business/api/v1/stk-push/initiate}
+  stk-status-url: ${NCBA_STK_STATUS_URL:https://zuqipayment.dev.zed.business/api/v1/stk-push}
+#  callback-base-url: ${NCBA_CALLBACK_BASE_URL:https://decimally-aposematic-librada.ngrok-free.dev/api/v1/ncba/callback}
+  callback-base-url: ${NCBA_CALLBACK_BASE_URL:https://zuqi.pestoe.com/api/v1/ncba/callback}
+
 ---
 # Development Profile
 spring:

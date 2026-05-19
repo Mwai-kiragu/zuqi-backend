@@ -93,7 +93,7 @@ public class CasbinAuthorizationFilter extends OncePerRequestFilter {
         // Fixed: actual paths are /v1/reports/aging/ar and /v1/reports/aging/ap
         Map.entry("AR_AGING",               List.of("/v1/reports/aging/ar")),
         Map.entry("AP_AGING",               List.of("/v1/reports/aging/ap")),
-        Map.entry("PAYMENT_SETUP",          List.of("/v1/payment-setup", "/v1/mpesa", "/v1/kcb")),
+        Map.entry("PAYMENT_SETUP",          List.of("/v1/payment-setup", "/v1/mpesa", "/v1/kcb", "/v1/ncba")),
         Map.entry("AUDIT_LOGS",             List.of("/v1/audit-logs")),
         Map.entry("ADMIN",                  List.of("/v1/users", "/v1/user-groups", "/v1/user-types",
                                                     "/v1/roles", "/v1/access-control")),
@@ -183,6 +183,8 @@ public class CasbinAuthorizationFilter extends OncePerRequestFilter {
             "/api/v1/mpesa/callback",
             "/v1/kcb/callback",
             "/api/v1/kcb/callback",
+            "/v1/ncba/callback",
+            "/api/v1/ncba/callback",
             "/uploads",
             "/api/uploads",
             "/v3/api-docs",
