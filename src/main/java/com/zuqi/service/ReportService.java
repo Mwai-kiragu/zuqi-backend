@@ -5,13 +5,12 @@ import com.zuqi.api.dto.report.PaymentReportResponse;
 import com.zuqi.api.dto.report.SalesReportResponse;
 
 import java.time.LocalDate;
-import java.util.UUID;
 
 public interface ReportService {
 
-    SalesReportResponse generateSalesReport(UUID distributorId, LocalDate startDate, LocalDate endDate);
+    SalesReportResponse generateSalesReport(LocalDate startDate, LocalDate endDate);
 
-    InventoryReportResponse generateInventoryReport(UUID distributorId);
+    InventoryReportResponse generateInventoryReport();
 
-    PaymentReportResponse generatePaymentReport(UUID distributorId, LocalDate startDate, LocalDate endDate);
+    PaymentReportResponse generatePaymentReport(LocalDate startDate, LocalDate endDate);
 }

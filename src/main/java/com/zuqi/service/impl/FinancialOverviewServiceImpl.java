@@ -5,6 +5,7 @@ import com.zuqi.api.dto.financial.FinancialOverviewResponse.CategoryData;
 import com.zuqi.api.dto.financial.FinancialOverviewResponse.MonthlyData;
 import com.zuqi.domain.gl.GlAccount;
 import com.zuqi.domain.gl.SystemAccountType;
+import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.ExpenseRepository;
 import com.zuqi.repository.GlAccountRepository;
 import com.zuqi.repository.InvoiceRepository;
@@ -31,6 +32,7 @@ public class FinancialOverviewServiceImpl implements FinancialOverviewService {
     private final ExpenseRepository expenseRepository;
     private final GlAccountRepository glAccountRepository;
     private final JournalEntryLineRepository journalEntryLineRepository;
+    private final DistributorRepository distributorRepository;
     private final SecurityUtils securityUtils;
 
     private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("MMM yyyy");
@@ -122,16 +124,17 @@ public class FinancialOverviewServiceImpl implements FinancialOverviewService {
     // ── Cash Position ────────────────────────────────────────────────────────
 
     private BigDecimal getCashPosition(UUID merchantId, UUID distributorId, LocalDate asOf) {
-        UUID distId = distributorId;
-
-        // For MERCHANT_ADMIN, use the first distributor under the merchant (simplified — shows first distributor's cash)
-        if (merchantId != null && distId == null) {
-            // Try to find a distributor via a different path — look for the GL account tagged CASH_AND_BANK
-            // under any distributor of this merchant; for simplicity, return ZERO when multi-distributor
-            return BigDecimal.ZERO;
+        if (merchantId != null) {
+            // Sum cash positions across all active distributors of this merchant
+            return distributorRepository.findByMerchantIdAndActiveTrue(merchantId).stream()
+                    .map(d -> cashPositionForDistributor(d.getId(), asOf))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
         }
-        if (distId == null) return BigDecimal.ZERO;
+        if (distributorId == null) return BigDecimal.ZERO;
+        return cashPositionForDistributor(distributorId, asOf);
+    }
 
+    private BigDecimal cashPositionForDistributor(UUID distId, LocalDate asOf) {
         Optional<GlAccount> cashAcct = glAccountRepository
                 .findByDistributorIdAndSystemAccountType(distId, SystemAccountType.CASH_AND_BANK);
         if (cashAcct.isEmpty()) return BigDecimal.ZERO;

@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,9 +29,15 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
             "AND s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel")
     List<Stock> findLowStockByWarehouseId(@Param("warehouseId") UUID warehouseId);
 
-    @Query("SELECT s FROM Stock s WHERE s.warehouse.distributor.id = :distributorId " +
-            "AND s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel")
+    @Query("SELECT s FROM Stock s JOIN FETCH s.product JOIN FETCH s.warehouse " +
+            "WHERE s.warehouse.distributor.id = :distributorId " +
+            "AND s.reorderLevel IS NOT NULL AND s.quantity > 0 AND s.quantity <= s.reorderLevel")
     Page<Stock> findLowStockByDistributorId(@Param("distributorId") UUID distributorId, Pageable pageable);
+
+    @Query("SELECT s FROM Stock s JOIN FETCH s.product JOIN FETCH s.warehouse " +
+            "WHERE s.warehouse.distributor.merchant.id = :merchantId " +
+            "AND s.reorderLevel IS NOT NULL AND s.quantity > 0 AND s.quantity <= s.reorderLevel")
+    Page<Stock> findLowStockByMerchantIdFetched(@Param("merchantId") UUID merchantId, Pageable pageable);
 
     @Query("SELECT s FROM Stock s WHERE s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel")
     Page<Stock> findAllLowStock(Pageable pageable);
@@ -56,14 +63,41 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
             "AND s.quantity <= 0")
     long countOutOfStockByDistributorId(@Param("distributorId") UUID distributorId);
 
-    @Query("SELECT s FROM Stock s WHERE s.warehouse.distributor.id = :distributorId " +
-            "AND s.quantity <= 0")
+    @Query("SELECT s FROM Stock s JOIN FETCH s.product JOIN FETCH s.warehouse " +
+            "WHERE s.warehouse.distributor.id = :distributorId AND s.quantity <= 0")
     List<Stock> findOutOfStockByDistributorId(@Param("distributorId") UUID distributorId);
 
-    /** Scope to a merchant brand (MERCHANT_ADMIN) — low stock items. */
-    @Query("SELECT s FROM Stock s WHERE s.warehouse.distributor.merchant.id = :merchantId " +
-            "AND s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel")
-    Page<Stock> findLowStockByMerchantId(@Param("merchantId") UUID merchantId, Pageable pageable);
+    /** Sum of (quantity × costPrice) for all in-stock items of a distributor (stock valuation). */
+    @Query("SELECT COALESCE(SUM(s.quantity * COALESCE(s.product.costPrice, s.product.unitPrice)), 0) " +
+            "FROM Stock s WHERE s.warehouse.distributor.id = :distributorId AND s.quantity > 0")
+    BigDecimal sumStockValueByDistributorId(@Param("distributorId") UUID distributorId);
+
+    /** Per-warehouse product count and low-stock count for a distributor. */
+    @Query("SELECT s.warehouse.id, s.warehouse.name, COUNT(s), " +
+            "SUM(CASE WHEN s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel AND s.quantity > 0 THEN 1 ELSE 0 END) " +
+            "FROM Stock s WHERE s.warehouse.distributor.id = :distributorId GROUP BY s.warehouse.id, s.warehouse.name")
+    List<Object[]> warehouseSummaryByDistributorId(@Param("distributorId") UUID distributorId);
+
+    @Query("SELECT COALESCE(SUM(s.quantity * COALESCE(s.product.costPrice, s.product.unitPrice)), 0) " +
+            "FROM Stock s WHERE s.warehouse.distributor.merchant.id = :merchantId AND s.quantity > 0")
+    BigDecimal sumStockValueByMerchantId(@Param("merchantId") UUID merchantId);
+
+    @Query("SELECT COUNT(s) FROM Stock s WHERE s.warehouse.distributor.merchant.id = :merchantId " +
+            "AND s.reorderLevel IS NOT NULL AND s.quantity > 0 AND s.quantity <= s.reorderLevel")
+    long countLowStockByMerchantId(@Param("merchantId") UUID merchantId);
+
+    @Query("SELECT COUNT(s) FROM Stock s WHERE s.warehouse.distributor.merchant.id = :merchantId " +
+            "AND s.quantity <= 0")
+    long countOutOfStockByMerchantId(@Param("merchantId") UUID merchantId);
+
+    @Query("SELECT s FROM Stock s JOIN FETCH s.product JOIN FETCH s.warehouse " +
+            "WHERE s.warehouse.distributor.merchant.id = :merchantId AND s.quantity <= 0")
+    List<Stock> findOutOfStockByMerchantId(@Param("merchantId") UUID merchantId);
+
+    @Query("SELECT s.warehouse.id, s.warehouse.name, COUNT(s), " +
+            "SUM(CASE WHEN s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel AND s.quantity > 0 THEN 1 ELSE 0 END) " +
+            "FROM Stock s WHERE s.warehouse.distributor.merchant.id = :merchantId GROUP BY s.warehouse.id, s.warehouse.name")
+    List<Object[]> warehouseSummaryByMerchantId(@Param("merchantId") UUID merchantId);
 
     // Global queries for SUPER_ADMIN/ADMIN (no distributor filter)
     @Query("SELECT COUNT(s) FROM Stock s WHERE s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel AND s.quantity > 0")

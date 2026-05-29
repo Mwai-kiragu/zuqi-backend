@@ -276,6 +276,11 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
             "WHERE o.merchant.id = :customerId AND o.paymentStatus != 'PAID'")
     java.math.BigDecimal sumOutstandingByCustomerId(@Param("customerId") UUID customerId);
 
+    /** Batch version: returns [customerId, outstandingAmount] pairs for a list of customers. */
+    @Query("SELECT o.merchant.id, COALESCE(SUM(o.totalAmount - o.paidAmount), 0) FROM Order o " +
+            "WHERE o.merchant.id IN :customerIds AND o.paymentStatus != 'PAID' GROUP BY o.merchant.id")
+    List<Object[]> sumOutstandingByCustomerIds(@Param("customerIds") java.util.Collection<UUID> customerIds);
+
     /** Top products sold by revenue within a date range (for sales report). */
     @Query("SELECT oi.product.id, oi.product.name, oi.product.sku, SUM(oi.quantity), SUM(oi.totalAmount) " +
             "FROM OrderItem oi WHERE oi.order.distributor.id = :distributorId " +
