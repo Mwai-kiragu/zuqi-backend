@@ -292,7 +292,7 @@ public class InventoryServiceImpl implements InventoryService {
         if (effectiveDistributorId == null) {
             UUID merchantId = securityUtils.getCurrentUserMerchantId();
             if (merchantId != null) {
-                return stockRepository.findLowStockByMerchantId(merchantId, pageable)
+                return stockRepository.findLowStockByMerchantIdFetched(merchantId, pageable)
                         .map(this::mapToStockResponse);
             }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();

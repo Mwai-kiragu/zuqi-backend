@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -122,4 +123,42 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     List<Payment> findCompletedSince(
             @Param("distributorId") UUID distributorId,
             @Param("since") LocalDateTime since);
+
+    /** Total amount collected (COMPLETED) in a date range. */
+    @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p " +
+           "WHERE p.distributor.id = :distributorId AND p.status = 'COMPLETED' " +
+           "AND p.paymentDate >= :startDate AND p.paymentDate <= :endDate")
+    BigDecimal sumCollectedByDistributorAndDateRange(
+            @Param("distributorId") UUID distributorId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate);
+
+    /** Count of COMPLETED payments in a date range. */
+    @Query("SELECT COUNT(p) FROM Payment p " +
+           "WHERE p.distributor.id = :distributorId AND p.status = 'COMPLETED' " +
+           "AND p.paymentDate >= :startDate AND p.paymentDate <= :endDate")
+    long countCompletedByDistributorAndDateRange(
+            @Param("distributorId") UUID distributorId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate);
+
+    /** Breakdown by payment method: [methodCode, methodName, count, total]. */
+    @Query("SELECT p.paymentMethod.code, p.paymentMethod.name, COUNT(p), COALESCE(SUM(p.amount), 0) " +
+           "FROM Payment p WHERE p.distributor.id = :distributorId AND p.status = 'COMPLETED' " +
+           "AND p.paymentDate >= :startDate AND p.paymentDate <= :endDate " +
+           "GROUP BY p.paymentMethod.code, p.paymentMethod.name")
+    List<Object[]> summaryByPaymentMethod(
+            @Param("distributorId") UUID distributorId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate);
+
+    /** Daily collections: [date, count, total]. */
+    @Query("SELECT CAST(p.paymentDate AS LocalDate), COUNT(p), COALESCE(SUM(p.amount), 0) " +
+           "FROM Payment p WHERE p.distributor.id = :distributorId AND p.status = 'COMPLETED' " +
+           "AND p.paymentDate >= :startDate AND p.paymentDate <= :endDate " +
+           "GROUP BY CAST(p.paymentDate AS LocalDate) ORDER BY CAST(p.paymentDate AS LocalDate)")
+    List<Object[]> dailyCollections(
+            @Param("distributorId") UUID distributorId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate);
 }

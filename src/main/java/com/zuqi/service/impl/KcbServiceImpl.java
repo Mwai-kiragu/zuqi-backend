@@ -99,46 +99,56 @@ public class KcbServiceImpl implements KcbService {
         config.setConfiguredBy(currentUser);
         config.setConfiguredByName(configuredByName);
 
-        // Try to find an existing properly-credentialed KCB config from swerri.io (mirrors M-Pesa lookupZedBusinessId)
-        String existingId = lookupSwerriKcbId(request.accountNumber(), request.businessNo());
-        if (existingId != null) {
-            config.setExternalId(existingId);
-            log.info("Using existing KCB config from swerri.io for merchant {} kcbDarajaId={}", merchantId, existingId);
-        } else {
-            // Fall back: register a new config with swerri.io
-            try {
-                Map<String, Object> body = new HashMap<>();
-                body.put("businessName", request.businessName());
-                body.put("accountReference", request.accountNumber());
-                body.put("businessShortCode", request.accountNumber());
-                body.put("consumerKey", "");
-                body.put("consumerSecret", "");
-                body.put("passKey", "");
-                body.put("thirdPartyCallback", callbackBaseUrl);
+        // Always call add_business_configs to register or update the config in swerri.io.
+        // This ensures the thirdPartyCallback URL is always current (e.g., when switching between
+        // local ngrok and production URLs or when the ngrok session restarts).
+        try {
+            Map<String, Object> body = new HashMap<>();
+            body.put("businessName", request.businessName());
+            body.put("accountReference", request.accountNumber());
+            body.put("businessShortCode", request.accountNumber());
+            body.put("consumerKey", "");
+            body.put("consumerSecret", "");
+            body.put("passKey", "");
+            body.put("thirdPartyCallback", callbackBaseUrl);
 
-                HttpHeaders headers = new HttpHeaders();
-                headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
 
-                log.info("Registering KCB config with swerri.io for merchant {} accountNumber={}",
-                        merchantId, request.accountNumber());
+            log.info("Registering/updating KCB config with swerri.io for merchant {} accountNumber={} callbackUrl={}",
+                    merchantId, request.accountNumber(), callbackBaseUrl);
 
-                ResponseEntity<Map> response = restTemplate.exchange(
-                        kcbAddConfigUrl, HttpMethod.POST, new HttpEntity<>(body, headers), Map.class);
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    kcbAddConfigUrl, HttpMethod.POST, new HttpEntity<>(body, headers), Map.class);
 
-                Map<?, ?> resBody = response.getBody();
-                if (resBody != null) {
-                    Object newConfigs = resBody.get("newBusinessConfigs");
-                    if (newConfigs instanceof Map<?, ?> nc) {
-                        String id = getString(nc, "_id");
-                        if (id != null) {
-                            config.setExternalId(id);
-                            log.info("KCB config registered with swerri.io for merchant {} kcbDarajaId={}",
-                                    merchantId, id);
-                        }
+            Map<?, ?> resBody = response.getBody();
+            if (resBody != null) {
+                Object newConfigs = resBody.get("newBusinessConfigs");
+                if (newConfigs instanceof Map<?, ?> nc) {
+                    String id = getString(nc, "_id");
+                    if (id != null) {
+                        config.setExternalId(id);
+                        log.info("KCB config registered/updated with swerri.io for merchant {} kcbDarajaId={}",
+                                merchantId, id);
                     }
                 }
-            } catch (Exception e) {
-                log.warn("swerri.io KCB config registration failed for merchant {}: {}", merchantId, e.getMessage());
+                // Some swerri.io responses return the updated config at the top level
+                if (config.getExternalId() == null) {
+                    String id = getString(resBody, "_id");
+                    if (id != null) {
+                        config.setExternalId(id);
+                        log.info("KCB config id from swerri.io top-level for merchant {} kcbDarajaId={}",
+                                merchantId, id);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("swerri.io KCB config registration/update failed for merchant {}: {}", merchantId, e.getMessage());
+            // Fall back to existing id from lookup if available
+            String existingId = lookupSwerriKcbId(request.accountNumber(), request.businessNo());
+            if (existingId != null) {
+                config.setExternalId(existingId);
+                log.info("Using existing KCB config from swerri.io for merchant {} kcbDarajaId={}", merchantId, existingId);
             }
         }
 
@@ -287,13 +297,13 @@ public class KcbServiceImpl implements KcbService {
         boolean success = resultCodeObj != null &&
                 (Integer.valueOf(0).equals(resultCodeObj) || "0".equals(String.valueOf(resultCodeObj)));
 
-        // Match by merchantRequestId (stored as zedStkId) first, then checkoutRequestId, then orderId
+        // Match by merchantRequestId (stored as zedStkId), then checkoutRequestId (stored as requestReferenceId), then orderId
         Optional<KcbStkRequest> optReq = merchantRequestId != null
                 ? kcbStkRequestRepository.findByZedStkId(merchantRequestId)
                 : Optional.empty();
 
         if (optReq.isEmpty() && checkoutRequestId != null) {
-            optReq = kcbStkRequestRepository.findTopByReferenceIdOrderByCreatedAtDesc(checkoutRequestId);
+            optReq = kcbStkRequestRepository.findTopByRequestReferenceIdOrderByCreatedAtDesc(checkoutRequestId);
         }
 
         if (optReq.isEmpty() && orderId != null) {

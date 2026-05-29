@@ -74,6 +74,8 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
 
     long countByDistributorIdAndActiveTrue(UUID distributorId);
 
+    long countByDistributorMerchantIdAndActiveTrue(UUID merchantId);
+
     long countByCategoryIdAndActiveTrue(Long categoryId);
 
     List<Product> findByIdIn(List<UUID> ids);

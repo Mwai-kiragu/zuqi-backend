@@ -12,5 +12,7 @@ public interface KcbStkRequestRepository extends JpaRepository<KcbStkRequest, UU
 
     Optional<KcbStkRequest> findByZedStkId(String zedStkId);
 
+    Optional<KcbStkRequest> findTopByRequestReferenceIdOrderByCreatedAtDesc(String requestReferenceId);
+
     Optional<KcbStkRequest> findTopByReferenceIdOrderByCreatedAtDesc(String referenceId);
 }

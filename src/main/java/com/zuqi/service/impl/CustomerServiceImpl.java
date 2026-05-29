@@ -86,16 +86,21 @@ public class CustomerServiceImpl implements CustomerService {
     @Transactional(readOnly = true)
     public Page<CustomerResponse> getAllCustomersIncludingInactive(Pageable pageable) {
         UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        Page<CustomerResponse> page;
         if (merchantId != null) {
-            return customerRepository.findByDistributorMerchantId(merchantId, pageable)
+            page = customerRepository.findByDistributorMerchantId(merchantId, pageable)
                     .map(CustomerResponse::fromEntity);
+        } else {
+            UUID distributorId = securityUtils.getDistributorIdForFiltering();
+            if (distributorId != null) {
+                page = customerRepository.findByDistributorId(distributorId, pageable)
+                        .map(CustomerResponse::fromEntity);
+            } else {
+                page = customerRepository.findAll(pageable).map(CustomerResponse::fromEntity);
+            }
         }
-        UUID distributorId = securityUtils.getDistributorIdForFiltering();
-        if (distributorId != null) {
-            return customerRepository.findByDistributorId(distributorId, pageable)
-                    .map(CustomerResponse::fromEntity);
-        }
-        return customerRepository.findAll(pageable).map(CustomerResponse::fromEntity);
+        enrichWithRealTimeBalances(page);
+        return page;
     }
 
     @Override
@@ -119,35 +124,45 @@ public class CustomerServiceImpl implements CustomerService {
     @Override
     @Transactional(readOnly = true)
     public Page<CustomerResponse> getCustomersBySalesRep(UUID salesRepId, Pageable pageable) {
-        return customerRepository.findByAssignedSalesRepIdAndActiveTrue(salesRepId, pageable)
+        Page<CustomerResponse> page = customerRepository.findByAssignedSalesRepIdAndActiveTrue(salesRepId, pageable)
                 .map(CustomerResponse::fromEntity);
+        enrichWithRealTimeBalances(page);
+        return page;
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<CustomerResponse> getCustomersByCategory(Long categoryId, Pageable pageable) {
-        return customerRepository.findByCategoryIdAndActiveTrue(categoryId, pageable)
+        Page<CustomerResponse> page = customerRepository.findByCategoryIdAndActiveTrue(categoryId, pageable)
                 .map(CustomerResponse::fromEntity);
+        enrichWithRealTimeBalances(page);
+        return page;
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<CustomerResponse> searchCustomers(String searchTerm, UUID distributorId, Boolean active, Pageable pageable) {
         UUID effectiveDistributorId = distributorId;
+        Page<CustomerResponse> page;
         if (effectiveDistributorId == null) {
             UUID merchantId = securityUtils.getCurrentUserMerchantId();
             if (merchantId != null) {
-                return customerRepository.searchByMerchantAndActive(merchantId, searchTerm, active, pageable)
+                page = customerRepository.searchByMerchantAndActive(merchantId, searchTerm, active, pageable)
                         .map(CustomerResponse::fromEntity);
+                enrichWithRealTimeBalances(page);
+                return page;
             }
             effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
         }
         if (effectiveDistributorId != null) {
-            return customerRepository.searchByDistributorAndActive(effectiveDistributorId, searchTerm, active, pageable)
+            page = customerRepository.searchByDistributorAndActive(effectiveDistributorId, searchTerm, active, pageable)
+                    .map(CustomerResponse::fromEntity);
+        } else {
+            page = customerRepository.searchByBusinessNameAndActive(searchTerm, active, pageable)
                     .map(CustomerResponse::fromEntity);
         }
-        return customerRepository.searchByBusinessNameAndActive(searchTerm, active, pageable)
-                .map(CustomerResponse::fromEntity);
+        enrichWithRealTimeBalances(page);
+        return page;
     }
 
     @Override
@@ -340,23 +355,30 @@ public class CustomerServiceImpl implements CustomerService {
     @Transactional(readOnly = true)
     public Page<CustomerResponse> getInactiveCustomers(Pageable pageable) {
         UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        Page<CustomerResponse> page;
         if (merchantId != null) {
-            return customerRepository.findByDistributorMerchantIdAndActiveFalse(merchantId, pageable)
+            page = customerRepository.findByDistributorMerchantIdAndActiveFalse(merchantId, pageable)
                     .map(CustomerResponse::fromEntity);
+        } else {
+            UUID distributorId = securityUtils.getDistributorIdForFiltering();
+            if (distributorId != null) {
+                page = customerRepository.findByDistributorIdAndActiveFalse(distributorId, pageable)
+                        .map(CustomerResponse::fromEntity);
+            } else {
+                page = customerRepository.findByActiveFalse(pageable).map(CustomerResponse::fromEntity);
+            }
         }
-        UUID distributorId = securityUtils.getDistributorIdForFiltering();
-        if (distributorId != null) {
-            return customerRepository.findByDistributorIdAndActiveFalse(distributorId, pageable)
-                    .map(CustomerResponse::fromEntity);
-        }
-        return customerRepository.findByActiveFalse(pageable).map(CustomerResponse::fromEntity);
+        enrichWithRealTimeBalances(page);
+        return page;
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<CustomerResponse> getInactiveCustomersByDistributor(UUID distributorId, Pageable pageable) {
-        return customerRepository.findByDistributorIdAndActiveFalse(distributorId, pageable)
+        Page<CustomerResponse> page = customerRepository.findByDistributorIdAndActiveFalse(distributorId, pageable)
                 .map(CustomerResponse::fromEntity);
+        enrichWithRealTimeBalances(page);
+        return page;
     }
 
     @Override
@@ -497,6 +519,22 @@ public class CustomerServiceImpl implements CustomerService {
             scoreMap.put(mid, score);
         }
         page.getContent().forEach(c -> c.setAiScore(scoreMap.get(c.getId())));
+        enrichWithRealTimeBalances(page, ids);
+    }
+
+    private void enrichWithRealTimeBalances(Page<CustomerResponse> page) {
+        if (page.isEmpty()) return;
+        List<UUID> ids = page.getContent().stream().map(CustomerResponse::getId).toList();
+        enrichWithRealTimeBalances(page, ids);
+    }
+
+    private void enrichWithRealTimeBalances(Page<CustomerResponse> page, List<UUID> ids) {
+        List<Object[]> balanceRows = orderRepository.sumOutstandingByCustomerIds(ids);
+        Map<UUID, BigDecimal> balanceMap = new HashMap<>();
+        for (Object[] row : balanceRows) {
+            balanceMap.put((UUID) row[0], (BigDecimal) row[1]);
+        }
+        page.getContent().forEach(c -> c.setCurrentBalance(balanceMap.getOrDefault(c.getId(), BigDecimal.ZERO)));
     }
 
     private void publishCustomerCreatedEvent(Customer customer) {

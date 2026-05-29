@@ -111,47 +111,47 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
             @Param("search") String search,
             Pageable pageable);
 
-    /** Sum of PAID invoices in a date range for a distributor (revenue). */
-    @Query("SELECT COALESCE(SUM(i.totalAmount), 0) FROM Invoice i " +
-           "WHERE i.distributor.id = :distributorId AND i.status = 'PAID' " +
+    /** Sum of collected revenue (PAID + PARTIALLY_PAID) in a date range for a distributor. */
+    @Query("SELECT COALESCE(SUM(i.paidAmount), 0) FROM Invoice i " +
+           "WHERE i.distributor.id = :distributorId AND i.status IN ('PAID', 'PARTIALLY_PAID') " +
            "AND i.issueDate BETWEEN :from AND :to")
     BigDecimal sumPaidByDistributorAndDateRange(
             @Param("distributorId") UUID distributorId,
             @Param("from") java.time.LocalDate from,
             @Param("to") java.time.LocalDate to);
 
-    /** Sum of PAID invoices in a date range for a merchant brand. */
-    @Query("SELECT COALESCE(SUM(i.totalAmount), 0) FROM Invoice i " +
-           "WHERE i.distributor.merchant.id = :merchantId AND i.status = 'PAID' " +
+    /** Sum of collected revenue (PAID + PARTIALLY_PAID) in a date range for a merchant brand. */
+    @Query("SELECT COALESCE(SUM(i.paidAmount), 0) FROM Invoice i " +
+           "WHERE i.distributor.merchant.id = :merchantId AND i.status IN ('PAID', 'PARTIALLY_PAID') " +
            "AND i.issueDate BETWEEN :from AND :to")
     BigDecimal sumPaidByMerchantAndDateRange(
             @Param("merchantId") UUID merchantId,
             @Param("from") java.time.LocalDate from,
             @Param("to") java.time.LocalDate to);
 
-    /** AR balance: sum of unpaid invoice balanceDue for a distributor. */
-    @Query("SELECT COALESCE(SUM(i.balanceDue), 0) FROM Invoice i " +
+    /** AR balance: sum of outstanding (totalAmount - paidAmount) for a distributor. */
+    @Query("SELECT COALESCE(SUM(i.totalAmount - COALESCE(i.paidAmount, 0)), 0) FROM Invoice i " +
            "WHERE i.distributor.id = :distributorId " +
-           "AND i.status NOT IN ('PAID', 'CANCELLED')")
+           "AND i.status NOT IN ('PAID', 'CANCELLED', 'DRAFT')")
     BigDecimal sumArBalanceByDistributor(@Param("distributorId") UUID distributorId);
 
     /** AR balance for a merchant brand. */
-    @Query("SELECT COALESCE(SUM(i.balanceDue), 0) FROM Invoice i " +
+    @Query("SELECT COALESCE(SUM(i.totalAmount - COALESCE(i.paidAmount, 0)), 0) FROM Invoice i " +
            "WHERE i.distributor.merchant.id = :merchantId " +
-           "AND i.status NOT IN ('PAID', 'CANCELLED')")
+           "AND i.status NOT IN ('PAID', 'CANCELLED', 'DRAFT')")
     BigDecimal sumArBalanceByMerchant(@Param("merchantId") UUID merchantId);
 
-    /** Monthly revenue (PAID invoices) grouped by year+month. */
-    @Query("SELECT YEAR(i.issueDate), MONTH(i.issueDate), COALESCE(SUM(i.totalAmount), 0) " +
-           "FROM Invoice i WHERE i.distributor.id = :distributorId AND i.status = 'PAID' " +
+    /** Monthly collected revenue (PAID + PARTIALLY_PAID) grouped by year+month. */
+    @Query("SELECT YEAR(i.issueDate), MONTH(i.issueDate), COALESCE(SUM(i.paidAmount), 0) " +
+           "FROM Invoice i WHERE i.distributor.id = :distributorId AND i.status IN ('PAID', 'PARTIALLY_PAID') " +
            "AND i.issueDate >= :from GROUP BY YEAR(i.issueDate), MONTH(i.issueDate)")
     java.util.List<Object[]> monthlyRevenueByDistributor(
             @Param("distributorId") UUID distributorId,
             @Param("from") java.time.LocalDate from);
 
-    /** Monthly revenue for merchant brand. */
-    @Query("SELECT YEAR(i.issueDate), MONTH(i.issueDate), COALESCE(SUM(i.totalAmount), 0) " +
-           "FROM Invoice i WHERE i.distributor.merchant.id = :merchantId AND i.status = 'PAID' " +
+    /** Monthly collected revenue for merchant brand. */
+    @Query("SELECT YEAR(i.issueDate), MONTH(i.issueDate), COALESCE(SUM(i.paidAmount), 0) " +
+           "FROM Invoice i WHERE i.distributor.merchant.id = :merchantId AND i.status IN ('PAID', 'PARTIALLY_PAID') " +
            "AND i.issueDate >= :from GROUP BY YEAR(i.issueDate), MONTH(i.issueDate)")
     java.util.List<Object[]> monthlyRevenueByMerchant(
             @Param("merchantId") UUID merchantId,
