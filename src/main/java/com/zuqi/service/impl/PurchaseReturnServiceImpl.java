@@ -10,6 +10,8 @@ import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
+import com.zuqi.domain.audit.ActivityAction;
+import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.PurchaseReturnService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +38,7 @@ public class PurchaseReturnServiceImpl implements PurchaseReturnService {
     private final UserRepository            userRepository;
     private final DistributorRepository     distributorRepository;
     private final SecurityUtils             securityUtils;
+    private final ActivityLogService        activityLogService;
 
     @Override
     @Transactional
@@ -86,7 +89,17 @@ public class PurchaseReturnServiceImpl implements PurchaseReturnService {
         pr.setItems(items);
         pr.setTotalAmount(items.stream().map(PurchaseReturnItem::getTotalAmount).reduce(BigDecimal.ZERO, BigDecimal::add));
 
-        return toResponse(purchaseReturnRepository.save(pr));
+        PurchaseReturn savedPr = purchaseReturnRepository.save(pr);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.CREATE, "PURCHASE_RETURN", savedPr.getId(),
+                savedPr.getReturnNumber(), "PURCHASE_RETURNS", "Created purchase return: " + savedPr.getReturnNumber()
+            );
+        }
+        return toResponse(savedPr);
     }
 
     @Override
@@ -97,7 +110,17 @@ public class PurchaseReturnServiceImpl implements PurchaseReturnService {
             throw new ValidationException("Only DRAFT returns can be confirmed");
         }
         pr.setStatus(ReturnStatus.CONFIRMED);
-        return toResponse(purchaseReturnRepository.save(pr));
+        PurchaseReturn confirmedPr = purchaseReturnRepository.save(pr);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.APPROVE, "PURCHASE_RETURN", confirmedPr.getId(),
+                confirmedPr.getReturnNumber(), "PURCHASE_RETURNS", "Approved purchase return: " + confirmedPr.getReturnNumber()
+            );
+        }
+        return toResponse(confirmedPr);
     }
 
     @Override

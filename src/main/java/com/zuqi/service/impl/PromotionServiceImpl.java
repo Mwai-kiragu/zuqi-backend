@@ -12,6 +12,9 @@ import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.ProductRepository;
 import com.zuqi.repository.PromotionRepository;
+import com.zuqi.domain.audit.ActivityAction;
+import com.zuqi.domain.user.User;
+import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.ApprovalService;
 import com.zuqi.service.PromotionService;
 import com.zuqi.util.SecurityUtils;
@@ -33,6 +36,7 @@ public class PromotionServiceImpl implements PromotionService {
     private final DistributorRepository distributorRepository;
     private final SecurityUtils         securityUtils;
     private final ApprovalService       approvalService;
+    private final ActivityLogService    activityLogService;
 
     @Override
     @Transactional
@@ -79,6 +83,15 @@ public class PromotionServiceImpl implements PromotionService {
                             .build());
         }
 
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.CREATE, "PROMOTION", saved.getId(),
+                saved.getName(), "PROMOTIONS", "Created promotion: " + saved.getName()
+            );
+        }
         return toResponse(saved);
     }
 
@@ -97,7 +110,17 @@ public class PromotionServiceImpl implements PromotionService {
             p.setProduct(productRepository.findById(request.getProductId())
                     .orElseThrow(() -> new ResourceNotFoundException("Product", "id", request.getProductId())));
         }
-        return toResponse(promotionRepository.save(p));
+        Promotion updatedPromotion = promotionRepository.save(p);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.UPDATE, "PROMOTION", updatedPromotion.getId(),
+                updatedPromotion.getName(), "PROMOTIONS", "Updated promotion: " + updatedPromotion.getName()
+            );
+        }
+        return toResponse(updatedPromotion);
     }
 
     @Override
@@ -122,13 +145,33 @@ public class PromotionServiceImpl implements PromotionService {
     public PromotionResponse deactivate(UUID id) {
         Promotion promotion = findOrThrow(id);
         promotion.setActive(false);
-        return toResponse(promotionRepository.save(promotion));
+        Promotion deactivatedPromotion = promotionRepository.save(promotion);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.DEACTIVATE, "PROMOTION", deactivatedPromotion.getId(),
+                deactivatedPromotion.getName(), "PROMOTIONS", "Deactivated promotion: " + deactivatedPromotion.getName()
+            );
+        }
+        return toResponse(deactivatedPromotion);
     }
 
     @Override
     @Transactional
     public void delete(UUID id) {
-        promotionRepository.delete(findOrThrow(id));
+        Promotion promotion = findOrThrow(id);
+        promotionRepository.delete(promotion);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.DELETE, "PROMOTION", promotion.getId(),
+                promotion.getName(), "PROMOTIONS", "Deleted promotion: " + promotion.getName()
+            );
+        }
     }
 
     private Distributor resolveDistributor() {

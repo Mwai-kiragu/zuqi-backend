@@ -261,10 +261,10 @@ management:
 
 # Email Configuration
 spring.mail:
-  host: ${EMAIL_HOST:smtp.gmail.com}
+  host: ${EMAIL_HOST:smtp.resend.com}
   port: ${EMAIL_PORT:587}
-  username: ${EMAIL_USER:onesmusmwai40@gmail.com}
-  password: ${EMAIL_PASSWORD:fuxm ijsv rbxs izkl}
+  username: ${EMAIL_USER:resend}
+  password: ${EMAIL_PASSWORD:re_8A8gphJD_4fjUv7efDCSuwhmYnpniCqUS}
   properties:
     mail:
       smtp:
@@ -283,7 +283,7 @@ app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173,https://zuqi.pestoe.com,http://localhost:5174,http://localhost:5175}
   email:
-    from: ${EMAIL_FROM:onesmusmwai40@gmail.com}
+    from: ${EMAIL_FROM:noreply+Zuqi@updates.rbsproto.com}
     from-name: ${EMAIL_FROM_NAME:Zuqi}
     enabled: ${EMAIL_ENABLED:true}
     # EMAIL_PROVIDER=SMTP (default) or SES

@@ -153,4 +153,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
             "AND (r.name IN ('VERIFIER','AUTHORIZER','DISTRIBUTOR_ADMIN') " +
             "     OR ug.workflowTier IN ('VERIFIER','AUTHORIZER'))")
     List<User> findActiveApproversByDistributorId(@Param("distributorId") UUID distributorId);
+
+    @Query("SELECT DISTINCT u FROM User u LEFT JOIN u.roles r " +
+            "WHERE u.distributorId = :distributorId AND u.active = true " +
+            "AND r.name IN ('WAREHOUSE_MANAGER', 'DISTRIBUTOR_ADMIN')")
+    List<User> findWarehouseManagersByDistributorId(@Param("distributorId") UUID distributorId);
 }

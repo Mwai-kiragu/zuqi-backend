@@ -9,6 +9,9 @@ import com.zuqi.domain.supplier.SupplierBill;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
+import com.zuqi.domain.audit.ActivityAction;
+import com.zuqi.domain.user.User;
+import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.ApprovalThresholdService;
 import com.zuqi.service.FundsTransferService;
 import com.zuqi.service.GlAutoPostingService;
@@ -48,6 +51,7 @@ public class FundsTransferServiceImpl implements FundsTransferService {
     private final ApprovalWorkflowConfigRepository approvalWorkflowConfigRepository;
     private final ApprovalThresholdService approvalThresholdService;
     private final SecurityUtils securityUtils;
+    private final ActivityLogService activityLogService;
 
     // ── Helpers ─────────────────────────────────────────────────────────────
 
@@ -199,10 +203,14 @@ public class FundsTransferServiceImpl implements FundsTransferService {
                 .distributorId(distributorId)
                 .referenceNumber(generateReference())
                 .transferType(req.getTransferType())
+                .paymentMode(req.getPaymentMode() != null ? req.getPaymentMode() : "BANK_TRANSFER")
                 .debitAccountNumber(req.getDebitAccountNumber())
                 .debitBankName(req.getDebitBankName())
                 .creditAccountNumber(creditAccount != null ? creditAccount : "")
                 .creditBankName(creditBank)
+                .chequeNumber(req.getChequeNumber())
+                .chequeDate(req.getChequeDate())
+                .chequeImageUrl(req.getChequeImageUrl())
                 .amount(req.getAmount())
                 .currency(req.getCurrency() != null ? req.getCurrency() : "KES")
                 .description(req.getDescription())
@@ -215,7 +223,17 @@ public class FundsTransferServiceImpl implements FundsTransferService {
                 .status(FundsTransferStatus.DRAFT)
                 .build();
 
-        return enrich(fundsTransferRepository.save(ft));
+        FundsTransfer savedFt = fundsTransferRepository.save(ft);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.CREATE, "FUNDS_TRANSFER", savedFt.getId(),
+                savedFt.getReferenceNumber(), "FUNDS_TRANSFER", "Created funds transfer: " + savedFt.getReferenceNumber()
+            );
+        }
+        return enrich(savedFt);
     }
 
     @Override
@@ -225,10 +243,14 @@ public class FundsTransferServiceImpl implements FundsTransferService {
             throw new ValidationException("Only DRAFT transfers can be edited");
         }
         ft.setTransferType(req.getTransferType());
+        if (req.getPaymentMode() != null) ft.setPaymentMode(req.getPaymentMode());
         ft.setDebitAccountNumber(req.getDebitAccountNumber());
         ft.setDebitBankName(req.getDebitBankName());
         ft.setCreditAccountNumber(req.getCreditAccountNumber());
         ft.setCreditBankName(req.getCreditBankName());
+        ft.setChequeNumber(req.getChequeNumber());
+        ft.setChequeDate(req.getChequeDate());
+        if (req.getChequeImageUrl() != null) ft.setChequeImageUrl(req.getChequeImageUrl());
         ft.setAmount(req.getAmount());
         if (req.getCurrency() != null) ft.setCurrency(req.getCurrency());
         ft.setDescription(req.getDescription());
@@ -282,7 +304,17 @@ public class FundsTransferServiceImpl implements FundsTransferService {
 
         ft.setCurrentApprovalLevel(1);
         ft.setStatus(FundsTransferStatus.PENDING_APPROVAL);
-        return enrich(fundsTransferRepository.save(ft));
+        FundsTransfer submittedFt = fundsTransferRepository.save(ft);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.UPDATE, "FUNDS_TRANSFER", submittedFt.getId(),
+                submittedFt.getReferenceNumber(), "FUNDS_TRANSFER", "Submitted for approval: " + submittedFt.getReferenceNumber()
+            );
+        }
+        return enrich(submittedFt);
     }
 
     @Override
@@ -367,7 +399,17 @@ public class FundsTransferServiceImpl implements FundsTransferService {
             }
         }
 
-        return enrich(fundsTransferRepository.save(ft));
+        FundsTransfer approvedFt = fundsTransferRepository.save(ft);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.APPROVE, "FUNDS_TRANSFER", approvedFt.getId(),
+                approvedFt.getReferenceNumber(), "FUNDS_TRANSFER", "Approved funds transfer: " + approvedFt.getReferenceNumber()
+            );
+        }
+        return enrich(approvedFt);
     }
 
     @Override
@@ -389,7 +431,17 @@ public class FundsTransferServiceImpl implements FundsTransferService {
 
         ft.setStatus(FundsTransferStatus.REJECTED);
         ft.setRejectedReason(reason);
-        return enrich(fundsTransferRepository.save(ft));
+        FundsTransfer rejectedFt = fundsTransferRepository.save(ft);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.REJECT, "FUNDS_TRANSFER", rejectedFt.getId(),
+                rejectedFt.getReferenceNumber(), "FUNDS_TRANSFER", "Rejected funds transfer: " + rejectedFt.getReferenceNumber()
+            );
+        }
+        return enrich(rejectedFt);
     }
 
     @Override

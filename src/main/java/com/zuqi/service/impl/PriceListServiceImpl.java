@@ -13,6 +13,9 @@ import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.PriceListItemRepository;
 import com.zuqi.repository.PriceListRepository;
 import com.zuqi.repository.ProductRepository;
+import com.zuqi.domain.audit.ActivityAction;
+import com.zuqi.domain.user.User;
+import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.ApprovalService;
 import com.zuqi.service.PriceListService;
 import com.zuqi.util.SecurityUtils;
@@ -41,6 +44,7 @@ public class PriceListServiceImpl implements PriceListService {
     private final DistributorRepository   distributorRepository;
     private final SecurityUtils           securityUtils;
     private final ApprovalService         approvalService;
+    private final ActivityLogService      activityLogService;
 
     @Override
     @Transactional
@@ -78,6 +82,15 @@ public class PriceListServiceImpl implements PriceListService {
                             .build());
         }
 
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.CREATE, "PRICE_LIST", saved.getId(),
+                saved.getName(), "PRICE_LISTS", "Created price list: " + saved.getName()
+            );
+        }
         return toResponse(saved);
     }
 
@@ -92,7 +105,17 @@ public class PriceListServiceImpl implements PriceListService {
         priceList.setValidTo(request.getValidTo());
         priceList.getItems().clear();
         buildItems(priceList, request.getItems());
-        return toResponse(priceListRepository.save(priceList));
+        PriceList updatedPl = priceListRepository.save(priceList);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.UPDATE, "PRICE_LIST", updatedPl.getId(),
+                updatedPl.getName(), "PRICE_LISTS", "Updated price list: " + updatedPl.getName()
+            );
+        }
+        return toResponse(updatedPl);
     }
 
     @Override
@@ -128,7 +151,17 @@ public class PriceListServiceImpl implements PriceListService {
     @Override
     @Transactional
     public void delete(UUID id) {
-        priceListRepository.delete(findOrThrow(id));
+        PriceList priceList = findOrThrow(id);
+        priceListRepository.delete(priceList);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.DELETE, "PRICE_LIST", priceList.getId(),
+                priceList.getName(), "PRICE_LISTS", "Deleted price list: " + priceList.getName()
+            );
+        }
     }
 
     private void buildItems(PriceList priceList, List<PriceListItemRequest> itemRequests) {

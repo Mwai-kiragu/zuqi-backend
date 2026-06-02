@@ -10,11 +10,14 @@ import com.zuqi.domain.supplier.SupplierCategory;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.DuplicateResourceException;
 import com.zuqi.exception.ResourceNotFoundException;
+import com.zuqi.exception.ValidationException;
 import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
 import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.SupplierCategoryRepository;
 import com.zuqi.repository.SupplierRepository;
+import com.zuqi.domain.audit.ActivityAction;
+import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.ApprovalService;
 import com.zuqi.service.SupplierService;
 import com.zuqi.util.SecurityUtils;
@@ -25,8 +28,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.zuqi.api.dto.approval.ApprovalRequestResponse;
+import com.zuqi.domain.approval.ApprovalStatus;
+import com.zuqi.repository.ApprovalRequestRepository;
+
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -40,8 +49,10 @@ public class SupplierServiceImpl implements SupplierService {
     private final SupplierRepository supplierRepository;
     private final SupplierCategoryRepository categoryRepository;
     private final DistributorRepository distributorRepository;
+    private final ApprovalRequestRepository approvalRequestRepository;
     private final SecurityUtils securityUtils;
     private final ApprovalService approvalService;
+    private final ActivityLogService activityLogService;
 
     private String generateSupplierCode() {
         long count = supplierRepository.countAll();
@@ -177,6 +188,15 @@ public class SupplierServiceImpl implements SupplierService {
                     .build());
         }
 
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.CREATE, "SUPPLIER", saved.getId(),
+                saved.getName(), "SUPPLIERS", "Created supplier: " + saved.getName()
+            );
+        }
         return SupplierResponse.fromEntity(saved);
     }
 
@@ -197,6 +217,63 @@ public class SupplierServiceImpl implements SupplierService {
             throw new DuplicateResourceException("Supplier", "kraPin", request.getKraPin());
         }
 
+        boolean needsApproval = securityUtils.currentUserRequiresApprovalFor("SUPPLIERS");
+        UUID currentUserId = securityUtils.getCurrentUserId();
+
+        if (needsApproval && currentUserId != null) {
+            boolean hasPending = !approvalRequestRepository
+                    .findByEntityTypeAndEntityIdAndStatus("SUPPLIER_UPDATE", id, ApprovalStatus.PENDING)
+                    .isEmpty();
+            if (hasPending) {
+                throw new ValidationException("This supplier already has a pending approval request. Please wait for it to be resolved before submitting new changes.");
+            }
+
+            Map<String, Object> pendingValues = new LinkedHashMap<>();
+            pendingValues.put("name", request.getName());
+            pendingValues.put("kraPin", request.getKraPin());
+            if (request.getRegistrationNumber() != null) pendingValues.put("registrationNumber", request.getRegistrationNumber());
+            if (request.getEmail() != null) pendingValues.put("email", request.getEmail());
+            pendingValues.put("phone", request.getPhone());
+            if (request.getAddress() != null) pendingValues.put("address", request.getAddress());
+            if (request.getCity() != null) pendingValues.put("city", request.getCity());
+            if (request.getCounty() != null) pendingValues.put("county", request.getCounty());
+            if (request.getSubCounty() != null) pendingValues.put("subCounty", request.getSubCounty());
+            if (request.getBankName() != null) pendingValues.put("bankName", request.getBankName());
+            if (request.getBankBranch() != null) pendingValues.put("bankBranch", request.getBankBranch());
+            if (request.getBankAccountNumber() != null) pendingValues.put("bankAccountNumber", request.getBankAccountNumber());
+            if (request.getBankAccountName() != null) pendingValues.put("bankAccountName", request.getBankAccountName());
+            if (request.getSwiftCode() != null) pendingValues.put("swiftCode", request.getSwiftCode());
+            if (request.getPaymentTermsDays() != null) pendingValues.put("paymentTermsDays", request.getPaymentTermsDays());
+            if (request.getCreditLimit() != null) pendingValues.put("creditLimit", request.getCreditLimit().toString());
+            if (request.getCategoryId() != null) pendingValues.put("categoryId", request.getCategoryId().toString());
+            if (request.getContactPersons() != null) pendingValues.put("contactPersons", request.getContactPersons());
+
+            ApprovalRequestResponse approvalReq = approvalService.createRequest(currentUserId,
+                    CreateApprovalRequestDto.builder()
+                            .workflowType(ApprovalWorkflowType.SUPPLIER_DETAILS_UPDATE)
+                            .entityType("SUPPLIER_UPDATE")
+                            .entityId(supplier.getId())
+                            .entityName(supplier.getName())
+                            .description("Update details for supplier: " + supplier.getName())
+                            .requestedValues(pendingValues)
+                            .requiredApprovals(1)
+                            .build());
+
+            User currentUser = securityUtils.getCurrentUser();
+            if (currentUser != null) {
+                activityLogService.log(
+                        currentUser.getId(), currentUser.getEmail(),
+                        currentUser.getFirstName() + " " + currentUser.getLastName(),
+                        ActivityAction.UPDATE, "SUPPLIER", supplier.getId(),
+                        supplier.getName(), "SUPPLIERS", "Submitted update for approval: " + supplier.getName());
+            }
+
+            SupplierResponse response = SupplierResponse.fromEntity(supplier);
+            response.setPendingApprovalId(approvalReq.getId());
+            return response;
+        }
+
+        // No approval needed — apply immediately
         supplier.setName(request.getName());
         supplier.setKraPin(request.getKraPin());
         supplier.setRegistrationNumber(request.getRegistrationNumber());
@@ -224,7 +301,16 @@ public class SupplierServiceImpl implements SupplierService {
                     .orElseThrow(() -> new ResourceNotFoundException("Distributor", "id", request.getDistributorId().toString())));
         }
 
-        return SupplierResponse.fromEntity(supplierRepository.save(supplier));
+        Supplier updatedSupplier = supplierRepository.save(supplier);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                    currentUser.getId(), currentUser.getEmail(),
+                    currentUser.getFirstName() + " " + currentUser.getLastName(),
+                    ActivityAction.UPDATE, "SUPPLIER", updatedSupplier.getId(),
+                    updatedSupplier.getName(), "SUPPLIERS", "Updated supplier: " + updatedSupplier.getName());
+        }
+        return SupplierResponse.fromEntity(updatedSupplier);
     }
 
     @Override
@@ -268,6 +354,14 @@ public class SupplierServiceImpl implements SupplierService {
         supplier.setDeactivatedAt(LocalDateTime.now());
         supplier.setDeactivatedBy(currentUser);
         supplierRepository.save(supplier);
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.DEACTIVATE, "SUPPLIER", supplier.getId(),
+                supplier.getName(), "SUPPLIERS", "Deactivated supplier: " + supplier.getName()
+            );
+        }
     }
 
     @Override
@@ -279,6 +373,15 @@ public class SupplierServiceImpl implements SupplierService {
         supplier.setDeactivatedAt(null);
         supplier.setDeactivatedBy(null);
         supplierRepository.save(supplier);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.ACTIVATE, "SUPPLIER", supplier.getId(),
+                supplier.getName(), "SUPPLIERS", "Activated supplier: " + supplier.getName()
+            );
+        }
     }
 
     @Override

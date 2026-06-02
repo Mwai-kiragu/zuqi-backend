@@ -19,6 +19,8 @@ import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.PurchaseOrderRepository;
 import com.zuqi.repository.PurchaseRequisitionRepository;
 import com.zuqi.repository.SupplierRepository;
+import com.zuqi.domain.audit.ActivityAction;
+import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.ApprovalService;
 import com.zuqi.service.ApprovalThresholdService;
 import com.zuqi.service.EmailService;
@@ -52,6 +54,7 @@ public class ProcurementServiceImpl implements ProcurementService {
     private final ApprovalThresholdService approvalThresholdService;
     private final ApprovalService approvalService;
     private final EmailService emailService;
+    private final ActivityLogService activityLogService;
 
     private String generatePrNumber(UUID distributorId) {
         String initials = resolveInitials(distributorId);
@@ -136,6 +139,12 @@ public class ProcurementServiceImpl implements ProcurementService {
                 .build();
 
         PurchaseRequisition saved = prRepository.save(pr);
+        activityLogService.log(
+            currentUser.getId(), currentUser.getEmail(),
+            currentUser.getFirstName() + " " + currentUser.getLastName(),
+            ActivityAction.CREATE, "PURCHASE_REQUISITION", saved.getId(),
+            saved.getPrNumber(), "PROCUREMENT", "Created purchase requisition: " + saved.getPrNumber()
+        );
         return PurchaseRequisitionResponse.fromEntity(saved, resolveDistributorName(saved.getDistributorId()));
     }
 
@@ -180,6 +189,12 @@ public class ProcurementServiceImpl implements ProcurementService {
         pr.setApprovedAt(LocalDateTime.now());
         pr.setApprovedBy(currentUser);
         PurchaseRequisition savedApp = prRepository.save(pr);
+        activityLogService.log(
+            currentUser.getId(), currentUser.getEmail(),
+            currentUser.getFirstName() + " " + currentUser.getLastName(),
+            ActivityAction.APPROVE, "PURCHASE_REQUISITION", savedApp.getId(),
+            savedApp.getPrNumber(), "PROCUREMENT", "Approved purchase requisition: " + savedApp.getPrNumber()
+        );
         return PurchaseRequisitionResponse.fromEntity(savedApp, resolveDistributorName(savedApp.getDistributorId()));
     }
 
@@ -193,6 +208,12 @@ public class ProcurementServiceImpl implements ProcurementService {
         pr.setStatus(PrStatus.REJECTED);
         pr.setRejectionReason(reason);
         PurchaseRequisition savedRej = prRepository.save(pr);
+        activityLogService.log(
+            currentUser.getId(), currentUser.getEmail(),
+            currentUser.getFirstName() + " " + currentUser.getLastName(),
+            ActivityAction.REJECT, "PURCHASE_REQUISITION", savedRej.getId(),
+            savedRej.getPrNumber(), "PROCUREMENT", "Rejected purchase requisition: " + savedRej.getPrNumber()
+        );
         return PurchaseRequisitionResponse.fromEntity(savedRej, resolveDistributorName(savedRej.getDistributorId()));
     }
 
@@ -253,6 +274,12 @@ public class ProcurementServiceImpl implements ProcurementService {
         }
 
         PurchaseOrder savedPo = poRepository.save(po);
+        activityLogService.log(
+            currentUser.getId(), currentUser.getEmail(),
+            currentUser.getFirstName() + " " + currentUser.getLastName(),
+            ActivityAction.CREATE, "PURCHASE_ORDER", savedPo.getId(),
+            savedPo.getPoNumber(), "PROCUREMENT", "Created purchase order: " + savedPo.getPoNumber()
+        );
         return PurchaseOrderResponse.fromEntity(savedPo, resolveDistributorName(savedPo.getDistributorId()));
     }
 

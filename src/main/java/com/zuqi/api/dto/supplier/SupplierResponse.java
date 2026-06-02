@@ -55,7 +55,8 @@ public class SupplierResponse {
     private LocalDateTime deactivatedAt;
     private String deactivatedByName;
     private String approvalStatus;
-    private java.util.UUID createdById;
+    private UUID createdById;
+    private UUID pendingApprovalId;
 
     public static SupplierResponse fromEntity(Supplier s) {
         return SupplierResponse.builder()

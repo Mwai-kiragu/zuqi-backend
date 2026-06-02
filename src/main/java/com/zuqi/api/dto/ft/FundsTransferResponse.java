@@ -7,6 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -19,10 +20,14 @@ public class FundsTransferResponse {
     private UUID distributorId;
     private String referenceNumber;
     private FundsTransferType transferType;
+    private String paymentMode;
     private String debitAccountNumber;
     private String debitBankName;
     private String creditAccountNumber;
     private String creditBankName;
+    private String chequeNumber;
+    private LocalDate chequeDate;
+    private String chequeImageUrl;
     private BigDecimal amount;
     private String currency;
     private String description;
@@ -57,10 +62,14 @@ public class FundsTransferResponse {
                 .distributorId(ft.getDistributorId())
                 .referenceNumber(ft.getReferenceNumber())
                 .transferType(ft.getTransferType())
+                .paymentMode(ft.getPaymentMode())
                 .debitAccountNumber(ft.getDebitAccountNumber())
                 .debitBankName(ft.getDebitBankName())
                 .creditAccountNumber(ft.getCreditAccountNumber())
                 .creditBankName(ft.getCreditBankName())
+                .chequeNumber(ft.getChequeNumber())
+                .chequeDate(ft.getChequeDate())
+                .chequeImageUrl(ft.getChequeImageUrl())
                 .amount(ft.getAmount())
                 .currency(ft.getCurrency())
                 .description(ft.getDescription())

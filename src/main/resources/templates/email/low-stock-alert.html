@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Low Stock Alert</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f4;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f4f4f4;">
+        <tr>
+            <td style="padding: 40px 0;">
+                <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="margin: 0 auto; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background-color: #f4fafb; padding: 24px 40px; border-radius: 8px 8px 0 0; text-align: center; border-bottom: 4px solid #f59e0b;">
+                            <span style="font-size: 24px; font-weight: 700; color: #0b5e72;">Zuqi</span>
+                        </td>
+                    </tr>
+
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 40px;">
+                            <!-- Alert Icon -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                                <tr>
+                                    <td style="text-align: center; padding-bottom: 20px;">
+                                        <div style="display: inline-block; width: 60px; height: 60px; background-color: #fffbeb; border-radius: 50%; line-height: 60px; text-align: center;">
+                                            <span style="color: #f59e0b; font-size: 32px;">&#9888;</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <h2 style="margin: 0 0 8px 0; color: #333333; font-size: 22px; font-weight: 600; text-align: center;">
+                                Low Stock Alert
+                            </h2>
+                            <p style="text-align: center; color: #666; margin: 0 0 28px 0;">
+                                Hi <span th:text="${recipientName}">Inventory Officer</span>, action may be required.
+                            </p>
+
+                            <!-- Alert Banner -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 0 0 25px 0;">
+                                <tr>
+                                    <td style="background-color: #fffbeb; border-left: 4px solid #f59e0b; border-radius: 4px; padding: 15px 20px;">
+                                        <p style="margin: 0; color: #92400e; font-size: 15px; font-weight: 600;">
+                                            Stock level for <span th:text="${productName}">Product</span> is at or below the reorder threshold.
+                                        </p>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <!-- Stock Details -->
+                            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin: 0 0 25px 0; border: 1px solid #e0e0e0; border-radius: 4px;">
+                                <tr>
+                                    <td style="padding: 14px 20px; border-bottom: 1px solid #e0e0e0; background-color: #fafafa; width: 40%;">
+                                        <strong style="color: #555555; font-size: 13px;">Product</strong>
+                                    </td>
+                                    <td style="padding: 14px 20px; border-bottom: 1px solid #e0e0e0;">
+                                        <span style="color: #333333; font-size: 14px; font-weight: 600;" th:text="${productName}">—</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 14px 20px; border-bottom: 1px solid #e0e0e0; background-color: #fafafa;">
+                                        <strong style="color: #555555; font-size: 13px;">Warehouse</strong>
+                                    </td>
+                                    <td style="padding: 14px 20px; border-bottom: 1px solid #e0e0e0;">
+                                        <span style="color: #333333; font-size: 14px;" th:text="${warehouseName}">—</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 14px 20px; border-bottom: 1px solid #e0e0e0; background-color: #fafafa;">
+                                        <strong style="color: #555555; font-size: 13px;">Current Stock</strong>
+                                    </td>
+                                    <td style="padding: 14px 20px; border-bottom: 1px solid #e0e0e0;">
+                                        <span style="color: #dc2626; font-size: 14px; font-weight: 700;" th:text="${currentStock}">0</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 14px 20px; background-color: #fafafa;">
+                                        <strong style="color: #555555; font-size: 13px;">Reorder Level</strong>
+                                    </td>
+                                    <td style="padding: 14px 20px;">
+                                        <span style="color: #333333; font-size: 14px;" th:text="${reorderLevel}">—</span>
+                                    </td>
+                                </tr>
+                            </table>
+
+                            <p style="color: #666666; font-size: 14px; line-height: 1.6; margin: 0 0 24px 0;">
+                                Please log in to Zuqi to review the stock levels and initiate a replenishment order if required.
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Footer -->
+                    <tr>
+                        <td style="padding: 20px 40px; border-top: 1px solid #e0e0e0; text-align: center;">
+                            <p style="margin: 0; color: #999999; font-size: 12px;">
+                                This is an automated alert from Zuqi. Please do not reply to this email.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

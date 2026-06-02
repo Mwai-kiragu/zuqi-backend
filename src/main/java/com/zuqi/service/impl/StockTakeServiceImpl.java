@@ -7,6 +7,8 @@ import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
+import com.zuqi.domain.audit.ActivityAction;
+import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.StockTakeService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +39,7 @@ public class StockTakeServiceImpl implements StockTakeService {
     private final StockMovementRepository stockMovementRepository;
     private final UserRepository userRepository;
     private final SecurityUtils securityUtils;
+    private final ActivityLogService activityLogService;
 
     @Override
     @Transactional
@@ -74,6 +77,15 @@ public class StockTakeServiceImpl implements StockTakeService {
 
         batch = batchRepository.save(batch);
         log.info("Created stock take batch {} for warehouse {}", batch.getReferenceNumber(), warehouse.getId());
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.CREATE, "STOCK_TAKE", batch.getId(),
+                batch.getReferenceNumber(), "INVENTORY", "Created stock take: " + batch.getReferenceNumber() + " for warehouse " + warehouse.getName()
+            );
+        }
         return mapToResponse(batch);
     }
 
@@ -150,7 +162,17 @@ public class StockTakeServiceImpl implements StockTakeService {
         batch.setStatus(StockTakeBatchStatus.COMPLETED);
         batch.setCompletedAt(LocalDateTime.now());
 
-        return mapToResponse(batchRepository.save(batch));
+        StockTakeBatch completedBatch = batchRepository.save(batch);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.STOCK_TAKE, "STOCK_TAKE", completedBatch.getId(),
+                completedBatch.getReferenceNumber(), "INVENTORY", "Stock take completed: " + completedBatch.getReferenceNumber()
+            );
+        }
+        return mapToResponse(completedBatch);
     }
 
     @Override

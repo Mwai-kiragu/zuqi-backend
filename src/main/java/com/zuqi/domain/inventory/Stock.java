@@ -51,6 +51,9 @@ public class Stock {
     @Column(name = "last_stock_check")
     private LocalDateTime lastStockCheck;
 
+    @Column(name = "last_low_stock_alert_sent_at")
+    private LocalDateTime lastLowStockAlertSentAt;
+
     @Version
     private Long version;
 

@@ -32,6 +32,9 @@ import com.zuqi.repository.TaxRateRepository;
 import com.zuqi.repository.WarehouseRepository;
 import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
 import com.zuqi.domain.approval.ApprovalWorkflowType;
+import com.zuqi.domain.audit.ActivityAction;
+import com.zuqi.domain.user.User;
+import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.ApprovalService;
 import com.zuqi.service.ApprovalWorkflowConfigService;
 import com.zuqi.service.EmailService;
@@ -84,6 +87,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final SecurityUtils securityUtils;
     private final PaymentService paymentService;
     private final GlAutoPostingService glAutoPostingService;
+    private final ActivityLogService activityLogService;
 
     @Lazy @Autowired
     private ApprovalService approvalService;
@@ -246,6 +250,16 @@ public class InvoiceServiceImpl implements InvoiceService {
             glAutoPostingService.postManualInvoiceCogs(saved, items, resolvedDistributorId);
         } catch (Exception e) {
             log.warn("GL COGS posting failed for manual invoice {}: {}", saved.getInvoiceNumber(), e.getMessage());
+        }
+
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.CREATE, "INVOICE", saved.getId(),
+                saved.getInvoiceNumber(), "INVOICES", "Created invoice: " + saved.getInvoiceNumber()
+            );
         }
 
         return InvoiceResponse.fromEntity(saved);
@@ -559,6 +573,16 @@ public class InvoiceServiceImpl implements InvoiceService {
 
         log.info("Invoice {} sent to {}", invoice.getInvoiceNumber(), recipientEmail);
 
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.SEND, "INVOICE", invoice.getId(),
+                invoice.getInvoiceNumber(), "INVOICES", "Sent invoice: " + invoice.getInvoiceNumber() + " to " + recipientEmail
+            );
+        }
+
         return InvoiceResponse.fromEntity(invoice);
     }
 
@@ -656,6 +680,16 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice = invoiceRepository.save(invoice);
 
         log.info("Invoice {} cancelled", invoice.getInvoiceNumber());
+
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.DELETE, "INVOICE", invoice.getId(),
+                invoice.getInvoiceNumber(), "INVOICES", "Cancelled invoice: " + invoice.getInvoiceNumber()
+            );
+        }
 
         return InvoiceResponse.fromEntity(invoice);
     }

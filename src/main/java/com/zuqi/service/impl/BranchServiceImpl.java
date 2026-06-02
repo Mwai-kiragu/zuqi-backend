@@ -15,8 +15,11 @@ import com.zuqi.repository.DistributorBranchRepository;
 import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.UserRepository;
 import com.zuqi.repository.WarehouseRepository;
+import com.zuqi.domain.audit.ActivityAction;
 import com.zuqi.security.JwtService;
+import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.BranchService;
+import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -38,6 +41,8 @@ public class BranchServiceImpl implements BranchService {
     private final UserRepository userRepository;
     private final WarehouseRepository warehouseRepository;
     private final JwtService jwtService;
+    private final SecurityUtils securityUtils;
+    private final ActivityLogService activityLogService;
 
     @Override
     @Transactional
@@ -95,6 +100,15 @@ public class BranchServiceImpl implements BranchService {
         warehouseRepository.save(warehouse);
         log.info("Auto-created warehouse for branch {}", branch.getId());
 
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.CREATE, "BRANCH", branch.getId(),
+                branch.getName(), "BRANCHES", "Created branch: " + branch.getName()
+            );
+        }
         return mapToResponse(branch);
     }
 
@@ -143,7 +157,17 @@ public class BranchServiceImpl implements BranchService {
             branch.setManager(manager);
         }
 
-        return mapToResponse(branchRepository.save(branch));
+        DistributorBranch updatedBranch = branchRepository.save(branch);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.UPDATE, "BRANCH", updatedBranch.getId(),
+                updatedBranch.getName(), "BRANCHES", "Updated branch: " + updatedBranch.getName()
+            );
+        }
+        return mapToResponse(updatedBranch);
     }
 
     @Override
@@ -153,6 +177,15 @@ public class BranchServiceImpl implements BranchService {
                 .orElseThrow(() -> new ResourceNotFoundException("Branch", "id", branchId));
         branch.setStatus(BranchStatus.ACTIVE);
         branchRepository.save(branch);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.ACTIVATE, "BRANCH", branch.getId(),
+                branch.getName(), "BRANCHES", "Activated branch: " + branch.getName()
+            );
+        }
     }
 
     @Override
@@ -162,6 +195,15 @@ public class BranchServiceImpl implements BranchService {
                 .orElseThrow(() -> new ResourceNotFoundException("Branch", "id", branchId));
         branch.setStatus(BranchStatus.INACTIVE);
         branchRepository.save(branch);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.DEACTIVATE, "BRANCH", branch.getId(),
+                branch.getName(), "BRANCHES", "Deactivated branch: " + branch.getName()
+            );
+        }
     }
 
     @Override
