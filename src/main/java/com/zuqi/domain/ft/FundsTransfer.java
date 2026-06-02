@@ -9,6 +9,7 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -51,6 +52,19 @@ public class FundsTransfer {
 
     @Column(name = "credit_bank_name", length = 100)
     private String creditBankName;
+
+    /** BANK_TRANSFER | CHEQUE | MPESA */
+    @Column(name = "payment_mode", length = 20)
+    private String paymentMode;
+
+    @Column(name = "cheque_number", length = 60)
+    private String chequeNumber;
+
+    @Column(name = "cheque_date")
+    private LocalDate chequeDate;
+
+    @Column(name = "cheque_image_url", length = 500)
+    private String chequeImageUrl;
 
     @Column(nullable = false, precision = 15, scale = 2)
     private BigDecimal amount;

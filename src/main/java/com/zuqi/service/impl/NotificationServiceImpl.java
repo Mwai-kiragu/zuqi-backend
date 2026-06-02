@@ -4,11 +4,13 @@ import com.zuqi.api.dto.common.PageResponse;
 import com.zuqi.api.dto.notification.NotificationResponse;
 import com.zuqi.domain.approval.ApprovalRequest;
 import com.zuqi.domain.approval.ApprovalStatus;
+import com.zuqi.domain.inventory.Stock;
 import com.zuqi.domain.notification.Notification;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.repository.NotificationRepository;
 import com.zuqi.repository.UserRepository;
+import com.zuqi.service.EmailService;
 import com.zuqi.service.NotificationService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -28,6 +31,7 @@ public class NotificationServiceImpl implements NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
+    private final EmailService emailService;
     private final SecurityUtils securityUtils;
 
     @Override
@@ -102,6 +106,67 @@ public class NotificationServiceImpl implements NotificationService {
         } catch (Exception e) {
             log.error("Failed to send in-app notification to requester for request {}: {}",
                     request.getRequestNumber(), e.getMessage(), e);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void notifyLowStock(Stock stock) {
+        try {
+            if (stock.getWarehouse() == null || stock.getWarehouse().getDistributor() == null) return;
+            UUID distributorId = stock.getWarehouse().getDistributor().getId();
+
+            List<User> recipients = userRepository.findWarehouseManagersByDistributorId(distributorId);
+            if (recipients.isEmpty()) {
+                log.info("No warehouse managers found for distributor {} — skipping low stock notification", distributorId);
+                return;
+            }
+
+            String productName = stock.getProduct() != null ? stock.getProduct().getName() : "Unknown Product";
+            String warehouseName = stock.getWarehouse().getName();
+            String title = "Low Stock Alert: " + productName;
+            String message = "Stock for \"" + productName + "\" in " + warehouseName
+                    + " has dropped to " + stock.getQuantity().stripTrailingZeros().toPlainString()
+                    + " units (reorder level: " + stock.getReorderLevel().stripTrailingZeros().toPlainString() + ").";
+
+            List<Notification> notifications = recipients.stream()
+                    .map(user -> Notification.builder()
+                            .userId(user.getId())
+                            .type("LOW_STOCK")
+                            .title(title)
+                            .message(message)
+                            .entityType("STOCK")
+                            .entityId(stock.getId())
+                            .entityName(productName)
+                            .build())
+                    .toList();
+            notificationRepository.saveAll(notifications);
+
+            // Send email to each recipient
+            recipients.stream()
+                    .filter(u -> u.getEmail() != null && !u.getEmail().isBlank())
+                    .forEach(user -> {
+                        try {
+                            emailService.sendTemplatedEmail(
+                                    user.getEmail(),
+                                    "Low Stock Alert: " + productName,
+                                    "email/low-stock-alert",
+                                    Map.of(
+                                            "recipientName", user.getFirstName() + " " + user.getLastName(),
+                                            "productName", productName,
+                                            "warehouseName", warehouseName,
+                                            "currentStock", stock.getQuantity().stripTrailingZeros().toPlainString(),
+                                            "reorderLevel", stock.getReorderLevel().stripTrailingZeros().toPlainString()
+                                    ));
+                        } catch (Exception e) {
+                            log.warn("Failed to send low stock email to {}: {}", user.getEmail(), e.getMessage());
+                        }
+                    });
+
+            log.info("Sent LOW_STOCK notification to {} recipients for product {} in {}",
+                    notifications.size(), productName, warehouseName);
+        } catch (Exception e) {
+            log.error("Failed to send low stock notification for stock {}: {}", stock.getId(), e.getMessage(), e);
         }
     }
 

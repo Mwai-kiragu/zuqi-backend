@@ -17,6 +17,9 @@ import com.zuqi.domain.mpesa.MpesaConfigStatus;
 import com.zuqi.domain.kcb.KcbConfigStatus;
 import com.zuqi.ai.event.PaymentRecordedEvent;
 import com.zuqi.ai.feature.FeatureStore;
+import com.zuqi.domain.audit.ActivityAction;
+import com.zuqi.domain.user.User;
+import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.PaymentService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -53,6 +56,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final SecurityUtils securityUtils;
     private final ApplicationEventPublisher eventPublisher;
     private final FeatureStore featureStore;
+    private final ActivityLogService activityLogService;
 
     @Override
     public Page<PaymentResponse> getAllPayments(Pageable pageable) {
@@ -221,6 +225,17 @@ public class PaymentServiceImpl implements PaymentService {
         publishPaymentRecordedEvent(payment);
 
         log.info("Payment created successfully: {}", payment.getPaymentNumber());
+
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.CREATE, "PAYMENT", payment.getId(),
+                payment.getPaymentNumber(), "PAYMENTS", "Recorded payment: " + payment.getPaymentNumber() + " — " + payment.getAmount()
+            );
+        }
+
         return PaymentResponse.fromEntity(payment);
     }
 

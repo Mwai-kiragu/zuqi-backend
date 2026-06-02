@@ -11,6 +11,8 @@ import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
+import com.zuqi.domain.audit.ActivityAction;
+import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.GlAutoPostingService;
 import com.zuqi.service.SupplierBillService;
 import com.zuqi.util.SecurityUtils;
@@ -43,6 +45,7 @@ public class SupplierBillServiceImpl implements SupplierBillService {
     private final UserRepository userRepository;
     private final GlAutoPostingService glAutoPostingService;
     private final SecurityUtils securityUtils;
+    private final ActivityLogService activityLogService;
 
     private SupplierBill findById(UUID id) {
         return supplierBillRepository.findById(id)
@@ -189,7 +192,17 @@ public class SupplierBillServiceImpl implements SupplierBillService {
                 .createdBy(createdBy)
                 .build();
 
-        return SupplierBillResponse.from(supplierBillRepository.save(bill));
+        SupplierBill savedBill = supplierBillRepository.save(bill);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.CREATE, "SUPPLIER_BILL", savedBill.getId(),
+                savedBill.getBillNumber(), "SUPPLIERS", "Created supplier bill: " + savedBill.getBillNumber()
+            );
+        }
+        return SupplierBillResponse.from(savedBill);
     }
 
     @Override
@@ -219,7 +232,17 @@ public class SupplierBillServiceImpl implements SupplierBillService {
         bill.setTotalAmount(req.getTotalAmount());
         bill.setNotes(req.getNotes());
 
-        return SupplierBillResponse.from(supplierBillRepository.save(bill));
+        SupplierBill updatedBill = supplierBillRepository.save(bill);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.UPDATE, "SUPPLIER_BILL", updatedBill.getId(),
+                updatedBill.getBillNumber(), "SUPPLIERS", "Updated supplier bill: " + updatedBill.getBillNumber()
+            );
+        }
+        return SupplierBillResponse.from(updatedBill);
     }
 
     @Override
@@ -268,5 +291,14 @@ public class SupplierBillServiceImpl implements SupplierBillService {
         supplierBillRepository.save(bill);
         log.info("Applied payment {} to supplier bill {} — new paid amount: {}, status: {}",
                 amount, bill.getBillNumber(), newPaid, bill.getStatus());
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.UPDATE, "SUPPLIER_BILL", bill.getId(),
+                bill.getBillNumber(), "SUPPLIERS", "Marked as paid: " + bill.getBillNumber() + " — amount " + amount
+            );
+        }
     }
 }

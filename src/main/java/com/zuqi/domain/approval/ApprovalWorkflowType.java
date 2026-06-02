@@ -10,6 +10,7 @@ public enum ApprovalWorkflowType {
 
     // Supplier Master
     SUPPLIER_CREATION,
+    SUPPLIER_DETAILS_UPDATE,
     SUPPLIER_BANK_DETAILS_UPDATE,
     SUPPLIER_BLACKLIST,
 

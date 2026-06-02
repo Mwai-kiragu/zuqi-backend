@@ -122,6 +122,11 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
     @Query("SELECT s FROM Stock s JOIN FETCH s.warehouse JOIN FETCH s.product WHERE s.warehouse.distributor.merchant.id = :merchantId")
     List<Stock> findAllByMerchantIdFetched(@Param("merchantId") UUID merchantId);
 
+    @Query("SELECT s FROM Stock s JOIN FETCH s.warehouse w JOIN FETCH w.distributor JOIN FETCH s.product " +
+            "WHERE s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel " +
+            "AND (s.lastLowStockAlertSentAt IS NULL OR s.lastLowStockAlertSentAt < :threshold)")
+    List<Stock> findLowStockNotRecentlyAlerted(@Param("threshold") java.time.LocalDateTime threshold);
+
     @Query("SELECT s FROM Stock s JOIN FETCH s.warehouse JOIN FETCH s.product")
     List<Stock> findAllFetched();
 }

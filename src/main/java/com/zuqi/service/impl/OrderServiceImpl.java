@@ -19,6 +19,7 @@ import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
 import com.zuqi.ai.event.DeliveryCompletedEvent;
 import com.zuqi.service.ActivityLogService;
+import com.zuqi.service.NotificationService;
 import com.zuqi.ai.event.OrderCreatedEvent;
 import com.zuqi.ai.feature.FeatureStore;
 import com.zuqi.domain.credit.CreditLimit;
@@ -69,6 +70,7 @@ public class OrderServiceImpl implements OrderService {
     private final TaxRateRepository taxRateRepository;
     private final SecurityUtils securityUtils;
     private final ActivityLogService activityLogService;
+    private final NotificationService notificationService;
     private final InvoiceService invoiceService;
     private final ApplicationEventPublisher eventPublisher;
     private final FeatureStore featureStore;
@@ -575,8 +577,9 @@ public class OrderServiceImpl implements OrderService {
                         .build();
             }
             stock.setQuantity(stock.getQuantity().subtract(item.getQuantity()));
-            stockRepository.save(stock);
+            Stock savedStock = stockRepository.save(stock);
             log.info("Deducted {} of '{}' for order {}", item.getQuantity(), item.getProduct().getName(), order.getOrderNumber());
+            triggerLowStockAlertIfNeeded(savedStock);
         }
     }
 
@@ -590,6 +593,15 @@ public class OrderServiceImpl implements OrderService {
             stockRepository.save(stock);
             log.info("Restored {} of '{}' on cancellation of order {}", item.getQuantity(), item.getProduct().getName(), order.getOrderNumber());
         }
+    }
+
+    private void triggerLowStockAlertIfNeeded(Stock stock) {
+        if (!stock.isLowStock()) return;
+        LocalDateTime threshold = LocalDateTime.now().minusHours(12);
+        if (stock.getLastLowStockAlertSentAt() != null && stock.getLastLowStockAlertSentAt().isAfter(threshold)) return;
+        notificationService.notifyLowStock(stock);
+        stock.setLastLowStockAlertSentAt(LocalDateTime.now());
+        stockRepository.save(stock);
     }
 
     private String generateOrderNumber() {

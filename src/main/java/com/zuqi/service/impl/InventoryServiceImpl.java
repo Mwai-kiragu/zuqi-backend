@@ -16,8 +16,11 @@ import com.zuqi.domain.branch.DistributorBranch;
 import com.zuqi.repository.*;
 import com.zuqi.ai.event.StockAdjustedEvent;
 import com.zuqi.ai.feature.FeatureStore;
+import com.zuqi.domain.audit.ActivityAction;
+import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.ApprovalService;
 import com.zuqi.service.InventoryService;
+import com.zuqi.service.NotificationService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,6 +55,8 @@ public class InventoryServiceImpl implements InventoryService {
     private final ApplicationEventPublisher eventPublisher;
     private final FeatureStore featureStore;
     private final ApprovalService approvalService;
+    private final ActivityLogService activityLogService;
+    private final NotificationService notificationService;
 
 
     @Override
@@ -228,7 +233,30 @@ public class InventoryServiceImpl implements InventoryService {
         // Publish AI event for shrinkage detection and stockout prediction
         publishStockAdjustedEvent(savedStock, previousQuantity, request);
 
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.STOCK_ADJUST, "STOCK", savedStock.getId(),
+                product.getName(), "INVENTORY",
+                "Stock adjusted: " + request.getMovementType().name() + " " + request.getQuantity() + " x " + product.getName()
+                    + " in " + warehouse.getName()
+            );
+        }
+
+        triggerLowStockAlertIfNeeded(savedStock);
+
         return mapToStockResponse(savedStock);
+    }
+
+    private void triggerLowStockAlertIfNeeded(Stock stock) {
+        if (!stock.isLowStock()) return;
+        LocalDateTime threshold = LocalDateTime.now().minusHours(12);
+        if (stock.getLastLowStockAlertSentAt() != null && stock.getLastLowStockAlertSentAt().isAfter(threshold)) return;
+        notificationService.notifyLowStock(stock);
+        stock.setLastLowStockAlertSentAt(LocalDateTime.now());
+        stockRepository.save(stock);
     }
 
     @Override

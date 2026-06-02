@@ -10,6 +10,8 @@ import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
+import com.zuqi.domain.audit.ActivityAction;
+import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.ApprovalService;
 import com.zuqi.service.StockTransferService;
 import lombok.RequiredArgsConstructor;
@@ -45,6 +47,7 @@ public class StockTransferServiceImpl implements StockTransferService {
     private final ProductRepository productRepository;
     private final UserRepository userRepository;
     private final com.zuqi.util.SecurityUtils securityUtils;
+    private final ActivityLogService activityLogService;
 
     @Lazy @Autowired
     private ApprovalService approvalService;
@@ -104,6 +107,16 @@ public class StockTransferServiceImpl implements StockTransferService {
 
         transfer = transferRepository.save(transfer);
         log.info("Created stock transfer {}", transfer.getReferenceNumber());
+
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.CREATE, "STOCK_TRANSFER", transfer.getId(),
+                transfer.getReferenceNumber(), "INVENTORY", "Created stock transfer: " + transfer.getReferenceNumber()
+            );
+        }
 
         if (needsApproval && requestedByUserId != null) {
             approvalService.createRequest(requestedByUserId, CreateApprovalRequestDto.builder()
@@ -260,7 +273,17 @@ public class StockTransferServiceImpl implements StockTransferService {
         transfer.setReceivedBy(receivedBy);
         transfer.setReceivedAt(LocalDateTime.now());
 
-        return mapToResponse(transferRepository.save(transfer));
+        StockTransfer receivedTransfer = transferRepository.save(transfer);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.UPDATE, "STOCK_TRANSFER", receivedTransfer.getId(),
+                receivedTransfer.getReferenceNumber(), "INVENTORY", "Transfer confirmed: " + receivedTransfer.getReferenceNumber()
+            );
+        }
+        return mapToResponse(receivedTransfer);
     }
 
     private StockTransfer getTransferEntity(UUID id) {

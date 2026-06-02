@@ -283,6 +283,11 @@ public class ApprovalServiceImpl implements ApprovalService {
         switch (request.getEntityType()) {
             case "CUSTOMER"       -> customerRepository.updateApprovalStatus(entityId, status);
             case "SUPPLIER"       -> supplierRepository.updateApprovalStatus(entityId, status);
+            case "SUPPLIER_UPDATE" -> {
+                if ("APPROVED".equals(status)) {
+                    applyApprovedSupplierUpdate(request);
+                }
+            }
             case "PRODUCT"        -> {
                 if ("APPROVED".equals(status)) {
                     productRepository.approveAndActivate(entityId);
@@ -401,6 +406,31 @@ public class ApprovalServiceImpl implements ApprovalService {
             });
             default -> { /* no-op for other entity types */ }
         }
+    }
+
+    private void applyApprovedSupplierUpdate(ApprovalRequest request) {
+        if (request.getEntityId() == null) return;
+        supplierRepository.findById(request.getEntityId()).ifPresent(supplier -> {
+            Map<String, Object> v = request.getRequestedValues();
+            if (v.containsKey("name")) supplier.setName((String) v.get("name"));
+            if (v.containsKey("kraPin")) supplier.setKraPin((String) v.get("kraPin"));
+            if (v.containsKey("registrationNumber")) supplier.setRegistrationNumber((String) v.get("registrationNumber"));
+            if (v.containsKey("email")) supplier.setEmail((String) v.get("email"));
+            if (v.containsKey("phone")) supplier.setPhone((String) v.get("phone"));
+            if (v.containsKey("address")) supplier.setAddress((String) v.get("address"));
+            if (v.containsKey("city")) supplier.setCity((String) v.get("city"));
+            if (v.containsKey("county")) supplier.setCounty((String) v.get("county"));
+            if (v.containsKey("subCounty")) supplier.setSubCounty((String) v.get("subCounty"));
+            if (v.containsKey("bankName")) supplier.setBankName((String) v.get("bankName"));
+            if (v.containsKey("bankBranch")) supplier.setBankBranch((String) v.get("bankBranch"));
+            if (v.containsKey("bankAccountNumber")) supplier.setBankAccountNumber((String) v.get("bankAccountNumber"));
+            if (v.containsKey("bankAccountName")) supplier.setBankAccountName((String) v.get("bankAccountName"));
+            if (v.containsKey("swiftCode")) supplier.setSwiftCode((String) v.get("swiftCode"));
+            if (v.containsKey("paymentTermsDays")) supplier.setPaymentTermsDays(((Number) v.get("paymentTermsDays")).intValue());
+            if (v.containsKey("creditLimit")) supplier.setCreditLimit(new java.math.BigDecimal(v.get("creditLimit").toString()));
+            supplierRepository.save(supplier);
+            log.info("Applied approved supplier update for supplier {}", supplier.getId());
+        });
     }
 
     private void applyApprovedStockMovement(UUID movementId) {
@@ -583,6 +613,7 @@ public class ApprovalServiceImpl implements ApprovalService {
             case PAYMENT_TERMS_CHANGE -> "PTM";
             case BANK_DETAILS_UPDATE -> "BDU";
             case SUPPLIER_CREATION -> "SUP";
+            case SUPPLIER_DETAILS_UPDATE -> "SDU";
             case SUPPLIER_BANK_DETAILS_UPDATE -> "SBD";
             case PRODUCT_PRICE_EDIT -> "PRE";
             case PRODUCT_COST_EDIT -> "PCE";

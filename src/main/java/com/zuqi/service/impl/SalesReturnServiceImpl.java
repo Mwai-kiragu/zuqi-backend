@@ -17,6 +17,8 @@ import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
+import com.zuqi.domain.audit.ActivityAction;
+import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.ApprovalService;
 import com.zuqi.service.SalesReturnService;
 import com.zuqi.util.SecurityUtils;
@@ -50,6 +52,7 @@ public class SalesReturnServiceImpl implements SalesReturnService {
     private final StockMovementRepository  stockMovementRepository;
     private final WarehouseRepository      warehouseRepository;
     private final SecurityUtils            securityUtils;
+    private final ActivityLogService       activityLogService;
 
     @Lazy @Autowired
     private ApprovalService approvalService;
@@ -151,6 +154,15 @@ public class SalesReturnServiceImpl implements SalesReturnService {
             log.info("Sales return {} queued for approval", saved.getReturnNumber());
         }
 
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.CREATE, "SALES_RETURN", saved.getId(),
+                saved.getReturnNumber(), "SALES_RETURNS", "Created sales return: " + saved.getReturnNumber()
+            );
+        }
         return toResponse(saved);
     }
 
@@ -196,6 +208,16 @@ public class SalesReturnServiceImpl implements SalesReturnService {
             log.warn("No warehouse found for return {} — stock not restored", sr.getReturnNumber());
         }
 
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.APPROVE, "SALES_RETURN", saved.getId(),
+                saved.getReturnNumber(), "SALES_RETURNS", "Approved sales return: " + saved.getReturnNumber()
+            );
+        }
+
         // Credit the return amount against the linked invoice
         if (sr.getInvoice() != null) {
             Invoice invoice = sr.getInvoice();
@@ -221,7 +243,17 @@ public class SalesReturnServiceImpl implements SalesReturnService {
             throw new ValidationException("Confirmed returns cannot be cancelled");
         }
         sr.setStatus(ReturnStatus.CANCELLED);
-        return toResponse(salesReturnRepository.save(sr));
+        SalesReturn cancelledSr = salesReturnRepository.save(sr);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.REJECT, "SALES_RETURN", cancelledSr.getId(),
+                cancelledSr.getReturnNumber(), "SALES_RETURNS", "Cancelled sales return: " + cancelledSr.getReturnNumber()
+            );
+        }
+        return toResponse(cancelledSr);
     }
 
     @Override

@@ -32,6 +32,8 @@ import com.zuqi.repository.ProductCategoryRepository;
 import com.zuqi.repository.ProductRepository;
 import com.zuqi.repository.StockRepository;
 import com.zuqi.repository.WarehouseRepository;
+import com.zuqi.domain.audit.ActivityAction;
+import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.ApprovalService;
 import com.zuqi.service.InventoryService;
 import com.zuqi.service.ProductService;
@@ -70,6 +72,7 @@ public class ProductServiceImpl implements ProductService {
     private final SecurityUtils securityUtils;
     private final ApprovalService approvalService;
     private final InventoryService inventoryService;
+    private final ActivityLogService activityLogService;
 
     @Override
     @Transactional(readOnly = true)
@@ -346,6 +349,16 @@ public class ProductServiceImpl implements ProductService {
         // Auto-add product to the distributor's default price list
         addToDefaultPriceList(savedProduct);
 
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.CREATE, "PRODUCT", savedProduct.getId(),
+                savedProduct.getName(), "PRODUCTS", "Created product: " + savedProduct.getName()
+            );
+        }
+
         ProductResponse response = ProductResponse.fromEntity(savedProduct);
         List<ProductBranchPrice> prices = branchPriceRepository.findByProductId(savedProduct.getId());
         if (!prices.isEmpty()) {
@@ -441,6 +454,16 @@ public class ProductServiceImpl implements ProductService {
         Product updatedProduct = productRepository.save(product);
         log.info("Product updated successfully: {}", id);
 
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.UPDATE, "PRODUCT", updatedProduct.getId(),
+                updatedProduct.getName(), "PRODUCTS", "Updated product: " + updatedProduct.getName()
+            );
+        }
+
         // Replace branch prices
         branchPriceRepository.deleteByProductId(id);
         if (request.getBranchPrices() != null && !request.getBranchPrices().isEmpty()) {
@@ -496,6 +519,14 @@ public class ProductServiceImpl implements ProductService {
         productRepository.save(product);
 
         log.info("Product deactivated successfully");
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.DEACTIVATE, "PRODUCT", product.getId(),
+                product.getName(), "PRODUCTS", "Deactivated product: " + product.getName()
+            );
+        }
     }
 
     @Override
@@ -513,6 +544,15 @@ public class ProductServiceImpl implements ProductService {
         productRepository.save(product);
 
         log.info("Product activated successfully");
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.ACTIVATE, "PRODUCT", product.getId(),
+                product.getName(), "PRODUCTS", "Activated product: " + product.getName()
+            );
+        }
     }
 
     @Override

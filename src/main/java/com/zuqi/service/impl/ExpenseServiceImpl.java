@@ -5,14 +5,17 @@ import com.zuqi.api.dto.expense.ExpenseRequest;
 import com.zuqi.api.dto.expense.ExpenseResponse;
 import com.zuqi.api.dto.gl.JournalEntryResponse;
 import com.zuqi.domain.approval.ApprovalWorkflowType;
+import com.zuqi.domain.audit.ActivityAction;
 import com.zuqi.domain.expense.Expense;
 import com.zuqi.domain.expense.ExpenseStatus;
+import com.zuqi.domain.user.User;
 import com.zuqi.domain.gl.JournalSourceModule;
 import com.zuqi.domain.gl.SystemAccountType;
 import com.zuqi.domain.gl.GlAccount;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.repository.ExpenseRepository;
 import com.zuqi.repository.GlAccountRepository;
+import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.ApprovalService;
 import com.zuqi.service.ExpenseService;
 import com.zuqi.service.GlPostingService;
@@ -45,6 +48,7 @@ public class ExpenseServiceImpl implements ExpenseService {
     private final GlAccountRepository glAccountRepository;
     private final GlPostingService glPostingService;
     private final SecurityUtils securityUtils;
+    private final ActivityLogService activityLogService;
 
     @Lazy
     @Autowired
@@ -103,7 +107,17 @@ public class ExpenseServiceImpl implements ExpenseService {
                 .status(ExpenseStatus.DRAFT)
                 .createdBy(securityUtils.getCurrentUserId())
                 .build();
-        return ExpenseResponse.from(expenseRepository.save(expense));
+        Expense savedExpense = expenseRepository.save(expense);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.CREATE, "EXPENSE", savedExpense.getId(),
+                savedExpense.getTitle(), "EXPENSES", "Created expense: " + savedExpense.getTitle()
+            );
+        }
+        return ExpenseResponse.from(savedExpense);
     }
 
     @Override
@@ -120,7 +134,17 @@ public class ExpenseServiceImpl implements ExpenseService {
         expense.setReferenceNumber(request.getReferenceNumber());
         expense.setReceiptUrl(request.getReceiptUrl());
         expense.setPaymentMethod(request.getPaymentMethod());
-        return ExpenseResponse.from(expenseRepository.save(expense));
+        Expense updatedExpense = expenseRepository.save(expense);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.UPDATE, "EXPENSE", updatedExpense.getId(),
+                updatedExpense.getTitle(), "EXPENSES", "Updated expense: " + updatedExpense.getTitle()
+            );
+        }
+        return ExpenseResponse.from(updatedExpense);
     }
 
     @Override
@@ -168,6 +192,16 @@ public class ExpenseServiceImpl implements ExpenseService {
         // GL auto-posting: DR OTHER_EXPENSE / CR ACCOUNTS_PAYABLE
         postExpenseApproved(saved);
 
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.APPROVE, "EXPENSE", saved.getId(),
+                saved.getTitle(), "EXPENSES", "Approved expense: " + saved.getTitle()
+            );
+        }
+
         return ExpenseResponse.from(saved);
     }
 
@@ -184,7 +218,17 @@ public class ExpenseServiceImpl implements ExpenseService {
                     (expense.getDescription() != null ? expense.getDescription() + "\n" : "") +
                     "[REJECTED] " + reason);
         }
-        return ExpenseResponse.from(expenseRepository.save(expense));
+        Expense rejectedExpense = expenseRepository.save(expense);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.REJECT, "EXPENSE", rejectedExpense.getId(),
+                rejectedExpense.getTitle(), "EXPENSES", "Rejected expense: " + rejectedExpense.getTitle()
+            );
+        }
+        return ExpenseResponse.from(rejectedExpense);
     }
 
     @Override
@@ -210,6 +254,15 @@ public class ExpenseServiceImpl implements ExpenseService {
             throw new IllegalStateException("Cannot delete an approved or paid expense");
         }
         expenseRepository.delete(expense);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.DELETE, "EXPENSE", expense.getId(),
+                expense.getTitle(), "EXPENSES", "Deleted expense: " + expense.getTitle()
+            );
+        }
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────
