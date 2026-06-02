@@ -37,13 +37,14 @@ public class InventoryController {
     private final StockoutPredictor stockoutPredictor;
 
     @GetMapping
-    @Operation(summary = "Get stock with optional filters", description = "Get all stock, optionally filtered by distributor, branch, and/or warehouse")
+    @Operation(summary = "Get stock with optional filters", description = "Get all stock, optionally filtered by distributor, branch, warehouse, or product name/SKU search")
     public ResponseEntity<ApiResponse<Page<StockResponse>>> getStock(
             @Parameter(description = "Distributor ID (optional)") @RequestParam(required = false) UUID distributorId,
             @Parameter(description = "Warehouse ID (optional)") @RequestParam(required = false) UUID warehouseId,
             @Parameter(description = "Branch ID (optional)") @RequestParam(required = false) UUID branchId,
+            @Parameter(description = "Search by product name or SKU") @RequestParam(required = false) String search,
             @PageableDefault(size = 20) Pageable pageable) {
-        Page<StockResponse> stock = inventoryService.getStock(distributorId, warehouseId, branchId, pageable);
+        Page<StockResponse> stock = inventoryService.getStock(distributorId, warehouseId, branchId, search, pageable);
         enrichWithAiPredictions(stock);
         return ResponseEntity.ok(ApiResponse.success(stock));
     }

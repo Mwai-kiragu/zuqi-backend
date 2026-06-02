@@ -60,8 +60,9 @@ public class InventoryServiceImpl implements InventoryService {
 
 
     @Override
-    public Page<StockResponse> getStock(UUID distributorId, UUID warehouseId, UUID branchId, Pageable pageable) {
-        return stockRepository.findByFilters(distributorId, warehouseId, branchId, pageable)
+    public Page<StockResponse> getStock(UUID distributorId, UUID warehouseId, UUID branchId, String search, Pageable pageable) {
+        String searchTerm = (search != null && !search.isBlank()) ? search.trim() : null;
+        return stockRepository.findByFilters(distributorId, warehouseId, branchId, searchTerm, pageable)
                 .map(this::mapToStockResponse);
     }
 
