@@ -30,6 +30,9 @@ public interface PosService {
 
     PosSaleResponse addPayment(UUID saleId, ProcessPaymentRequest request);
 
+    /** Add a top-up payment to a COMPLETED but partially-paid sale. */
+    PosSaleResponse settleBalance(UUID saleId, ProcessPaymentRequest request);
+
     PosSaleResponse completeSale(UUID saleId, UUID warehouseId);
 
     PosSaleResponse cancelSale(UUID saleId, String reason);

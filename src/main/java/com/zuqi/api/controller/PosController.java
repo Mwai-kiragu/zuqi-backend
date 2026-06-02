@@ -113,6 +113,13 @@ public class PosController {
         return ResponseEntity.ok(ApiResponse.success("Payment added", posService.addPayment(saleId, request)));
     }
 
+    @PostMapping("/sales/{saleId}/settle")
+    @Operation(summary = "Add a top-up payment to a completed partially-paid sale")
+    public ResponseEntity<ApiResponse<PosSaleResponse>> settleBalance(
+            @PathVariable UUID saleId, @Valid @RequestBody ProcessPaymentRequest request) {
+        return ResponseEntity.ok(ApiResponse.success("Payment recorded", posService.settleBalance(saleId, request)));
+    }
+
     @PostMapping("/sales/{saleId}/complete")
     @Operation(summary = "Complete a sale")
     public ResponseEntity<ApiResponse<PosSaleResponse>> completeSale(

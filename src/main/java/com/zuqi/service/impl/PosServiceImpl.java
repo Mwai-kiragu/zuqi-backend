@@ -478,6 +478,57 @@ public class PosServiceImpl implements PosService {
 
     @Override
     @Transactional
+    public PosSaleResponse settleBalance(UUID saleId, ProcessPaymentRequest request) {
+        PosSale sale = getSaleEntity(saleId);
+        if (sale.getStatus() != PosSaleStatus.COMPLETED) {
+            throw new ValidationException("Top-up payments are only allowed on COMPLETED sales. Current status: " + sale.getStatus());
+        }
+        BigDecimal remaining = sale.getTotalAmount().subtract(sale.getAmountPaid());
+        if (remaining.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ValidationException("This sale is already fully paid");
+        }
+        // Cap payment at remaining balance (no overpayment for mobile methods)
+        BigDecimal payAmount = request.getAmount() != null
+                ? request.getAmount().min(remaining)
+                : remaining;
+
+        PosSalePayment payment = PosSalePayment.builder()
+                .sale(sale)
+                .paymentMethod(request.getPaymentMethod())
+                .amount(payAmount)
+                .referenceNumber(request.getReferenceNumber())
+                .notes(request.getNotes())
+                .build();
+        sale.getPayments().add(payment);
+
+        BigDecimal totalPaid = sale.getPayments().stream()
+                .map(PosSalePayment::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        sale.setAmountPaid(totalPaid);
+
+        PosSale savedSale = saleRepository.save(sale);
+
+        try {
+            glAutoPostingService.postPosSalePayment(savedSale, payAmount);
+        } catch (Exception e) {
+            log.warn("GL auto-post skipped (POS settle) for sale {}: {}", saleId, e.getMessage());
+        }
+
+        try {
+            orderRepository.findByPosSaleId(savedSale.getId()).ifPresent(order -> {
+                order.setPaidAmount(totalPaid);
+                order.setPaymentStatus(resolvePaymentStatus(totalPaid, savedSale.getTotalAmount()));
+                orderRepository.save(order);
+            });
+        } catch (Exception e) {
+            log.warn("Order payment status update failed for sale {}: {}", saleId, e.getMessage());
+        }
+
+        return mapToSaleResponse(savedSale);
+    }
+
+    @Override
+    @Transactional
     public PosSaleResponse completeSale(UUID saleId, UUID warehouseId) {
         PosSale sale = getSaleEntity(saleId);
         validateSaleUnpaid(sale);
