@@ -12,7 +12,7 @@ import java.util.UUID;
 public interface InventoryService {
 
     // Stock operations
-    Page<StockResponse> getStock(UUID distributorId, UUID warehouseId, UUID branchId, Pageable pageable);
+    Page<StockResponse> getStock(UUID distributorId, UUID warehouseId, UUID branchId, String search, Pageable pageable);
 
     Page<StockResponse> getStockByWarehouse(UUID warehouseId, Pageable pageable);
 
