@@ -219,6 +219,52 @@ public class ProcurementServiceImpl implements ProcurementService {
 
     @Override
     @Transactional
+    public PurchaseRequisitionResponse updatePurchaseRequisition(UUID id, PurchaseRequisitionRequest request, User currentUser) {
+        PurchaseRequisition pr = findPrById(id);
+        if (pr.getStatus() != PrStatus.DRAFT) {
+            throw new IllegalStateException("Only DRAFT requisitions can be edited");
+        }
+        if (request.getDescription() != null) pr.setDescription(request.getDescription());
+        if (request.getJustification() != null) pr.setJustification(request.getJustification());
+        if (request.getExpectedDeliveryDate() != null) pr.setExpectedDeliveryDate(request.getExpectedDeliveryDate());
+        if (request.getItems() != null && !request.getItems().isEmpty()) {
+            pr.setItems(itemsToMaps(request.getItems()));
+            pr.setEstimatedTotalAmount(calculateTotal(request.getItems()));
+        }
+        PurchaseRequisition saved = prRepository.save(pr);
+        activityLogService.log(
+            currentUser.getId(), currentUser.getEmail(),
+            currentUser.getFirstName() + " " + currentUser.getLastName(),
+            ActivityAction.UPDATE, "PURCHASE_REQUISITION", saved.getId(),
+            saved.getPrNumber(), "PROCUREMENT", "Updated purchase requisition: " + saved.getPrNumber()
+        );
+        return PurchaseRequisitionResponse.fromEntity(saved, resolveDistributorName(saved.getDistributorId()));
+    }
+
+    @Override
+    @Transactional
+    public PurchaseRequisitionResponse resubmitPurchaseRequisition(UUID id, User currentUser) {
+        PurchaseRequisition pr = findPrById(id);
+        if (pr.getStatus() != PrStatus.REJECTED) {
+            throw new IllegalStateException("Only REJECTED requisitions can be resubmitted");
+        }
+        pr.setStatus(PrStatus.DRAFT);
+        pr.setRejectionReason(null);
+        pr.setSubmittedAt(null);
+        pr.setApprovedAt(null);
+        pr.setApprovedBy(null);
+        PurchaseRequisition saved = prRepository.save(pr);
+        activityLogService.log(
+            currentUser.getId(), currentUser.getEmail(),
+            currentUser.getFirstName() + " " + currentUser.getLastName(),
+            ActivityAction.UPDATE, "PURCHASE_REQUISITION", saved.getId(),
+            saved.getPrNumber(), "PROCUREMENT", "Reset rejected requisition to draft for resubmission: " + saved.getPrNumber()
+        );
+        return PurchaseRequisitionResponse.fromEntity(saved, resolveDistributorName(saved.getDistributorId()));
+    }
+
+    @Override
+    @Transactional
     public PurchaseRequisitionResponse cancelPurchaseRequisition(UUID id, User currentUser) {
         PurchaseRequisition pr = findPrById(id);
         if (pr.getStatus() == PrStatus.CONVERTED_TO_PO) {

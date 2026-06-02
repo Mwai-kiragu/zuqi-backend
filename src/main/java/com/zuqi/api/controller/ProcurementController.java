@@ -90,6 +90,25 @@ public class ProcurementController {
                 procurementService.rejectPurchaseRequisition(id, body.reason(), currentUser)));
     }
 
+    @PutMapping("/v1/purchase-requisitions/{id}")
+    @Operation(summary = "Update a DRAFT purchase requisition")
+    public ResponseEntity<ApiResponse<PurchaseRequisitionResponse>> updatePurchaseRequisition(
+            @PathVariable UUID id,
+            @Valid @RequestBody PurchaseRequisitionRequest request,
+            @AuthenticationPrincipal User currentUser) {
+        return ResponseEntity.ok(ApiResponse.success("Requisition updated",
+                procurementService.updatePurchaseRequisition(id, request, currentUser)));
+    }
+
+    @PostMapping("/v1/purchase-requisitions/{id}/resubmit")
+    @Operation(summary = "Reset a rejected requisition to draft for revision and resubmission")
+    public ResponseEntity<ApiResponse<PurchaseRequisitionResponse>> resubmitPurchaseRequisition(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal User currentUser) {
+        return ResponseEntity.ok(ApiResponse.success("Requisition reset to draft for revision",
+                procurementService.resubmitPurchaseRequisition(id, currentUser)));
+    }
+
     @PostMapping("/v1/purchase-requisitions/{id}/cancel")
     @Operation(summary = "Cancel purchase requisition")
     public ResponseEntity<ApiResponse<PurchaseRequisitionResponse>> cancelPurchaseRequisition(

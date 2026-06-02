@@ -474,6 +474,11 @@ public class FundsTransferServiceImpl implements FundsTransferService {
 
         ft.setStatus(FundsTransferStatus.DISBURSED);
         ft.setDisbursedAt(LocalDateTime.now());
+        User disbursingUser = securityUtils.getCurrentUser();
+        if (disbursingUser != null) {
+            ft.setAuthorizedById(disbursingUser.getId());
+            ft.setAuthorizedByName(disbursingUser.getFirstName() + " " + disbursingUser.getLastName());
+        }
         FundsTransfer saved = fundsTransferRepository.save(ft);
 
         // GL auto-post for supplier payments
