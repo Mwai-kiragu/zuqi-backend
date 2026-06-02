@@ -1,6 +1,8 @@
 package com.zuqi.service.impl;
 
 import com.zuqi.api.dto.inventory.*;
+import com.zuqi.domain.approval.ApprovalWorkflowConfig;
+import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.branch.DistributorBranch;
 import com.zuqi.domain.inventory.*;
 import com.zuqi.domain.user.User;
@@ -22,6 +24,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -38,6 +41,7 @@ public class StockTakeServiceImpl implements StockTakeService {
     private final StockRepository stockRepository;
     private final StockMovementRepository stockMovementRepository;
     private final UserRepository userRepository;
+    private final ApprovalWorkflowConfigRepository approvalWorkflowConfigRepository;
     private final SecurityUtils securityUtils;
     private final ActivityLogService activityLogService;
 
@@ -185,6 +189,30 @@ public class StockTakeServiceImpl implements StockTakeService {
 
         User approvedBy = userRepository.findById(approvedByUserId).orElse(null);
 
+        // Enforce approval matrix if configured for this distributor
+        if (approvedBy != null && approvedBy.getDistributorId() != null) {
+            List<ApprovalWorkflowConfig> configs = approvalWorkflowConfigRepository
+                    .findByDistributorIdAndWorkflowTypeAndActiveTrueOrderByLevelNumberAsc(
+                            approvedBy.getDistributorId(), ApprovalWorkflowType.STOCK_TAKE_POSTING);
+            if (!configs.isEmpty()) {
+                Set<String> allowedRoles = configs.stream()
+                        .map(ApprovalWorkflowConfig::getRequiredRole)
+                        .filter(r -> r != null && !r.isBlank())
+                        .collect(java.util.stream.Collectors.toSet());
+                boolean authorized = allowedRoles.isEmpty() ||
+                        securityUtils.hasRole(approvedBy, "SUPER_ADMIN") ||
+                        allowedRoles.stream().anyMatch(role -> securityUtils.hasRole(approvedBy, role));
+                if (!authorized) {
+                    String labels = configs.stream()
+                            .map(ApprovalWorkflowConfig::getRoleLabel)
+                            .distinct()
+                            .collect(java.util.stream.Collectors.joining(", "));
+                    throw new ValidationException(
+                            "You are not authorized to approve stock takes. Configured approvers: " + labels);
+                }
+            }
+        }
+
         // Post counted quantities to stock (absolute set — stock take is the source of truth)
         for (StockTakeItem item : batch.getItems()) {
             // Skip items that were never counted
@@ -225,7 +253,17 @@ public class StockTakeServiceImpl implements StockTakeService {
         batch.setApprovedBy(approvedBy);
         batch.setApprovedAt(LocalDateTime.now());
 
-        return mapToResponse(batchRepository.save(batch));
+        StockTakeBatch savedBatch = batchRepository.save(batch);
+        if (approvedBy != null) {
+            activityLogService.log(
+                approvedBy.getId(), approvedBy.getEmail(),
+                approvedBy.getFirstName() + " " + approvedBy.getLastName(),
+                ActivityAction.APPROVE, "STOCK_TAKE", savedBatch.getId(),
+                savedBatch.getReferenceNumber(), "INVENTORY",
+                "Stock take approved: " + savedBatch.getReferenceNumber()
+            );
+        }
+        return mapToResponse(savedBatch);
     }
 
     @Override
