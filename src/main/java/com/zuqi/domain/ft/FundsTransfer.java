@@ -105,6 +105,12 @@ public class FundsTransfer {
     @Column(name = "reference_id")
     private UUID referenceId;
 
+    @Column(name = "authorized_by_id")
+    private UUID authorizedById;
+
+    @Column(name = "authorized_by_name", length = 200)
+    private String authorizedByName;
+
     @Column(name = "disbursed_at")
     private LocalDateTime disbursedAt;
 

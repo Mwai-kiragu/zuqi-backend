@@ -38,6 +38,8 @@ public class FundsTransferResponse {
     private UUID amountRangeId;
     private UUID initiatorId;
     private String initiatorName;
+    private UUID authorizedById;
+    private String authorizedByName;
     private String referenceType;
     private UUID referenceId;
     private String referenceSummary;   // e.g. "Expense: Office Rent | KES 50,000"
@@ -79,6 +81,8 @@ public class FundsTransferResponse {
                 .requiredApprovalLevels(ft.getRequiredApprovalLevels())
                 .amountRangeId(ft.getAmountRangeId())
                 .initiatorId(ft.getInitiatorId())
+                .authorizedById(ft.getAuthorizedById())
+                .authorizedByName(ft.getAuthorizedByName())
                 .referenceType(ft.getReferenceType())
                 .referenceId(ft.getReferenceId())
                 .disbursedAt(ft.getDisbursedAt())

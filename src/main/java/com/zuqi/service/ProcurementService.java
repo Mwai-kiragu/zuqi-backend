@@ -27,6 +27,10 @@ public interface ProcurementService {
 
     PurchaseRequisitionResponse rejectPurchaseRequisition(UUID id, String reason, User currentUser);
 
+    PurchaseRequisitionResponse updatePurchaseRequisition(UUID id, PurchaseRequisitionRequest request, User currentUser);
+
+    PurchaseRequisitionResponse resubmitPurchaseRequisition(UUID id, User currentUser);
+
     PurchaseRequisitionResponse cancelPurchaseRequisition(UUID id, User currentUser);
 
     // Purchase Orders
