@@ -62,7 +62,11 @@ public class InventoryServiceImpl implements InventoryService {
     @Override
     public Page<StockResponse> getStock(UUID distributorId, UUID warehouseId, UUID branchId, String search, Pageable pageable) {
         String searchTerm = (search != null && !search.isBlank()) ? search.trim() : null;
-        return stockRepository.findByFilters(distributorId, warehouseId, branchId, searchTerm, pageable)
+        if (searchTerm != null) {
+            return stockRepository.findByFiltersWithSearch(distributorId, warehouseId, branchId, searchTerm, pageable)
+                    .map(this::mapToStockResponse);
+        }
+        return stockRepository.findByFilters(distributorId, warehouseId, branchId, pageable)
                 .map(this::mapToStockResponse);
     }
 
@@ -313,6 +317,16 @@ public class InventoryServiceImpl implements InventoryService {
         log.info("Stock adjustment approved by {} - movement {}, new balance: {}", approverId, movementId, newQuantity);
 
         return mapToStockMovementResponse(movement);
+    }
+
+    @Override
+    public StockResponse updateThresholds(UUID stockId, StockThresholdRequest request) {
+        Stock stock = stockRepository.findById(stockId)
+                .orElseThrow(() -> new ResourceNotFoundException("Stock", "id", stockId));
+        if (request.getReorderLevel() != null) {
+            stock.setReorderLevel(request.getReorderLevel());
+    }
+        return mapToStockResponse(stockRepository.save(stock));
     }
 
     @Override

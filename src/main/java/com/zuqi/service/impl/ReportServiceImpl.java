@@ -184,6 +184,7 @@ public class ReportServiceImpl implements ReportService {
                         .warehouseName((String) row[1])
                         .productCount(((Number) row[2]).longValue())
                         .lowStockCount(((Number) row[3]).longValue())
+                        .outOfStockCount(((Number) row[4]).longValue())
                         .build())
                 .toList();
 
