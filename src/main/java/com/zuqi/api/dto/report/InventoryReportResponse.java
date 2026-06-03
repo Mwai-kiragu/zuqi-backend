@@ -44,5 +44,6 @@ public class InventoryReportResponse {
         private String warehouseName;
         private Long productCount;
         private Long lowStockCount;
+        private Long outOfStockCount;
     }
 }

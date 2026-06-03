@@ -68,17 +68,18 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
     List<Stock> findOutOfStockByDistributorId(@Param("distributorId") UUID distributorId);
 
     /** Sum of (quantity × costPrice) for all in-stock items of a distributor (stock valuation). */
-    @Query("SELECT COALESCE(SUM(s.quantity * COALESCE(s.product.costPrice, s.product.unitPrice)), 0) " +
+    @Query("SELECT COALESCE(SUM(s.quantity * COALESCE(s.product.costPrice, s.product.unitPrice, 0)), 0) " +
             "FROM Stock s WHERE s.warehouse.distributor.id = :distributorId AND s.quantity > 0")
     BigDecimal sumStockValueByDistributorId(@Param("distributorId") UUID distributorId);
 
-    /** Per-warehouse product count and low-stock count for a distributor. */
+    /** Per-warehouse product count, low-stock count and out-of-stock count for a distributor. */
     @Query("SELECT s.warehouse.id, s.warehouse.name, COUNT(s), " +
-            "SUM(CASE WHEN s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel AND s.quantity > 0 THEN 1 ELSE 0 END) " +
+            "SUM(CASE WHEN s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel AND s.quantity > 0 THEN 1 ELSE 0 END), " +
+            "SUM(CASE WHEN s.quantity <= 0 THEN 1 ELSE 0 END) " +
             "FROM Stock s WHERE s.warehouse.distributor.id = :distributorId GROUP BY s.warehouse.id, s.warehouse.name")
     List<Object[]> warehouseSummaryByDistributorId(@Param("distributorId") UUID distributorId);
 
-    @Query("SELECT COALESCE(SUM(s.quantity * COALESCE(s.product.costPrice, s.product.unitPrice)), 0) " +
+    @Query("SELECT COALESCE(SUM(s.quantity * COALESCE(s.product.costPrice, s.product.unitPrice, 0)), 0) " +
             "FROM Stock s WHERE s.warehouse.distributor.merchant.id = :merchantId AND s.quantity > 0")
     BigDecimal sumStockValueByMerchantId(@Param("merchantId") UUID merchantId);
 
@@ -95,7 +96,8 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
     List<Stock> findOutOfStockByMerchantId(@Param("merchantId") UUID merchantId);
 
     @Query("SELECT s.warehouse.id, s.warehouse.name, COUNT(s), " +
-            "SUM(CASE WHEN s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel AND s.quantity > 0 THEN 1 ELSE 0 END) " +
+            "SUM(CASE WHEN s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel AND s.quantity > 0 THEN 1 ELSE 0 END), " +
+            "SUM(CASE WHEN s.quantity <= 0 THEN 1 ELSE 0 END) " +
             "FROM Stock s WHERE s.warehouse.distributor.merchant.id = :merchantId GROUP BY s.warehouse.id, s.warehouse.name")
     List<Object[]> warehouseSummaryByMerchantId(@Param("merchantId") UUID merchantId);
 
@@ -109,10 +111,20 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
     @Query("SELECT s FROM Stock s WHERE " +
             "(:distributorId IS NULL OR s.warehouse.distributor.id = :distributorId) AND " +
             "(:warehouseId IS NULL OR s.warehouse.id = :warehouseId) AND " +
-            "(:branchId IS NULL OR s.warehouse.branch.id = :branchId) AND " +
-            "(:search IS NULL OR LOWER(s.product.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
-            "  OR LOWER(s.product.sku) LIKE LOWER(CONCAT('%', :search, '%')))")
+            "(:branchId IS NULL OR s.warehouse.branch.id = :branchId)")
     Page<Stock> findByFilters(
+            @Param("distributorId") UUID distributorId,
+            @Param("warehouseId") UUID warehouseId,
+            @Param("branchId") UUID branchId,
+            Pageable pageable);
+
+    @Query("SELECT s FROM Stock s WHERE " +
+            "(:distributorId IS NULL OR s.warehouse.distributor.id = :distributorId) AND " +
+            "(:warehouseId IS NULL OR s.warehouse.id = :warehouseId) AND " +
+            "(:branchId IS NULL OR s.warehouse.branch.id = :branchId) AND " +
+            "(LOWER(s.product.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
+            "  OR LOWER(s.product.sku) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<Stock> findByFiltersWithSearch(
             @Param("distributorId") UUID distributorId,
             @Param("warehouseId") UUID warehouseId,
             @Param("branchId") UUID branchId,

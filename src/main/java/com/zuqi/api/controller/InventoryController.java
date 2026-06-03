@@ -106,6 +106,15 @@ public class InventoryController {
                 .body(ApiResponse.success("Stock adjusted successfully", stock));
     }
 
+    @PatchMapping("/{stockId}/thresholds")
+    @Operation(summary = "Update stock thresholds", description = "Update reorder level for a stock item")
+    public ResponseEntity<ApiResponse<StockResponse>> updateThresholds(
+            @PathVariable UUID stockId,
+            @Valid @RequestBody StockThresholdRequest request) {
+        StockResponse stock = inventoryService.updateThresholds(stockId, request);
+        return ResponseEntity.ok(ApiResponse.success("Thresholds updated successfully", stock));
+    }
+
     @PostMapping("/movements/{movementId}/approve")
     @Operation(summary = "Approve a pending stock adjustment", description = "VERIFIER/AUTHORIZER approves a pending stock movement and applies the quantity change")
     public ResponseEntity<ApiResponse<StockMovementResponse>> approveStockAdjustment(
