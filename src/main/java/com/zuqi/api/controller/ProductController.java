@@ -24,6 +24,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -70,7 +71,11 @@ public class ProductController {
             }
         } else if (distributorId != null) {
             if (Boolean.TRUE.equals(listableOnly)) {
-                products = productService.getListableProductsByDistributor(distributorId, startDate, endDate, pageable);
+                if (categoryId != null) {
+                    products = productService.getListableProductsByDistributorAndCategory(distributorId, categoryId, startDate, endDate, pageable);
+                } else {
+                    products = productService.getListableProductsByDistributor(distributorId, startDate, endDate, pageable);
+                }
             } else if (Boolean.TRUE.equals(topLevelOnly)) {
                 products = productService.getTopLevelProductsByDistributor(distributorId, startDate, endDate, pageable);
             } else {
@@ -159,10 +164,16 @@ public class ProductController {
     }
 
     @GetMapping("/categories")
-    @Operation(summary = "Get product categories", description = "Retrieves all product categories")
+    @Operation(summary = "Get product categories", description = "Retrieves product categories with optional filtering")
     public ResponseEntity<ApiResponse<List<ProductCategoryResponse>>> getCategories(
-            @Parameter(description = "Distributor ID filter") @RequestParam(required = false) UUID distributorId) {
-        List<ProductCategoryResponse> categories = productService.getAllCategories(distributorId);
+            @Parameter(description = "Distributor ID filter") @RequestParam(required = false) UUID distributorId,
+            @Parameter(description = "Filter by active status") @RequestParam(required = false) Boolean active,
+            @Parameter(description = "Search by name or description") @RequestParam(required = false) String search,
+            @Parameter(description = "Start date (inclusive)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @Parameter(description = "End date (inclusive)") @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        LocalDateTime start = startDate != null ? startDate.atStartOfDay() : null;
+        LocalDateTime end = endDate != null ? endDate.plusDays(1).atStartOfDay() : null;
+        List<ProductCategoryResponse> categories = productService.getAllCategories(distributorId, active, search, start, end);
         return ResponseEntity.ok(ApiResponse.success(categories));
     }
 

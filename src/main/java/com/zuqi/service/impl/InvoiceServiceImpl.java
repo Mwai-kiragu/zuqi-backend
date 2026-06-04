@@ -293,7 +293,15 @@ public class InvoiceServiceImpl implements InvoiceService {
         UUID distributorId = order.getDistributor().getId();
         int invoiceApprovalLevels = approvalWorkflowConfigService.countActiveLevels(
                 distributorId, ApprovalWorkflowType.INVOICE_CREATION);
-        boolean needsApproval = invoiceApprovalLevels > 0;
+
+        // Also check if the original order submitter requires invoice approval.
+        // This covers the case where createInvoiceFromOrder is called from the order approval
+        // callback (where the current principal is the approver, not the submitter).
+        UUID submitterId = order.getSubmittedById();
+        if (submitterId == null && order.getSalesRep() != null) submitterId = order.getSalesRep().getId();
+        boolean submitterRequiresApproval = securityUtils.userRequiresApprovalFor(submitterId, "INVOICES");
+
+        boolean needsApproval = invoiceApprovalLevels > 0 || submitterRequiresApproval;
 
         // Create invoice — DRAFT if approval is required, UNPAID if not
         Invoice invoice = Invoice.builder()
@@ -331,6 +339,8 @@ public class InvoiceServiceImpl implements InvoiceService {
             }
             if (requesterId != null) {
                 try {
+                    // Use the configured levels if set; fall back to 1 when triggered by UserType rule
+                    int requiredApprovals = invoiceApprovalLevels > 0 ? invoiceApprovalLevels : 1;
                     approvalService.createRequest(requesterId, CreateApprovalRequestDto.builder()
                             .workflowType(ApprovalWorkflowType.INVOICE_CREATION)
                             .entityType("INVOICE")
@@ -340,7 +350,8 @@ public class InvoiceServiceImpl implements InvoiceService {
                                     + " for " + order.getMerchant().getBusinessName()
                                     + " — KES " + invoice.getTotalAmount())
                             .amount(invoice.getTotalAmount())
-                            .requiredApprovals(invoiceApprovalLevels)
+                            .requiredApprovals(requiredApprovals)
+                            .distributorId(order.getDistributor().getId())
                             .build());
                     log.info("Invoice {} queued for approval", invoice.getInvoiceNumber());
                 } catch (Exception e) {

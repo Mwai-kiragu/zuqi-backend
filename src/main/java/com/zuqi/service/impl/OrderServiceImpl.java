@@ -248,15 +248,20 @@ public class OrderServiceImpl implements OrderService {
                         distributor.getId(), product.getId(), LocalDate.now());
                 if (!promos.isEmpty()) {
                     Promotion promo = promos.get(0);
-                    if ("PERCENTAGE".equals(promo.getPromotionType()) && promo.getDiscountValue() != null) {
-                        discountPct = promo.getDiscountValue();
-                        promotionName = promo.getName();
-                    } else if ("FIXED_AMOUNT".equals(promo.getPromotionType()) && promo.getDiscountValue() != null
-                            && product.getUnitPrice().compareTo(BigDecimal.ZERO) > 0) {
-                        discountPct = promo.getDiscountValue()
-                                .divide(product.getUnitPrice(), 4, RoundingMode.HALF_UP)
-                                .multiply(BigDecimal.valueOf(100));
-                        promotionName = promo.getName();
+                    BigDecimal lineGross = product.getUnitPrice().multiply(itemRequest.getQuantity());
+                    boolean meetsMinimum = promo.getMinOrderAmount() == null
+                            || lineGross.compareTo(promo.getMinOrderAmount()) >= 0;
+                    if (meetsMinimum) {
+                        if ("PERCENTAGE".equals(promo.getPromotionType()) && promo.getDiscountValue() != null) {
+                            discountPct = promo.getDiscountValue();
+                            promotionName = promo.getName();
+                        } else if ("FIXED_AMOUNT".equals(promo.getPromotionType()) && promo.getDiscountValue() != null
+                                && product.getUnitPrice().compareTo(BigDecimal.ZERO) > 0) {
+                            discountPct = promo.getDiscountValue()
+                                    .divide(product.getUnitPrice(), 4, RoundingMode.HALF_UP)
+                                    .multiply(BigDecimal.valueOf(100));
+                            promotionName = promo.getName();
+                        }
                     }
                 }
             }

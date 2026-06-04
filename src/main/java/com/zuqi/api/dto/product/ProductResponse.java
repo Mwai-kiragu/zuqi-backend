@@ -63,6 +63,11 @@ public class ProductResponse {
     private Map<String, String> variantAttributes;
     private List<ProductResponse> variants;
 
+    // Pending price change (set when a PRODUCT_PRICE_CHANGE approval is pending for this product)
+    private UUID pendingPriceApprovalId;
+    private BigDecimal pendingUnitPrice;
+    private BigDecimal pendingCostPrice;
+
     public static ProductResponse fromEntity(Product product) {
         return ProductResponse.builder()
                 .id(product.getId())

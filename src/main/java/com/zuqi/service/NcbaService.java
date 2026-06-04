@@ -21,6 +21,8 @@ public interface NcbaService {
 
     NcbaStkPushResponse initiateStk(NcbaStkPushRequest request);
 
+    NcbaStkPushResponse initiatePublicStk(UUID merchantId, String phone, java.math.BigDecimal amount, String referenceId);
+
     NcbaStkPushResponse getStkStatus(UUID stkRequestId);
 
     void handleCallback(Map<String, Object> payload);

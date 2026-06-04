@@ -21,8 +21,13 @@ import com.zuqi.exception.ValidationException;
 import com.zuqi.api.dto.inventory.StockAdjustmentRequest;
 import com.zuqi.domain.inventory.Stock;
 import com.zuqi.domain.inventory.StockMovement;
+import com.zuqi.domain.inventory.Warehouse;
 import com.zuqi.domain.pricing.PriceList;
 import com.zuqi.domain.pricing.PriceListItem;
+import com.zuqi.domain.approval.ApprovalRequest;
+import com.zuqi.domain.approval.ApprovalStatus;
+import com.zuqi.repository.ApprovalRequestRepository;
+import com.zuqi.repository.ApprovalWorkflowConfigRepository;
 import com.zuqi.repository.DistributorBranchRepository;
 import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.GlAccountRepository;
@@ -73,6 +78,8 @@ public class ProductServiceImpl implements ProductService {
     private final ApprovalService approvalService;
     private final InventoryService inventoryService;
     private final ActivityLogService activityLogService;
+    private final ApprovalWorkflowConfigRepository approvalWorkflowConfigRepository;
+    private final ApprovalRequestRepository approvalRequestRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -137,6 +144,19 @@ public class ProductServiceImpl implements ProductService {
             return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndActiveTrueAndHasVariantsFalseAndCreatedAtBetween(distributorId, from, to, pageable));
         }
         return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndActiveTrueAndHasVariantsFalse(distributorId, pageable));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ProductResponse> getListableProductsByDistributorAndCategory(UUID distributorId, Long categoryId, java.time.LocalDate startDate, java.time.LocalDate endDate, Pageable pageable) {
+        log.debug("Fetching listable products for distributor: {}, category: {}", distributorId, categoryId);
+        boolean hasDates = startDate != null && endDate != null;
+        if (hasDates) {
+            java.time.LocalDateTime from = startDate.atStartOfDay();
+            java.time.LocalDateTime to = endDate.plusDays(1).atStartOfDay();
+            return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndCategoryIdAndActiveTrueAndHasVariantsFalseAndCreatedAtBetween(distributorId, categoryId, from, to, pageable));
+        }
+        return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndCategoryIdAndActiveTrueAndHasVariantsFalse(distributorId, categoryId, pageable));
     }
 
     @Override
@@ -219,6 +239,7 @@ public class ProductServiceImpl implements ProductService {
             response.setVariants(variants);
         }
         enrichGlAccountNames(List.of(response));
+        enrichPendingPriceApproval(response, id);
         return response;
     }
 
@@ -346,6 +367,21 @@ public class ProductServiceImpl implements ProductService {
             });
         }
 
+        // Ensure a zero-stock record exists in every active warehouse so the product appears in inventory
+        if (!savedProduct.isHasVariants()) {
+            List<Warehouse> allWarehouses = warehouseRepository.findByDistributorIdAndActiveTrue(savedProduct.getDistributor().getId());
+            for (Warehouse wh : allWarehouses) {
+                if (!stockRepository.existsByWarehouseIdAndProductId(wh.getId(), savedProduct.getId())) {
+                    stockRepository.save(Stock.builder()
+                            .warehouse(wh)
+                            .product(savedProduct)
+                            .quantity(BigDecimal.ZERO)
+                            .reservedQuantity(BigDecimal.ZERO)
+                            .build());
+                }
+            }
+        }
+
         // Auto-add product to the distributor's default price list
         addToDefaultPriceList(savedProduct);
 
@@ -421,17 +457,35 @@ public class ProductServiceImpl implements ProductService {
             throw new DuplicateResourceException("Product", "sku", request.getSku());
         }
 
+        // Detect price changes before applying anything
+        BigDecimal currentUnitPrice = product.getUnitPrice();
+        BigDecimal currentCostPrice = product.getCostPrice();
+        BigDecimal newUnitPrice = request.getUnitPrice();
+        BigDecimal newCostPrice = request.getCostPrice();
+
+        boolean unitPriceChanged = newUnitPrice != null && newUnitPrice.compareTo(currentUnitPrice != null ? currentUnitPrice : BigDecimal.ZERO) != 0;
+        boolean costPriceChanged = newCostPrice != null && currentCostPrice != null && newCostPrice.compareTo(currentCostPrice) != 0;
+        boolean priceChanged = unitPriceChanged || costPriceChanged;
+
+        // Check if a PRODUCT_PRICE_EDIT workflow is configured for this distributor
+        UUID distributorId = product.getDistributor() != null ? product.getDistributor().getId() : null;
+        boolean priceWorkflowActive = priceChanged && distributorId != null &&
+                !approvalWorkflowConfigRepository.findByDistributorIdAndWorkflowTypeAndActiveTrueOrderByLevelNumberAsc(
+                        distributorId, ApprovalWorkflowType.PRODUCT_PRICE_EDIT).isEmpty();
+
         product.setSku(request.getSku());
         product.setName(request.getName());
         product.setDescription(request.getDescription());
-        product.setUnitPrice(request.getUnitPrice());
         product.setAllBranches(request.isAllBranches());
+
+        // Only apply price changes now if no approval workflow is configured
+        if (!priceWorkflowActive) {
+            product.setUnitPrice(newUnitPrice);
+            if (newCostPrice != null) product.setCostPrice(newCostPrice);
+        }
 
         if (request.getUnitOfMeasure() != null) {
             product.setUnitOfMeasure(request.getUnitOfMeasure());
-        }
-        if (request.getCostPrice() != null) {
-            product.setCostPrice(request.getCostPrice());
         }
         if (request.getImageUrl() != null) {
             product.setImageUrl(request.getImageUrl());
@@ -453,6 +507,34 @@ public class ProductServiceImpl implements ProductService {
 
         Product updatedProduct = productRepository.save(product);
         log.info("Product updated successfully: {}", id);
+
+        // Create price-change approval request if workflow is active
+        UUID pendingApprovalId = null;
+        if (priceWorkflowActive) {
+            UUID currentUserId = securityUtils.getCurrentUserId();
+            if (currentUserId != null) {
+                Map<String, Object> currentVals = new java.util.LinkedHashMap<>();
+                if (currentUnitPrice != null) currentVals.put("unitPrice", currentUnitPrice.toPlainString());
+                if (currentCostPrice != null) currentVals.put("costPrice", currentCostPrice.toPlainString());
+
+                Map<String, Object> requestedVals = new java.util.LinkedHashMap<>();
+                if (unitPriceChanged) requestedVals.put("unitPrice", newUnitPrice.toPlainString());
+                if (costPriceChanged) requestedVals.put("costPrice", newCostPrice.toPlainString());
+
+                var approvalResponse = approvalService.createRequest(currentUserId, CreateApprovalRequestDto.builder()
+                        .workflowType(ApprovalWorkflowType.PRODUCT_PRICE_EDIT)
+                        .entityType("PRODUCT_PRICE_CHANGE")
+                        .entityId(updatedProduct.getId())
+                        .entityName(updatedProduct.getName())
+                        .description("Price change for: " + updatedProduct.getName())
+                        .currentValues(currentVals)
+                        .requestedValues(requestedVals)
+                        .requiredApprovals(1)
+                        .build());
+                pendingApprovalId = approvalResponse.getId();
+                log.info("Created price-change approval request {} for product {}", approvalResponse.getRequestNumber(), updatedProduct.getName());
+            }
+        }
 
         User currentUser = securityUtils.getCurrentUser();
         if (currentUser != null) {
@@ -477,6 +559,17 @@ public class ProductServiceImpl implements ProductService {
                     .map(ProductBranchPriceResponse::fromEntity)
                     .collect(Collectors.toList()));
         }
+
+        // Attach pending price approval info so the frontend can show a banner
+        if (pendingApprovalId != null) {
+            response.setPendingPriceApprovalId(pendingApprovalId);
+            response.setPendingUnitPrice(unitPriceChanged ? newUnitPrice : null);
+            response.setPendingCostPrice(costPriceChanged ? newCostPrice : null);
+        } else {
+            // Also populate from any pre-existing pending approval (e.g. on GET)
+            enrichPendingPriceApproval(response, updatedProduct.getId());
+        }
+
         return response;
     }
 
@@ -557,14 +650,16 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
-    public List<ProductCategoryResponse> getAllCategories(UUID distributorId) {
-        log.debug("Fetching active product categories for distributor: {}", distributorId);
+    public List<ProductCategoryResponse> getAllCategories(UUID distributorId, Boolean active, String search, java.time.LocalDateTime startDate, java.time.LocalDateTime endDate) {
+        log.debug("Fetching product categories for distributor: {}, active: {}, search: {}", distributorId, active, search);
+
+        String searchParam = (search != null && !search.isBlank()) ? search.trim() : null;
 
         UUID effectiveDistributorId = distributorId;
         if (effectiveDistributorId == null) {
             UUID merchantId = securityUtils.getCurrentUserMerchantId();
             if (merchantId != null) {
-                return categoryRepository.findByDistributorMerchantIdAndActiveTrue(merchantId).stream()
+                return categoryRepository.findFilteredByMerchant(merchantId, active, searchParam, startDate, endDate).stream()
                         .map(ProductCategoryResponse::fromEntity)
                         .toList();
             }
@@ -572,13 +667,12 @@ public class ProductServiceImpl implements ProductService {
         }
 
         if (effectiveDistributorId != null) {
-            return categoryRepository.findByDistributorIdAndActiveTrue(effectiveDistributorId).stream()
+            return categoryRepository.findFiltered(effectiveDistributorId, active, searchParam, startDate, endDate).stream()
                     .map(ProductCategoryResponse::fromEntity)
                     .toList();
         }
 
-        return categoryRepository.findAll().stream()
-                .filter(ProductCategory::isActive)
+        return categoryRepository.findFilteredAll(active, searchParam, startDate, endDate).stream()
                 .map(ProductCategoryResponse::fromEntity)
                 .toList();
     }
@@ -802,6 +896,24 @@ public class ProductServiceImpl implements ProductService {
     // -------------------------------------------------------
     // Helpers
     // -------------------------------------------------------
+
+    private void enrichPendingPriceApproval(ProductResponse response, UUID productId) {
+        List<ApprovalRequest> pending = approvalRequestRepository
+                .findByEntityTypeAndEntityIdAndStatus("PRODUCT_PRICE_CHANGE", productId, ApprovalStatus.PENDING);
+        if (!pending.isEmpty()) {
+            ApprovalRequest req = pending.get(0);
+            response.setPendingPriceApprovalId(req.getId());
+            Map<String, Object> vals = req.getRequestedValues();
+            if (vals != null) {
+                if (vals.containsKey("unitPrice")) {
+                    try { response.setPendingUnitPrice(new java.math.BigDecimal(vals.get("unitPrice").toString())); } catch (Exception ignored) {}
+                }
+                if (vals.containsKey("costPrice")) {
+                    try { response.setPendingCostPrice(new java.math.BigDecimal(vals.get("costPrice").toString())); } catch (Exception ignored) {}
+                }
+            }
+        }
+    }
 
     private void saveBranchPrices(Product product, List<ProductBranchPriceRequest> requests) {
         for (ProductBranchPriceRequest req : requests) {

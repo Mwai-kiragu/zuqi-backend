@@ -9,6 +9,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -26,6 +27,8 @@ public interface ProductService {
 
     /** Excludes parent templates (hasVariants=true) — returns standalone + variant children only. */
     Page<ProductResponse> getListableProductsByDistributor(UUID distributorId, LocalDate startDate, LocalDate endDate, Pageable pageable);
+
+    Page<ProductResponse> getListableProductsByDistributorAndCategory(UUID distributorId, Long categoryId, LocalDate startDate, LocalDate endDate, Pageable pageable);
 
     Page<ProductResponse> getInactiveProductsByDistributor(UUID distributorId, Pageable pageable);
 
@@ -48,7 +51,7 @@ public interface ProductService {
 
     void activateProduct(UUID id);
 
-    List<ProductCategoryResponse> getAllCategories(UUID distributorId);
+    List<ProductCategoryResponse> getAllCategories(UUID distributorId, Boolean active, String search, LocalDateTime startDate, LocalDateTime endDate);
 
     List<ProductCategoryResponse> getInactiveCategories(UUID distributorId);
 

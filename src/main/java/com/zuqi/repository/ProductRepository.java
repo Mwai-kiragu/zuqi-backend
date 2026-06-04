@@ -44,6 +44,10 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
 
     Page<Product> findByCategoryIdAndActiveTrue(Long categoryId, Pageable pageable);
 
+    Page<Product> findByDistributorIdAndCategoryIdAndActiveTrueAndHasVariantsFalse(UUID distributorId, Long categoryId, Pageable pageable);
+
+    Page<Product> findByDistributorIdAndCategoryIdAndActiveTrueAndHasVariantsFalseAndCreatedAtBetween(UUID distributorId, Long categoryId, LocalDateTime from, LocalDateTime to, Pageable pageable);
+
     Optional<Product> findBySkuAndDistributorId(String sku, UUID distributorId);
 
     boolean existsBySkuAndDistributorId(String sku, UUID distributorId);

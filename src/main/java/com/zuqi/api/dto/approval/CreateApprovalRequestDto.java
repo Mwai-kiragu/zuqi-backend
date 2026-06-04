@@ -39,4 +39,7 @@ public class CreateApprovalRequestDto {
     private BigDecimal amount;
 
     private Integer requiredApprovals;
+
+    /** Optional explicit distributor scope — overrides requester's distributorId when set. */
+    private UUID distributorId;
 }

@@ -201,7 +201,10 @@ public class StockTakeServiceImpl implements StockTakeService {
                         .collect(java.util.stream.Collectors.toSet());
                 boolean authorized = allowedRoles.isEmpty() ||
                         securityUtils.hasRole(approvedBy, "SUPER_ADMIN") ||
-                        allowedRoles.stream().anyMatch(role -> securityUtils.hasRole(approvedBy, role));
+                        allowedRoles.stream().anyMatch(role ->
+                                securityUtils.hasRole(approvedBy, role) ||
+                                (approvedBy.getUserGroup() != null &&
+                                 approvedBy.getUserGroup().getId().toString().equals(role)));
                 if (!authorized) {
                     String labels = configs.stream()
                             .map(ApprovalWorkflowConfig::getRoleLabel)

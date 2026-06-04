@@ -144,13 +144,19 @@ public class ApprovalServiceImpl implements ApprovalService {
             requiredApprovals = dto.getRequiredApprovals();
         }
 
+        // Use the explicit distributorId from the DTO if provided (e.g. when the requester is a
+        // MERCHANT_ADMIN without a distributorId), otherwise fall back to the requester's own.
+        UUID effectiveDistributorId = dto.getDistributorId() != null
+                ? dto.getDistributorId()
+                : requester.getDistributorId();
+
         ApprovalRequest request = ApprovalRequest.builder()
                 .requestNumber(generateRequestNumber(dto.getWorkflowType()))
                 .workflowType(dto.getWorkflowType())
                 .entityType(dto.getEntityType())
                 .entityId(dto.getEntityId())
                 .entityName(dto.getEntityName())
-                .distributorId(requester.getDistributorId())
+                .distributorId(effectiveDistributorId)
                 .requestedById(requesterId)
                 .requestedByEmail(requester.getEmail())
                 .requestedByName(requester.getFirstName() + " " + requester.getLastName())
@@ -344,6 +350,11 @@ public class ApprovalServiceImpl implements ApprovalService {
                     productRepository.updateApprovalStatus(entityId, status);
                 }
             }
+            case "PRODUCT_PRICE_CHANGE" -> {
+                if ("APPROVED".equals(status)) {
+                    applyApprovedProductPriceChange(request);
+                }
+            }
             case "PRICE_LIST"     -> priceListRepository.updateApprovalStatus(entityId, status);
             case "PROMOTION"      -> promotionRepository.updateApprovalStatus(entityId, status);
             case "STOCK_MOVEMENT" -> {
@@ -430,6 +441,21 @@ public class ApprovalServiceImpl implements ApprovalService {
             if (v.containsKey("creditLimit")) supplier.setCreditLimit(new java.math.BigDecimal(v.get("creditLimit").toString()));
             supplierRepository.save(supplier);
             log.info("Applied approved supplier update for supplier {}", supplier.getId());
+        });
+    }
+
+    private void applyApprovedProductPriceChange(ApprovalRequest request) {
+        if (request.getEntityId() == null) return;
+        productRepository.findById(request.getEntityId()).ifPresent(product -> {
+            Map<String, Object> v = request.getRequestedValues();
+            if (v.containsKey("unitPrice")) {
+                try { product.setUnitPrice(new java.math.BigDecimal(v.get("unitPrice").toString())); } catch (Exception ignored) {}
+            }
+            if (v.containsKey("costPrice")) {
+                try { product.setCostPrice(new java.math.BigDecimal(v.get("costPrice").toString())); } catch (Exception ignored) {}
+            }
+            productRepository.save(product);
+            log.info("Applied approved price change for product {}", product.getId());
         });
     }
 

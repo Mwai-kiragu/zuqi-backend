@@ -195,6 +195,9 @@ public class ImportServiceImpl implements ImportService {
         int imported = 0;
         int rowNum = 1;
 
+        // cache created/resolved categories to avoid duplicate inserts within the same batch
+        Map<String, ProductCategory> categoryCache = new HashMap<>();
+
         try (CSVReader reader = new CSVReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
             String[] headers = reader.readNext();
             if (headers == null) return new ImportResult(0, 0, errors);
@@ -252,9 +255,18 @@ public class ImportServiceImpl implements ImportService {
 
                     ProductCategory category = null;
                     if (!categoryName.isEmpty()) {
-                        category = productCategoryRepository
-                                .findByNameAndDistributorId(categoryName, distributorId)
-                                .orElse(null);
+                        if (!categoryCache.containsKey(categoryName)) {
+                            ProductCategory resolved = productCategoryRepository
+                                    .findByNameAndDistributorId(categoryName, distributorId)
+                                    .orElseGet(() -> productCategoryRepository.save(
+                                            ProductCategory.builder()
+                                                    .name(categoryName)
+                                                    .distributor(distributor)
+                                                    .active(true)
+                                                    .build()));
+                            categoryCache.put(categoryName, resolved);
+                        }
+                        category = categoryCache.get(categoryName);
                     }
 
                     Product product = Product.builder()

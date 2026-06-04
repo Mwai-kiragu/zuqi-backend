@@ -1,5 +1,6 @@
 package com.zuqi.api.dto.gl;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.zuqi.domain.gl.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,7 +25,9 @@ public class GlAccountResponse {
     private NormalBalance normalBalance;
     private UUID parentId;
     private int level;
+    @JsonProperty("isPostingAccount")
     private boolean isPostingAccount;
+    @JsonProperty("isSystemAccount")
     private boolean isSystemAccount;
     private SystemAccountType systemAccountType;
     private String description;

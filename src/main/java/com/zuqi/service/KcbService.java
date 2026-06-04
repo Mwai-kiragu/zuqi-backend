@@ -21,6 +21,8 @@ public interface KcbService {
 
     KcbStkPushResponse initiateStk(KcbStkPushRequest request);
 
+    KcbStkPushResponse initiatePublicStk(UUID merchantId, String phone, java.math.BigDecimal amount, String referenceId);
+
     KcbStkPushResponse getStkStatus(UUID stkRequestId);
 
     void handleCallback(Map<String, Object> payload);
