@@ -167,8 +167,13 @@ public class CasbinAuthorizationFilter extends OncePerRequestFilter {
     }
 
     private static final Set<String> APPROVE_SUFFIXES = Set.of(
-        "/approve", "/process", "/reject", "/cancel", "/disburse", "/receive",
-        "/confirm", "/dispatch", "/activate", "/deactivate"
+        "/approve", "/process", "/reject"
+    );
+
+    // POST sub-paths that change state but are not approvals — require canUpdate, not canApprove
+    private static final Set<String> STATE_CHANGE_SUFFIXES = Set.of(
+        "/activate", "/deactivate", "/cancel", "/disburse", "/receive",
+        "/confirm", "/dispatch"
     );
 
     // Paths that don't require authorization checks (with and without /api context)
@@ -289,10 +294,10 @@ public class CasbinAuthorizationFilter extends OncePerRequestFilter {
      * Check whether the user's UserType grants them access to this path/method.
      * Uses a direct repository query to avoid LazyInitializationException.
      * canRead   → GET
-     * canCreate → POST (non-approve)
-     * canUpdate → PUT, PATCH
+     * canCreate → POST (non-approve, non-state-change)
+     * canUpdate → PUT, PATCH, POST on state-change sub-paths (/activate, /deactivate, /cancel, etc.)
      * canDelete → DELETE
-     * canApprove→ POST on approve/process/reject/etc sub-paths
+     * canApprove→ POST on approval sub-paths (/approve, /process, /reject)
      */
     private boolean isAllowedByUserType(User user, String path, String method) {
         List<UserTypePermission> permissions = userRepository.findUserTypePermissionsByUserId(user.getId());
@@ -300,6 +305,8 @@ public class CasbinAuthorizationFilter extends OncePerRequestFilter {
 
         boolean isApproveAction = "POST".equalsIgnoreCase(method)
                 && APPROVE_SUFFIXES.stream().anyMatch(path::endsWith);
+        boolean isStateChangeAction = "POST".equalsIgnoreCase(method)
+                && STATE_CHANGE_SUFFIXES.stream().anyMatch(path::endsWith);
 
         for (UserTypePermission perm : permissions) {
             List<String> prefixes = resolveModulePaths(perm.getModule());
@@ -308,13 +315,27 @@ public class CasbinAuthorizationFilter extends OncePerRequestFilter {
                     path.equals(prefix) || path.startsWith(prefix + "/") || path.startsWith(prefix + "?"));
             if (!matchesPath) continue;
 
-            if ("GET".equalsIgnoreCase(method)    && perm.isCanRead())                    return true;
-            if ("POST".equalsIgnoreCase(method)   && !isApproveAction && perm.isCanCreate()) return true;
-            if ("PUT".equalsIgnoreCase(method)    && perm.isCanUpdate())                  return true;
-            if ("PATCH".equalsIgnoreCase(method)  && perm.isCanUpdate())                  return true;
-            if ("DELETE".equalsIgnoreCase(method) && perm.isCanDelete())                  return true;
-            if (isApproveAction                   && perm.isCanApprove())                 return true;
+            if ("GET".equalsIgnoreCase(method)    && perm.isCanRead())                                 return true;
+            if ("POST".equalsIgnoreCase(method)   && !isApproveAction && !isStateChangeAction
+                                                  && perm.isCanCreate())                               return true;
+            if ("PUT".equalsIgnoreCase(method)    && perm.isCanUpdate())                               return true;
+            if ("PATCH".equalsIgnoreCase(method)  && perm.isCanUpdate())                               return true;
+            if ("DELETE".equalsIgnoreCase(method) && perm.isCanDelete())                               return true;
+            if (isStateChangeAction               && perm.isCanUpdate())                               return true;
+            if (isApproveAction                   && perm.isCanApprove())                              return true;
         }
+
+        // GL reference data (accounts, cost-centers) must be readable by anyone who can
+        // use journal entries — the creation form depends on these dropdowns.
+        if ("GET".equalsIgnoreCase(method)
+                && (path.equals("/v1/gl/accounts") || path.startsWith("/v1/gl/accounts/")
+                    || path.equals("/v1/gl/cost-centers") || path.startsWith("/v1/gl/cost-centers/"))) {
+            for (UserTypePermission perm : permissions) {
+                String mod = perm.getModule() == null ? "" : perm.getModule().toUpperCase();
+                if ("JOURNAL_ENTRIES".equals(mod) && (perm.isCanRead() || perm.isCanCreate())) return true;
+            }
+        }
+
         return false;
     }
 

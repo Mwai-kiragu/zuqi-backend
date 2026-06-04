@@ -49,7 +49,7 @@ public class CustomerRequest {
     private String kraPin;
 
     @NotBlank(message = "National ID is required")
-    @Size(max = 20, message = "National ID must not exceed 20 characters")
+    @Pattern(regexp = "^\\d{7,8}$", message = "National ID must be 7–8 digits (numbers only)")
     private String nationalId;
 
     private List<Map<String, Object>> contactPersons;

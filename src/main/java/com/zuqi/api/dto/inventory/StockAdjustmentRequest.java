@@ -38,4 +38,7 @@ public class StockAdjustmentRequest {
 
     /** Optional: expiry date for this stock-in. When provided, a ProductBatch record is auto-created. */
     private LocalDate expiryDate;
+
+    /** Optional: set/update the reorder level for this stock record at the same time as the adjustment. */
+    private BigDecimal reorderLevel;
 }

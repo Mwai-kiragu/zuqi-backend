@@ -26,20 +26,22 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
     List<Stock> findAvailableStockByProductId(@Param("productId") UUID productId);
 
     @Query("SELECT s FROM Stock s WHERE s.warehouse.id = :warehouseId " +
-            "AND s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel")
+            "AND s.quantity <= COALESCE(s.reorderLevel, 10)")
     List<Stock> findLowStockByWarehouseId(@Param("warehouseId") UUID warehouseId);
 
     @Query("SELECT s FROM Stock s JOIN FETCH s.product JOIN FETCH s.warehouse " +
             "WHERE s.warehouse.distributor.id = :distributorId " +
-            "AND s.reorderLevel IS NOT NULL AND s.quantity > 0 AND s.quantity <= s.reorderLevel")
+            "AND s.product.hasVariants = false " +
+            "AND s.quantity > 0 AND s.quantity <= COALESCE(s.reorderLevel, 10)")
     Page<Stock> findLowStockByDistributorId(@Param("distributorId") UUID distributorId, Pageable pageable);
 
     @Query("SELECT s FROM Stock s JOIN FETCH s.product JOIN FETCH s.warehouse " +
             "WHERE s.warehouse.distributor.merchant.id = :merchantId " +
-            "AND s.reorderLevel IS NOT NULL AND s.quantity > 0 AND s.quantity <= s.reorderLevel")
+            "AND s.product.hasVariants = false " +
+            "AND s.quantity > 0 AND s.quantity <= COALESCE(s.reorderLevel, 10)")
     Page<Stock> findLowStockByMerchantIdFetched(@Param("merchantId") UUID merchantId, Pageable pageable);
 
-    @Query("SELECT s FROM Stock s WHERE s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel")
+    @Query("SELECT s FROM Stock s WHERE s.quantity <= COALESCE(s.reorderLevel, 10)")
     Page<Stock> findAllLowStock(Pageable pageable);
 
     @Query("SELECT s FROM Stock s WHERE s.warehouse.id = :warehouseId AND s.product.id IN :productIds")
@@ -56,7 +58,7 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
     java.math.BigDecimal getTotalQuantityByProductId(@Param("productId") UUID productId);
 
     @Query("SELECT COUNT(s) FROM Stock s WHERE s.warehouse.distributor.id = :distributorId " +
-            "AND s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel AND s.quantity > 0")
+            "AND s.quantity > 0 AND s.quantity <= COALESCE(s.reorderLevel, 10)")
     long countLowStockByDistributorId(@Param("distributorId") UUID distributorId);
 
     @Query("SELECT COUNT(s) FROM Stock s WHERE s.warehouse.distributor.id = :distributorId " +
@@ -74,7 +76,7 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
 
     /** Per-warehouse product count, low-stock count and out-of-stock count for a distributor. */
     @Query("SELECT s.warehouse.id, s.warehouse.name, COUNT(s), " +
-            "SUM(CASE WHEN s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel AND s.quantity > 0 THEN 1 ELSE 0 END), " +
+            "SUM(CASE WHEN s.quantity > 0 AND s.quantity <= COALESCE(s.reorderLevel, 10) THEN 1 ELSE 0 END), " +
             "SUM(CASE WHEN s.quantity <= 0 THEN 1 ELSE 0 END) " +
             "FROM Stock s WHERE s.warehouse.distributor.id = :distributorId GROUP BY s.warehouse.id, s.warehouse.name")
     List<Object[]> warehouseSummaryByDistributorId(@Param("distributorId") UUID distributorId);
@@ -84,7 +86,7 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
     BigDecimal sumStockValueByMerchantId(@Param("merchantId") UUID merchantId);
 
     @Query("SELECT COUNT(s) FROM Stock s WHERE s.warehouse.distributor.merchant.id = :merchantId " +
-            "AND s.reorderLevel IS NOT NULL AND s.quantity > 0 AND s.quantity <= s.reorderLevel")
+            "AND s.quantity > 0 AND s.quantity <= COALESCE(s.reorderLevel, 10)")
     long countLowStockByMerchantId(@Param("merchantId") UUID merchantId);
 
     @Query("SELECT COUNT(s) FROM Stock s WHERE s.warehouse.distributor.merchant.id = :merchantId " +
@@ -96,13 +98,13 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
     List<Stock> findOutOfStockByMerchantId(@Param("merchantId") UUID merchantId);
 
     @Query("SELECT s.warehouse.id, s.warehouse.name, COUNT(s), " +
-            "SUM(CASE WHEN s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel AND s.quantity > 0 THEN 1 ELSE 0 END), " +
+            "SUM(CASE WHEN s.quantity > 0 AND s.quantity <= COALESCE(s.reorderLevel, 10) THEN 1 ELSE 0 END), " +
             "SUM(CASE WHEN s.quantity <= 0 THEN 1 ELSE 0 END) " +
             "FROM Stock s WHERE s.warehouse.distributor.merchant.id = :merchantId GROUP BY s.warehouse.id, s.warehouse.name")
     List<Object[]> warehouseSummaryByMerchantId(@Param("merchantId") UUID merchantId);
 
     // Global queries for SUPER_ADMIN/ADMIN (no distributor filter)
-    @Query("SELECT COUNT(s) FROM Stock s WHERE s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel AND s.quantity > 0")
+    @Query("SELECT COUNT(s) FROM Stock s WHERE s.quantity > 0 AND s.quantity <= COALESCE(s.reorderLevel, 10)")
     long countAllLowStock();
 
     @Query("SELECT COUNT(s) FROM Stock s WHERE s.quantity <= 0")
@@ -111,7 +113,8 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
     @Query("SELECT s FROM Stock s WHERE " +
             "(:distributorId IS NULL OR s.warehouse.distributor.id = :distributorId) AND " +
             "(:warehouseId IS NULL OR s.warehouse.id = :warehouseId) AND " +
-            "(:branchId IS NULL OR s.warehouse.branch.id = :branchId)")
+            "(:branchId IS NULL OR s.warehouse.branch.id = :branchId) AND " +
+            "s.product.hasVariants = false")
     Page<Stock> findByFilters(
             @Param("distributorId") UUID distributorId,
             @Param("warehouseId") UUID warehouseId,
@@ -122,6 +125,7 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
             "(:distributorId IS NULL OR s.warehouse.distributor.id = :distributorId) AND " +
             "(:warehouseId IS NULL OR s.warehouse.id = :warehouseId) AND " +
             "(:branchId IS NULL OR s.warehouse.branch.id = :branchId) AND " +
+            "s.product.hasVariants = false AND " +
             "(LOWER(s.product.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
             "  OR LOWER(s.product.sku) LIKE LOWER(CONCAT('%', :search, '%')))")
     Page<Stock> findByFiltersWithSearch(
@@ -138,7 +142,7 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
     List<Stock> findAllByMerchantIdFetched(@Param("merchantId") UUID merchantId);
 
     @Query("SELECT s FROM Stock s JOIN FETCH s.warehouse w JOIN FETCH w.distributor JOIN FETCH s.product " +
-            "WHERE s.reorderLevel IS NOT NULL AND s.quantity <= s.reorderLevel " +
+            "WHERE s.quantity <= COALESCE(s.reorderLevel, 10) " +
             "AND (s.lastLowStockAlertSentAt IS NULL OR s.lastLowStockAlertSentAt < :threshold)")
     List<Stock> findLowStockNotRecentlyAlerted(@Param("threshold") java.time.LocalDateTime threshold);
 

@@ -188,6 +188,9 @@ public class InventoryServiceImpl implements InventoryService {
 
         stock.setQuantity(newQuantity);
         stock.setLastStockCheck(LocalDateTime.now());
+        if (request.getReorderLevel() != null) {
+            stock.setReorderLevel(request.getReorderLevel());
+        }
         Stock savedStock = stockRepository.save(stock);
 
         // Create movement record (immediately approved)
@@ -478,6 +481,20 @@ public class InventoryServiceImpl implements InventoryService {
 
         Warehouse savedWarehouse = warehouseRepository.save(warehouse);
         log.info("Created warehouse: {} ({})", savedWarehouse.getName(), savedWarehouse.getCode());
+
+        // Initialize zero-stock records for all active non-parent products so they appear in inventory
+        productRepository.findByDistributorIdAndActiveTrue(distributor.getId()).stream()
+                .filter(p -> !p.isHasVariants())
+                .forEach(p -> {
+                    if (!stockRepository.existsByWarehouseIdAndProductId(savedWarehouse.getId(), p.getId())) {
+                        stockRepository.save(Stock.builder()
+                                .warehouse(savedWarehouse)
+                                .product(p)
+                                .quantity(java.math.BigDecimal.ZERO)
+                                .reservedQuantity(java.math.BigDecimal.ZERO)
+                                .build());
+                    }
+                });
 
         return mapToWarehouseResponse(savedWarehouse);
     }

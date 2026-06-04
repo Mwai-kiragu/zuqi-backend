@@ -349,13 +349,17 @@ public class PosServiceImpl implements PosService {
                 if (!promos.isEmpty()) {
                     Promotion promo = promos.get(0);
                     BigDecimal lineGross = itemReq.getUnitPrice().multiply(itemReq.getQuantity());
-                    if ("PERCENTAGE".equals(promo.getPromotionType()) && promo.getDiscountValue() != null) {
-                        discount = lineGross.multiply(promo.getDiscountValue())
-                                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
-                        promotionName = promo.getName();
-                    } else if ("FIXED_AMOUNT".equals(promo.getPromotionType()) && promo.getDiscountValue() != null) {
-                        discount = promo.getDiscountValue().min(lineGross);
-                        promotionName = promo.getName();
+                    boolean meetsMinimum = promo.getMinOrderAmount() == null
+                            || lineGross.compareTo(promo.getMinOrderAmount()) >= 0;
+                    if (meetsMinimum) {
+                        if ("PERCENTAGE".equals(promo.getPromotionType()) && promo.getDiscountValue() != null) {
+                            discount = lineGross.multiply(promo.getDiscountValue())
+                                    .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+                            promotionName = promo.getName();
+                        } else if ("FIXED_AMOUNT".equals(promo.getPromotionType()) && promo.getDiscountValue() != null) {
+                            discount = promo.getDiscountValue().min(lineGross);
+                            promotionName = promo.getName();
+                        }
                     }
                 }
             }

@@ -190,7 +190,16 @@ public class KcbServiceImpl implements KcbService {
         if (merchantId == null) {
             throw new ValidationException("Merchant context required for KCB STK push");
         }
+        return doInitiateStk(merchantId, request);
+    }
 
+    @Override
+    public KcbStkPushResponse initiatePublicStk(UUID merchantId, String phone, java.math.BigDecimal amount, String referenceId) {
+        if (merchantId == null) throw new ValidationException("Merchant context required for KCB STK push");
+        return doInitiateStk(merchantId, new com.zuqi.api.dto.kcb.KcbStkPushRequest(phone, amount, referenceId, "INVOICE"));
+    }
+
+    private KcbStkPushResponse doInitiateStk(UUID merchantId, KcbStkPushRequest request) {
         List<KcbConfig> activeConfigs = kcbConfigRepository.findByMerchantIdAndStatus(merchantId, KcbConfigStatus.ACTIVE);
         if (activeConfigs.isEmpty()) {
             throw new ValidationException("No active KCB configuration found for this merchant");

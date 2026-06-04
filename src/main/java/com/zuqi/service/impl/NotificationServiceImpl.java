@@ -2,6 +2,7 @@ package com.zuqi.service.impl;
 
 import com.zuqi.api.dto.common.PageResponse;
 import com.zuqi.api.dto.notification.NotificationResponse;
+import com.zuqi.config.EmailConfig;
 import com.zuqi.domain.approval.ApprovalRequest;
 import com.zuqi.domain.approval.ApprovalStatus;
 import com.zuqi.domain.inventory.Stock;
@@ -32,6 +33,7 @@ public class NotificationServiceImpl implements NotificationService {
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
     private final EmailService emailService;
+    private final EmailConfig emailConfig;
     private final SecurityUtils securityUtils;
 
     @Override
@@ -39,12 +41,23 @@ public class NotificationServiceImpl implements NotificationService {
     public void notifyApprovers(ApprovalRequest request) {
         try {
             UUID requesterId = request.getRequestedById();
-            User requester = userRepository.findById(requesterId).orElse(null);
-            if (requester == null || requester.getDistributorId() == null) return;
 
-            List<User> approvers = userRepository.findActiveApproversByDistributorId(requester.getDistributorId());
+            // Prefer the distributor stored on the request (explicitly set at creation time).
+            // Fall back to the requester's own distributorId for legacy paths.
+            UUID distributorId = request.getDistributorId();
+            if (distributorId == null) {
+                User requester = userRepository.findById(requesterId).orElse(null);
+                if (requester == null) return;
+                distributorId = requester.getDistributorId();
+            }
+            if (distributorId == null) {
+                log.info("No distributor context for approval request {} — skipping notifications", request.getRequestNumber());
+                return;
+            }
+
+            List<User> approvers = userRepository.findActiveApproversByDistributorId(distributorId);
             if (approvers.isEmpty()) {
-                log.info("No approvers found for distributor {} — skipping in-app notifications", requester.getDistributorId());
+                log.info("No approvers found for distributor {} — skipping in-app notifications", distributorId);
                 return;
             }
 
@@ -69,6 +82,32 @@ public class NotificationServiceImpl implements NotificationService {
             notificationRepository.saveAll(notifications);
             log.info("Sent APPROVAL_REQUESTED in-app notification to {} approvers for request {}",
                     notifications.size(), request.getRequestNumber());
+
+            // Send email to each approver
+            String expiresAt = request.getExpiresAt() != null
+                    ? request.getExpiresAt().toLocalDate().toString() : "N/A";
+            approvers.stream()
+                    .filter(a -> !a.getId().equals(requesterId))
+                    .filter(a -> a.getEmail() != null && !a.getEmail().isBlank())
+                    .forEach(approver -> {
+                        try {
+                            emailService.sendTemplatedEmail(
+                                    approver.getEmail(),
+                                    "Approval Required: " + request.getEntityName() + " [" + request.getRequestNumber() + "]",
+                                    "email/approval-request",
+                                    Map.of(
+                                            "requestNumber", request.getRequestNumber(),
+                                            "workflowType", formatLabel(request.getWorkflowType().name()),
+                                            "entityName", request.getEntityName(),
+                                            "requesterName", request.getRequestedByName() != null ? request.getRequestedByName() : "A team member",
+                                            "description", request.getDescription() != null ? request.getDescription() : "",
+                                            "expiresAt", expiresAt,
+                                            "companyName", emailConfig.getFromName()
+                                    ));
+                        } catch (Exception e) {
+                            log.warn("Failed to send approval request email to {}: {}", approver.getEmail(), e.getMessage());
+                        }
+                    });
         } catch (Exception e) {
             log.error("Failed to send in-app notifications to approvers for request {}: {}",
                     request.getRequestNumber(), e.getMessage(), e);

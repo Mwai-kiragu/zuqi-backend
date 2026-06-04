@@ -4,15 +4,19 @@ import com.zuqi.api.dto.ApiResponse;
 import com.zuqi.api.dto.invoice.InvoiceResponse;
 import com.zuqi.api.dto.invoice.ManualInvoiceRequest;
 import com.zuqi.api.dto.invoice.SendInvoiceRequest;
+import com.zuqi.api.dto.kcb.KcbStkPushResponse;
 import com.zuqi.api.dto.mpesa.StkPushRequest;
 import com.zuqi.api.dto.mpesa.StkPushResponse;
+import com.zuqi.api.dto.ncba.NcbaStkPushResponse;
 import com.zuqi.domain.invoice.InvoiceStatus;
 import com.zuqi.domain.mpesa.MpesaConfig;
 import com.zuqi.domain.mpesa.MpesaConfigStatus;
 import com.zuqi.repository.InvoiceRepository;
 import com.zuqi.repository.MpesaConfigRepository;
 import com.zuqi.service.InvoiceService;
+import com.zuqi.service.KcbService;
 import com.zuqi.service.MpesaService;
+import com.zuqi.service.NcbaService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -42,6 +46,8 @@ public class InvoiceController {
     private final InvoiceRepository invoiceRepository;
     private final MpesaConfigRepository mpesaConfigRepository;
     private final MpesaService mpesaService;
+    private final KcbService kcbService;
+    private final NcbaService ncbaService;
 
     @PostMapping
     @Operation(summary = "Create a manual invoice tied to a customer with products")
@@ -241,6 +247,44 @@ public class InvoiceController {
         );
 
         StkPushResponse response = mpesaService.initiateStk(stkRequest);
+        return ResponseEntity.ok(ApiResponse.success("STK push sent", response));
+    }
+
+    @PostMapping("/public/{invoiceNumber}/pay/kcb")
+    @Operation(summary = "Initiate KCB STK push for an unpaid invoice (no auth)")
+    public ResponseEntity<ApiResponse<KcbStkPushResponse>> payPublicInvoiceKcb(
+            @PathVariable String invoiceNumber,
+            @RequestParam String phone,
+            @RequestParam(required = false) BigDecimal amount) {
+
+        UUID merchantId = invoiceRepository.findMerchantIdByInvoiceNumber(invoiceNumber)
+                .orElseThrow(() -> new com.zuqi.exception.ResourceNotFoundException("Invoice", "number", invoiceNumber));
+
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            InvoiceResponse invoice = invoiceService.getInvoiceByNumber(invoiceNumber);
+            amount = invoice.getBalanceDue() != null ? invoice.getBalanceDue() : invoice.getTotalAmount();
+        }
+
+        KcbStkPushResponse response = kcbService.initiatePublicStk(merchantId, phone, amount, invoiceNumber);
+        return ResponseEntity.ok(ApiResponse.success("STK push sent", response));
+    }
+
+    @PostMapping("/public/{invoiceNumber}/pay/ncba")
+    @Operation(summary = "Initiate NCBA STK push for an unpaid invoice (no auth)")
+    public ResponseEntity<ApiResponse<NcbaStkPushResponse>> payPublicInvoiceNcba(
+            @PathVariable String invoiceNumber,
+            @RequestParam String phone,
+            @RequestParam(required = false) BigDecimal amount) {
+
+        UUID merchantId = invoiceRepository.findMerchantIdByInvoiceNumber(invoiceNumber)
+                .orElseThrow(() -> new com.zuqi.exception.ResourceNotFoundException("Invoice", "number", invoiceNumber));
+
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            InvoiceResponse invoice = invoiceService.getInvoiceByNumber(invoiceNumber);
+            amount = invoice.getBalanceDue() != null ? invoice.getBalanceDue() : invoice.getTotalAmount();
+        }
+
+        NcbaStkPushResponse response = ncbaService.initiatePublicStk(merchantId, phone, amount, invoiceNumber);
         return ResponseEntity.ok(ApiResponse.success("STK push sent", response));
     }
 }

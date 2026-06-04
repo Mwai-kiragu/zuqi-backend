@@ -140,7 +140,16 @@ public class NcbaServiceImpl implements NcbaService {
         if (merchantId == null) {
             throw new ValidationException("Merchant context required for NCBA STK push");
         }
+        return doInitiateStk(merchantId, request);
+    }
 
+    @Override
+    public NcbaStkPushResponse initiatePublicStk(UUID merchantId, String phone, java.math.BigDecimal amount, String referenceId) {
+        if (merchantId == null) throw new ValidationException("Merchant context required for NCBA STK push");
+        return doInitiateStk(merchantId, new com.zuqi.api.dto.ncba.NcbaStkPushRequest(phone, amount, referenceId, "INVOICE", referenceId));
+    }
+
+    private NcbaStkPushResponse doInitiateStk(UUID merchantId, NcbaStkPushRequest request) {
         List<NcbaConfig> activeConfigs = ncbaConfigRepository.findByMerchantIdAndStatus(merchantId, NcbaConfigStatus.ACTIVE);
         if (activeConfigs.isEmpty()) {
             throw new ValidationException("No active NCBA configuration found for this merchant");

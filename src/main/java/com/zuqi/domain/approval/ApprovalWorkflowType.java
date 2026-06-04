@@ -55,6 +55,7 @@ public enum ApprovalWorkflowType {
 
     // Accounting
     CHART_OF_ACCOUNTS,
+    GL_BUDGET,
 
     // Funds Transfer
     FUNDS_TRANSFER

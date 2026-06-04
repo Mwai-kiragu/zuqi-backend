@@ -65,10 +65,10 @@ public class Stock {
         return quantity.subtract(reservedQuantity);
     }
 
+    public static final BigDecimal DEFAULT_REORDER_LEVEL = BigDecimal.TEN;
+
     public boolean isLowStock() {
-        if (reorderLevel == null) {
-            return false;
-        }
-        return quantity.compareTo(reorderLevel) <= 0;
+        BigDecimal threshold = reorderLevel != null ? reorderLevel : DEFAULT_REORDER_LEVEL;
+        return quantity != null && quantity.compareTo(threshold) <= 0;
     }
 }

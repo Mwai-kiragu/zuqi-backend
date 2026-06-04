@@ -184,6 +184,31 @@ public class SecurityUtils {
                 .orElse(false);
     }
 
+    /**
+     * Checks whether a specific user (by ID) requires approval for the given module.
+     * Used when the calling context differs from the originating user (e.g., an order
+     * approval callback where the current principal is the approver, not the submitter).
+     */
+    public boolean userRequiresApprovalFor(UUID userId, String module) {
+        if (userId == null) return false;
+        User user = userRepository.findById(userId).orElse(null);
+        if (user == null) return false;
+
+        for (String adminRole : List.of("SUPER_ADMIN", "DISTRIBUTOR_ADMIN", "MERCHANT_ADMIN")) {
+            if (hasRole(user, adminRole)) return false;
+        }
+
+        Optional<String> tier = userRepository.findWorkflowTierByUserId(userId);
+        if (tier.isPresent()) return true;
+
+        List<UserTypePermission> permissions = userRepository.findUserTypePermissionsByUserId(userId);
+        return permissions.stream()
+                .filter(p -> p.getModule().equalsIgnoreCase(module))
+                .findFirst()
+                .map(UserTypePermission::isRequiresApproval)
+                .orElse(false);
+    }
+
     public UUID getCurrentBranchId() {
         User user = getCurrentUser();
         return user != null ? user.getActiveBranchId() : null;
