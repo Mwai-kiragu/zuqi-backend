@@ -1,5 +1,6 @@
 package com.zuqi.api.dto.inventory;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -27,6 +28,7 @@ public class StockResponse {
     private BigDecimal quantity;
     private BigDecimal reservedQuantity;
     private BigDecimal availableQuantity;
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     private BigDecimal reorderLevel;
     private boolean lowStock;
     private LocalDateTime lastStockCheck;

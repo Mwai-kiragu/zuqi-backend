@@ -31,6 +31,8 @@ public interface InventoryService {
     // Warehouse operations
     List<WarehouseResponse> getWarehousesByDistributor(UUID distributorId);
 
+    List<WarehouseResponse> getAllWarehousesByDistributor(UUID distributorId);
+
     List<WarehouseResponse> getWarehousesByBranch(UUID branchId);
 
     Page<WarehouseResponse> getWarehousesByDistributor(UUID distributorId, Pageable pageable);

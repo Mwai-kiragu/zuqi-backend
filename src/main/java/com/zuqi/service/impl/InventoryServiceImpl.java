@@ -323,12 +323,13 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     @Override
+    @Transactional
     public StockResponse updateThresholds(UUID stockId, StockThresholdRequest request) {
         Stock stock = stockRepository.findById(stockId)
                 .orElseThrow(() -> new ResourceNotFoundException("Stock", "id", stockId));
         if (request.getReorderLevel() != null) {
             stock.setReorderLevel(request.getReorderLevel());
-    }
+        }
         return mapToStockResponse(stockRepository.save(stock));
     }
 
@@ -378,6 +379,32 @@ public class InventoryServiceImpl implements InventoryService {
 
         // SUPER_ADMIN can see all warehouses
         return warehouseRepository.findByActiveTrue().stream()
+                .map(this::mapToWarehouseResponse)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<WarehouseResponse> getAllWarehousesByDistributor(UUID distributorId) {
+        UUID effectiveDistributorId = distributorId;
+        if (effectiveDistributorId == null) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId != null) {
+                return warehouseRepository.findByDistributorMerchantId(merchantId).stream()
+                        .map(this::mapToWarehouseResponse)
+                        .collect(Collectors.toList());
+            }
+            effectiveDistributorId = securityUtils.getDistributorIdForFiltering();
+        }
+
+        if (effectiveDistributorId != null) {
+            validateDistributorExists(effectiveDistributorId);
+            return warehouseRepository.findByDistributorId(effectiveDistributorId).stream()
+                    .map(this::mapToWarehouseResponse)
+                    .collect(Collectors.toList());
+        }
+
+        // SUPER_ADMIN sees all warehouses across all distributors
+        return warehouseRepository.findAll().stream()
                 .map(this::mapToWarehouseResponse)
                 .collect(Collectors.toList());
     }
@@ -640,7 +667,7 @@ public class InventoryServiceImpl implements InventoryService {
                 .quantity(stock.getQuantity())
                 .reservedQuantity(stock.getReservedQuantity())
                 .availableQuantity(stock.getAvailableQuantity())
-                .reorderLevel(stock.getReorderLevel())
+                .reorderLevel(stock.getReorderLevel() != null ? stock.getReorderLevel() : BigDecimal.ZERO)
                 .lowStock(stock.isLowStock())
                 .lastStockCheck(stock.getLastStockCheck())
                 .updatedAt(stock.getUpdatedAt())
