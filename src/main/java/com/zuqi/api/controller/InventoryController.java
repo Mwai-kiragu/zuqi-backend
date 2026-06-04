@@ -134,13 +134,16 @@ public class InventoryController {
     }
 
     @GetMapping("/warehouses")
-    @Operation(summary = "List warehouses", description = "Get all active warehouses for a distributor or branch")
+    @Operation(summary = "List warehouses", description = "Get warehouses for a distributor or branch")
     public ResponseEntity<ApiResponse<List<WarehouseResponse>>> getWarehouses(
             @Parameter(description = "Distributor ID (optional for admins)") @RequestParam(required = false) UUID distributorId,
-            @Parameter(description = "Branch ID filter") @RequestParam(required = false) UUID branchId) {
+            @Parameter(description = "Branch ID filter") @RequestParam(required = false) UUID branchId,
+            @Parameter(description = "Include inactive warehouses") @RequestParam(required = false, defaultValue = "false") boolean includeInactive) {
         List<WarehouseResponse> warehouses = branchId != null
                 ? inventoryService.getWarehousesByBranch(branchId)
-                : inventoryService.getWarehousesByDistributor(distributorId);
+                : (includeInactive
+                        ? inventoryService.getAllWarehousesByDistributor(distributorId)
+                        : inventoryService.getWarehousesByDistributor(distributorId));
         return ResponseEntity.ok(ApiResponse.success(warehouses));
     }
 

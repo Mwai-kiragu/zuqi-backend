@@ -148,6 +148,19 @@ public class ProductServiceImpl implements ProductService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<ProductResponse> getAllListableProductsByDistributor(UUID distributorId, java.time.LocalDate startDate, java.time.LocalDate endDate, Pageable pageable) {
+        log.debug("Fetching all (active+inactive) listable products for distributor: {}", distributorId);
+        boolean hasDates = startDate != null && endDate != null;
+        if (hasDates) {
+            java.time.LocalDateTime from = startDate.atStartOfDay();
+            java.time.LocalDateTime to = endDate.plusDays(1).atStartOfDay();
+            return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndHasVariantsFalseAndCreatedAtBetween(distributorId, from, to, pageable));
+        }
+        return enrichWithStockAndBranchPrices(productRepository.findByDistributorIdAndHasVariantsFalse(distributorId, pageable));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Page<ProductResponse> getListableProductsByDistributorAndCategory(UUID distributorId, Long categoryId, java.time.LocalDate startDate, java.time.LocalDate endDate, Pageable pageable) {
         log.debug("Fetching listable products for distributor: {}, category: {}", distributorId, categoryId);
         boolean hasDates = startDate != null && endDate != null;

@@ -73,8 +73,12 @@ public class ProductController {
             if (Boolean.TRUE.equals(listableOnly)) {
                 if (categoryId != null) {
                     products = productService.getListableProductsByDistributorAndCategory(distributorId, categoryId, startDate, endDate, pageable);
-                } else {
+                } else if (Boolean.TRUE.equals(active)) {
+                    // Explicit active=true: active only
                     products = productService.getListableProductsByDistributor(distributorId, startDate, endDate, pageable);
+                } else {
+                    // No active filter: return all (active + inactive) so deactivated products remain visible
+                    products = productService.getAllListableProductsByDistributor(distributorId, startDate, endDate, pageable);
                 }
             } else if (Boolean.TRUE.equals(topLevelOnly)) {
                 products = productService.getTopLevelProductsByDistributor(distributorId, startDate, endDate, pageable);

@@ -28,6 +28,9 @@ public interface ProductService {
     /** Excludes parent templates (hasVariants=true) — returns standalone + variant children only. */
     Page<ProductResponse> getListableProductsByDistributor(UUID distributorId, LocalDate startDate, LocalDate endDate, Pageable pageable);
 
+    /** Same as above but includes inactive products (no active filter). */
+    Page<ProductResponse> getAllListableProductsByDistributor(UUID distributorId, LocalDate startDate, LocalDate endDate, Pageable pageable);
+
     Page<ProductResponse> getListableProductsByDistributorAndCategory(UUID distributorId, Long categoryId, LocalDate startDate, LocalDate endDate, Pageable pageable);
 
     Page<ProductResponse> getInactiveProductsByDistributor(UUID distributorId, Pageable pageable);

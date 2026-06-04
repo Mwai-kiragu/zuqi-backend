@@ -30,6 +30,11 @@ public interface ProductRepository extends JpaRepository<Product, UUID>, JpaSpec
     /** Excludes parent templates (hasVariants=false) — shows standalone + variant children. */
     Page<Product> findByDistributorIdAndActiveTrueAndHasVariantsFalse(UUID distributorId, Pageable pageable);
 
+    /** All statuses (active + inactive) excluding parent templates. */
+    Page<Product> findByDistributorIdAndHasVariantsFalse(UUID distributorId, Pageable pageable);
+
+    Page<Product> findByDistributorIdAndHasVariantsFalseAndCreatedAtBetween(UUID distributorId, LocalDateTime from, LocalDateTime to, Pageable pageable);
+
     Page<Product> findByDistributorIdAndActiveTrueAndCreatedAtBetween(UUID distributorId, LocalDateTime from, LocalDateTime to, Pageable pageable);
 
     /** Top-level only with date range. */
