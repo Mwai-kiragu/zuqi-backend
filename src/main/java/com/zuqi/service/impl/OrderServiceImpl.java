@@ -566,6 +566,57 @@ public class OrderServiceImpl implements OrderService {
                 .toList();
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public OrderStatsResponse getOrderStats() {
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId != null) {
+            return OrderStatsResponse.builder()
+                    .totalCount(orderRepository.countByDistributorMerchantIdAndPaymentStatus(merchantId, PaymentStatus.PAID)
+                            + orderRepository.countByDistributorMerchantIdAndPaymentStatus(merchantId, PaymentStatus.PENDING)
+                            + orderRepository.countByDistributorMerchantIdAndPaymentStatus(merchantId, PaymentStatus.PARTIAL))
+                    .totalAmount(coalesce(orderRepository.sumTotalAmountByMerchant(merchantId)))
+                    .paidCount(orderRepository.countByDistributorMerchantIdAndPaymentStatus(merchantId, PaymentStatus.PAID))
+                    .paidAmount(coalesce(orderRepository.sumPaidAmountByMerchant(merchantId)))
+                    .unpaidCount(orderRepository.countByDistributorMerchantIdAndPaymentStatus(merchantId, PaymentStatus.PENDING))
+                    .unpaidAmount(coalesce(orderRepository.sumUnpaidAmountByMerchant(merchantId)))
+                    .partialCount(orderRepository.countByDistributorMerchantIdAndPaymentStatus(merchantId, PaymentStatus.PARTIAL))
+                    .partialBalanceDue(coalesce(orderRepository.sumPartialBalanceDueByMerchant(merchantId)))
+                    .build();
+        }
+        UUID distributorId = securityUtils.getDistributorIdForFiltering();
+        if (distributorId != null) {
+            return OrderStatsResponse.builder()
+                    .totalCount(orderRepository.countByDistributorIdAndPaymentStatus(distributorId, PaymentStatus.PAID)
+                            + orderRepository.countByDistributorIdAndPaymentStatus(distributorId, PaymentStatus.PENDING)
+                            + orderRepository.countByDistributorIdAndPaymentStatus(distributorId, PaymentStatus.PARTIAL))
+                    .totalAmount(coalesce(orderRepository.sumTotalAmountByDistributor(distributorId)))
+                    .paidCount(orderRepository.countByDistributorIdAndPaymentStatus(distributorId, PaymentStatus.PAID))
+                    .paidAmount(coalesce(orderRepository.sumPaidAmountByDistributor(distributorId)))
+                    .unpaidCount(orderRepository.countByDistributorIdAndPaymentStatus(distributorId, PaymentStatus.PENDING))
+                    .unpaidAmount(coalesce(orderRepository.sumUnpaidAmountByDistributor(distributorId)))
+                    .partialCount(orderRepository.countByDistributorIdAndPaymentStatus(distributorId, PaymentStatus.PARTIAL))
+                    .partialBalanceDue(coalesce(orderRepository.sumPartialBalanceDueByDistributor(distributorId)))
+                    .build();
+        }
+        return OrderStatsResponse.builder()
+                .totalCount(orderRepository.countByPaymentStatus(PaymentStatus.PAID)
+                        + orderRepository.countByPaymentStatus(PaymentStatus.PENDING)
+                        + orderRepository.countByPaymentStatus(PaymentStatus.PARTIAL))
+                .totalAmount(coalesce(orderRepository.sumTotalAmountAll()))
+                .paidCount(orderRepository.countByPaymentStatus(PaymentStatus.PAID))
+                .paidAmount(coalesce(orderRepository.sumPaidAmountAll()))
+                .unpaidCount(orderRepository.countByPaymentStatus(PaymentStatus.PENDING))
+                .unpaidAmount(coalesce(orderRepository.sumUnpaidAmountAll()))
+                .partialCount(orderRepository.countByPaymentStatus(PaymentStatus.PARTIAL))
+                .partialBalanceDue(coalesce(orderRepository.sumPartialBalanceDueAll()))
+                .build();
+    }
+
+    private BigDecimal coalesce(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
+    }
+
     // Helper methods
 
     private void deductStockForOrder(Order order) {

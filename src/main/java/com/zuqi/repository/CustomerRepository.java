@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -120,4 +121,31 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID>, JpaSp
 
     // Non-paginated exports
     List<Customer> findByDistributorMerchantId(UUID merchantId);
+
+    @Query("SELECT COALESCE(SUM(c.creditLimit), 0) FROM Customer c WHERE c.distributor.id = :distributorId AND c.active = true")
+    BigDecimal sumCreditLimitByDistributor(@Param("distributorId") UUID distributorId);
+
+    @Query("SELECT COALESCE(SUM(c.currentBalance), 0) FROM Customer c WHERE c.distributor.id = :distributorId AND c.active = true")
+    BigDecimal sumCurrentBalanceByDistributor(@Param("distributorId") UUID distributorId);
+
+    @Query(value = "SELECT COUNT(*) FROM customers WHERE distributor_id = :distributorId AND active = true AND credit_limit > 0 AND current_balance > credit_limit * 0.7", nativeQuery = true)
+    long countAtRiskByDistributor(@Param("distributorId") UUID distributorId);
+
+    @Query("SELECT COALESCE(SUM(c.creditLimit), 0) FROM Customer c WHERE c.distributor.merchant.id = :merchantId AND c.active = true")
+    BigDecimal sumCreditLimitByMerchant(@Param("merchantId") UUID merchantId);
+
+    @Query("SELECT COALESCE(SUM(c.currentBalance), 0) FROM Customer c WHERE c.distributor.merchant.id = :merchantId AND c.active = true")
+    BigDecimal sumCurrentBalanceByMerchant(@Param("merchantId") UUID merchantId);
+
+    @Query(value = "SELECT COUNT(*) FROM customers c JOIN distributors d ON c.distributor_id = d.id WHERE d.merchant_id = :merchantId AND c.active = true AND c.credit_limit > 0 AND c.current_balance > c.credit_limit * 0.7", nativeQuery = true)
+    long countAtRiskByMerchant(@Param("merchantId") UUID merchantId);
+
+    @Query("SELECT COALESCE(SUM(c.creditLimit), 0) FROM Customer c WHERE c.active = true")
+    BigDecimal sumCreditLimitAll();
+
+    @Query("SELECT COALESCE(SUM(c.currentBalance), 0) FROM Customer c WHERE c.active = true")
+    BigDecimal sumCurrentBalanceAll();
+
+    @Query(value = "SELECT COUNT(*) FROM customers WHERE active = true AND credit_limit > 0 AND current_balance > credit_limit * 0.7", nativeQuery = true)
+    long countAtRiskAll();
 }

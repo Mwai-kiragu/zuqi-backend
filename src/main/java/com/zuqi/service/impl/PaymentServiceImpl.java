@@ -434,6 +434,49 @@ public class PaymentServiceImpl implements PaymentService {
         orderRepository.save(order);
     }
 
+    @Override
+    public PaymentStatsResponse getPaymentStats(
+            UUID distributorId,
+            PaymentStatus status,
+            UUID merchantId,
+            Boolean reconciled,
+            Long paymentMethodId,
+            LocalDate startDate,
+            LocalDate endDate) {
+
+        LocalDateTime startDt = startDate != null ? startDate.atStartOfDay() : null;
+        LocalDateTime endDt = endDate != null ? endDate.atTime(23, 59, 59) : null;
+
+        PaymentRepository.PaymentStatsView view;
+        UUID effectiveDistributorId = distributorId != null
+                ? distributorId : securityUtils.getDistributorIdForFiltering();
+
+        if (effectiveDistributorId != null) {
+            view = paymentRepository.statsForDistributorByFilters(
+                    effectiveDistributorId,
+                    status != null ? status.name() : null,
+                    merchantId, reconciled, paymentMethodId, startDt, endDt);
+        } else {
+            UUID mId = securityUtils.getCurrentUserMerchantId();
+            if (mId != null) {
+                view = paymentRepository.statsForMerchant(mId);
+            } else {
+                view = paymentRepository.statsAll();
+            }
+        }
+
+        return PaymentStatsResponse.builder()
+                .totalAmount(coalesce(view.getTotalAmount()))
+                .completedAmount(coalesce(view.getCompletedAmount()))
+                .pendingAmount(coalesce(view.getPendingAmount()))
+                .count(view.getPaymentCount() != null ? view.getPaymentCount() : 0L)
+                .build();
+    }
+
+    private BigDecimal coalesce(BigDecimal val) {
+        return val != null ? val : BigDecimal.ZERO;
+    }
+
     private void publishPaymentRecordedEvent(Payment payment) {
         PaymentRecordedEvent event = new PaymentRecordedEvent(
                 payment.getId(),

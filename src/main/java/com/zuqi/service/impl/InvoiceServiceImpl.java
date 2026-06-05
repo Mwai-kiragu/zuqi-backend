@@ -1,6 +1,7 @@
 package com.zuqi.service.impl;
 
 import com.zuqi.api.dto.invoice.InvoiceResponse;
+import com.zuqi.api.dto.invoice.InvoiceStatsResponse;
 import com.zuqi.api.dto.invoice.ManualInvoiceItemRequest;
 import com.zuqi.api.dto.invoice.ManualInvoiceRequest;
 import com.zuqi.config.EmailConfig;
@@ -781,6 +782,49 @@ public class InvoiceServiceImpl implements InvoiceService {
         counts.put("ALL", total);
 
         return counts;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public InvoiceStatsResponse getInvoiceStats() {
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (merchantId != null) {
+            BigDecimal total = coalesceInv(invoiceRepository.sumTotalAmountByMerchant(merchantId));
+            BigDecimal paid = coalesceInv(invoiceRepository.sumPaidAmountByMerchant(merchantId));
+            return InvoiceStatsResponse.builder()
+                    .totalCount(invoiceRepository.countByDistributorMerchantId(merchantId))
+                    .totalAmount(total)
+                    .paidAmount(paid)
+                    .outstandingAmount(coalesceInv(invoiceRepository.sumArBalanceByMerchant(merchantId)))
+                    .overdueAmount(coalesceInv(invoiceRepository.sumOverdueAmountByMerchant(merchantId)))
+                    .overdueCount(invoiceRepository.countOverdueByMerchant(merchantId))
+                    .build();
+        }
+        UUID distributorId = securityUtils.getDistributorIdForFiltering();
+        if (distributorId != null) {
+            return InvoiceStatsResponse.builder()
+                    .totalCount(invoiceRepository.countByDistributorId(distributorId))
+                    .totalAmount(coalesceInv(invoiceRepository.sumTotalAmountByDistributor(distributorId)))
+                    .paidAmount(coalesceInv(invoiceRepository.sumPaidAmountByDistributor(distributorId)))
+                    .outstandingAmount(coalesceInv(invoiceRepository.sumArBalanceByDistributor(distributorId)))
+                    .overdueAmount(coalesceInv(invoiceRepository.sumOverdueAmountByDistributor(distributorId)))
+                    .overdueCount(invoiceRepository.countOverdueByDistributor(distributorId))
+                    .build();
+        }
+        BigDecimal totalAll = coalesceInv(invoiceRepository.sumTotalAmountAll());
+        BigDecimal paidAll = coalesceInv(invoiceRepository.sumPaidAmountAll());
+        return InvoiceStatsResponse.builder()
+                .totalCount(invoiceRepository.count())
+                .totalAmount(totalAll)
+                .paidAmount(paidAll)
+                .outstandingAmount(totalAll.subtract(paidAll))
+                .overdueAmount(coalesceInv(invoiceRepository.sumOverdueAmountAll()))
+                .overdueCount(invoiceRepository.countOverdueAll())
+                .build();
+    }
+
+    private BigDecimal coalesceInv(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
     }
 
     // Helper methods

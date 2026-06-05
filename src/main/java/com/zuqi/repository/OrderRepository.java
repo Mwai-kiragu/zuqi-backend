@@ -305,4 +305,48 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
     @Query("SELECT o FROM Order o WHERE o.distributor.id = :distributorId " +
            "AND o.status IN ('PENDING', 'CONFIRMED', 'PROCESSING')")
     List<Order> findPendingOrdersByDistributorId(@Param("distributorId") UUID distributorId);
+
+    // ── Payment stats aggregates ──────────────────────────────────────────────
+
+    long countByDistributorIdAndPaymentStatus(UUID distributorId, PaymentStatus paymentStatus);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.distributor.id = :distributorId AND o.status != 'CANCELLED'")
+    java.math.BigDecimal sumTotalAmountByDistributor(@Param("distributorId") UUID distributorId);
+
+    @Query("SELECT COALESCE(SUM(o.paidAmount), 0) FROM Order o WHERE o.distributor.id = :distributorId AND o.paymentStatus = 'PAID'")
+    java.math.BigDecimal sumPaidAmountByDistributor(@Param("distributorId") UUID distributorId);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.distributor.id = :distributorId AND o.paymentStatus = 'PENDING' AND o.status != 'CANCELLED'")
+    java.math.BigDecimal sumUnpaidAmountByDistributor(@Param("distributorId") UUID distributorId);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount - o.paidAmount), 0) FROM Order o WHERE o.distributor.id = :distributorId AND o.paymentStatus = 'PARTIAL'")
+    java.math.BigDecimal sumPartialBalanceDueByDistributor(@Param("distributorId") UUID distributorId);
+
+    long countByDistributorMerchantIdAndPaymentStatus(UUID merchantId, PaymentStatus paymentStatus);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.distributor.merchant.id = :merchantId AND o.status != 'CANCELLED'")
+    java.math.BigDecimal sumTotalAmountByMerchant(@Param("merchantId") UUID merchantId);
+
+    @Query("SELECT COALESCE(SUM(o.paidAmount), 0) FROM Order o WHERE o.distributor.merchant.id = :merchantId AND o.paymentStatus = 'PAID'")
+    java.math.BigDecimal sumPaidAmountByMerchant(@Param("merchantId") UUID merchantId);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.distributor.merchant.id = :merchantId AND o.paymentStatus = 'PENDING' AND o.status != 'CANCELLED'")
+    java.math.BigDecimal sumUnpaidAmountByMerchant(@Param("merchantId") UUID merchantId);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount - o.paidAmount), 0) FROM Order o WHERE o.distributor.merchant.id = :merchantId AND o.paymentStatus = 'PARTIAL'")
+    java.math.BigDecimal sumPartialBalanceDueByMerchant(@Param("merchantId") UUID merchantId);
+
+    long countByPaymentStatus(PaymentStatus paymentStatus);
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.status != 'CANCELLED'")
+    java.math.BigDecimal sumTotalAmountAll();
+
+    @Query("SELECT COALESCE(SUM(o.paidAmount), 0) FROM Order o WHERE o.paymentStatus = 'PAID'")
+    java.math.BigDecimal sumPaidAmountAll();
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.paymentStatus = 'PENDING' AND o.status != 'CANCELLED'")
+    java.math.BigDecimal sumUnpaidAmountAll();
+
+    @Query("SELECT COALESCE(SUM(o.totalAmount - o.paidAmount), 0) FROM Order o WHERE o.paymentStatus = 'PARTIAL'")
+    java.math.BigDecimal sumPartialBalanceDueAll();
 }

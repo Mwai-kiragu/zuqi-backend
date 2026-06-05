@@ -202,6 +202,12 @@ public class InvoiceController {
         return ResponseEntity.ok(ApiResponse.success("Invoice status counts retrieved successfully", counts));
     }
 
+    @GetMapping("/stats")
+    @Operation(summary = "Get invoice payment stats — totals, paid, outstanding and overdue amounts")
+    public ResponseEntity<ApiResponse<com.zuqi.api.dto.invoice.InvoiceStatsResponse>> getInvoiceStats() {
+        return ResponseEntity.ok(ApiResponse.success(invoiceService.getInvoiceStats()));
+    }
+
     // ── PUBLIC (no-auth) endpoints ─────────────────────────────────────────
 
     @GetMapping("/public/{invoiceNumber}")

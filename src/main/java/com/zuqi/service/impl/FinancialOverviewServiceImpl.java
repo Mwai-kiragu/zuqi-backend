@@ -10,6 +10,7 @@ import com.zuqi.repository.ExpenseRepository;
 import com.zuqi.repository.GlAccountRepository;
 import com.zuqi.repository.InvoiceRepository;
 import com.zuqi.repository.JournalEntryLineRepository;
+import com.zuqi.repository.PosSaleRepository;
 import com.zuqi.service.FinancialOverviewService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class FinancialOverviewServiceImpl implements FinancialOverviewService {
     private final GlAccountRepository glAccountRepository;
     private final JournalEntryLineRepository journalEntryLineRepository;
     private final DistributorRepository distributorRepository;
+    private final PosSaleRepository posSaleRepository;
     private final SecurityUtils securityUtils;
 
     private static final DateTimeFormatter MONTH_FMT = DateTimeFormatter.ofPattern("MMM yyyy");
@@ -75,11 +77,17 @@ public class FinancialOverviewServiceImpl implements FinancialOverviewService {
     // ── Revenue ─────────────────────────────────────────────────────────────
 
     private BigDecimal getRevenue(UUID merchantId, UUID distributorId, LocalDate from, LocalDate to) {
+        java.time.LocalDateTime fromDt = from.atStartOfDay();
+        java.time.LocalDateTime toDt = to.atTime(23, 59, 59);
         if (merchantId != null) {
-            return coalesce(invoiceRepository.sumPaidByMerchantAndDateRange(merchantId, from, to));
+            BigDecimal invoiceRevenue = coalesce(invoiceRepository.sumPaidByMerchantAndDateRange(merchantId, from, to));
+            BigDecimal posRevenue = coalesce(posSaleRepository.sumCompletedByMerchantAndDateRange(merchantId, fromDt, toDt));
+            return invoiceRevenue.add(posRevenue);
         }
         if (distributorId != null) {
-            return coalesce(invoiceRepository.sumPaidByDistributorAndDateRange(distributorId, from, to));
+            BigDecimal invoiceRevenue = coalesce(invoiceRepository.sumPaidByDistributorAndDateRange(distributorId, from, to));
+            BigDecimal posRevenue = coalesce(posSaleRepository.sumCompletedByDistributorAndDateRange(distributorId, fromDt, toDt));
+            return invoiceRevenue.add(posRevenue);
         }
         // SUPER_ADMIN — aggregate all (not feasible to sum all in one call without a dedicated query; return zero)
         return BigDecimal.ZERO;
@@ -156,19 +164,31 @@ public class FinancialOverviewServiceImpl implements FinancialOverviewService {
                                                      LocalDate from, LocalDate to) {
         List<Object[]> revenueRows;
         List<Object[]> expenseRows;
+        List<Object[]> posRows;
+        java.time.LocalDateTime fromDt = from.atStartOfDay();
 
         if (merchantId != null) {
             revenueRows = invoiceRepository.monthlyRevenueByMerchant(merchantId, from);
             expenseRows = expenseRepository.monthlyExpensesByMerchant(merchantId, from);
+            posRows = posSaleRepository.monthlyCompletedByMerchant(merchantId, fromDt);
         } else if (distributorId != null) {
             revenueRows = invoiceRepository.monthlyRevenueByDistributor(distributorId, from);
             expenseRows = expenseRepository.monthlyExpensesByDistributor(distributorId, from);
+            posRows = posSaleRepository.monthlyCompletedByDistributor(distributorId, fromDt);
         } else {
             return Collections.emptyList();
         }
 
         // Key: year * 100 + month
         Map<Integer, BigDecimal> revenueMap = toMap(revenueRows);
+        // Merge POS sales into invoice revenue map
+        for (Object[] row : posRows) {
+            int year = ((Number) row[0]).intValue();
+            int month = ((Number) row[1]).intValue();
+            BigDecimal posAmt = row[2] instanceof BigDecimal bd ? bd : BigDecimal.valueOf(((Number) row[2]).doubleValue());
+            int key = year * 100 + month;
+            revenueMap.merge(key, posAmt, BigDecimal::add);
+        }
         Map<Integer, BigDecimal> expenseMap = toMap(expenseRows);
 
         List<MonthlyData> result = new ArrayList<>();

@@ -170,8 +170,8 @@ public class SalesReturnServiceImpl implements SalesReturnService {
     @Transactional
     public SalesReturnResponse confirm(UUID id) {
         SalesReturn sr = findOrThrow(id);
-        if (sr.getStatus() != ReturnStatus.DRAFT) {
-            throw new ValidationException("Only DRAFT returns can be confirmed");
+        if (sr.getStatus() != ReturnStatus.DRAFT && sr.getStatus() != ReturnStatus.PENDING_APPROVAL) {
+            throw new ValidationException("Only DRAFT or PENDING_APPROVAL returns can be confirmed");
         }
         sr.setStatus(ReturnStatus.CONFIRMED);
         SalesReturn saved = salesReturnRepository.save(sr);

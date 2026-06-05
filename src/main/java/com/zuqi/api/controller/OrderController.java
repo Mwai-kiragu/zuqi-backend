@@ -162,4 +162,10 @@ public class OrderController {
         List<DriverDto> drivers = orderService.getAvailableDrivers();
         return ResponseEntity.ok(ApiResponse.success(drivers));
     }
+
+    @GetMapping("/stats")
+    @Operation(summary = "Get order payment stats", description = "Returns total, paid, unpaid and partial order counts and amounts")
+    public ResponseEntity<ApiResponse<OrderStatsResponse>> getOrderStats() {
+        return ResponseEntity.ok(ApiResponse.success(orderService.getOrderStats()));
+    }
 }
