@@ -1,5 +1,6 @@
 package com.zuqi.service;
 
+import com.zuqi.api.dto.customer.CreditStatsResponse;
 import com.zuqi.api.dto.customer.CustomerCategoryRequest;
 import com.zuqi.api.dto.customer.CustomerCategoryResponse;
 import com.zuqi.api.dto.customer.CustomerRequest;
@@ -62,4 +63,6 @@ public interface CustomerService {
     void deleteCategory(Long id);
 
     List<String> getDistinctCities();
+
+    CreditStatsResponse getCreditStats();
 }

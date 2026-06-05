@@ -128,6 +128,22 @@ public class PaymentController {
         return ResponseEntity.ok(ApiResponse.success(count));
     }
 
+    @GetMapping("/stats")
+    @Operation(summary = "Get payment stats", description = "Returns aggregate totals for the stat cards (not paginated)")
+    public ResponseEntity<ApiResponse<PaymentStatsResponse>> getPaymentStats(
+            @RequestParam(required = false) UUID distributorId,
+            @RequestParam(required = false) UUID merchantId,
+            @RequestParam(required = false) PaymentStatus status,
+            @RequestParam(required = false) Boolean reconciled,
+            @RequestParam(required = false) Long paymentMethodId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+
+        PaymentStatsResponse stats = paymentService.getPaymentStats(
+                distributorId, status, merchantId, reconciled, paymentMethodId, startDate, endDate);
+        return ResponseEntity.ok(ApiResponse.success(stats));
+    }
+
     @GetMapping("/methods")
     @Operation(summary = "Get payment methods", description = "Gets all payment methods")
     public ResponseEntity<ApiResponse<List<PaymentMethodResponse>>> getPaymentMethods() {

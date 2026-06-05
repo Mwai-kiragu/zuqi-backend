@@ -1,6 +1,7 @@
 package com.zuqi.service;
 
 import com.zuqi.api.dto.invoice.InvoiceResponse;
+import com.zuqi.api.dto.invoice.InvoiceStatsResponse;
 import com.zuqi.api.dto.invoice.ManualInvoiceRequest;
 import com.zuqi.domain.invoice.InvoiceStatus;
 import com.zuqi.domain.order.Order;
@@ -59,4 +60,6 @@ public interface InvoiceService {
     long getInvoiceCountByStatus(UUID distributorId, InvoiceStatus status);
 
     java.util.Map<String, Long> getAllStatusCounts(UUID distributorId);
+
+    InvoiceStatsResponse getInvoiceStats();
 }

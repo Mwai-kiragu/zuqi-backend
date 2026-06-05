@@ -20,4 +20,9 @@ public class PosSummaryResponse {
     private BigDecimal totalRevenue;
     private BigDecimal totalDiscounts;
     private BigDecimal averageTransactionValue;
+
+    private long unpaidCount;
+    private BigDecimal unpaidTotal;
+    private long partiallyPaidCount;
+    private BigDecimal partiallyPaidBalanceDue;
 }

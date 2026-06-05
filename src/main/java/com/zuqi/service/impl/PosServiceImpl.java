@@ -672,11 +672,14 @@ public class PosServiceImpl implements PosService {
         LocalDateTime from = startDate.atStartOfDay();
         LocalDateTime to = endDate.plusDays(1).atStartOfDay();
 
-        long total = saleRepository.countByBranchAndStatusAndDateRange(branchId, PosSaleStatus.COMPLETED, from, to) +
-                saleRepository.countByBranchAndStatusAndDateRange(branchId, PosSaleStatus.CANCELLED, from, to);
         long completed = saleRepository.countByBranchAndStatusAndDateRange(branchId, PosSaleStatus.COMPLETED, from, to);
         long cancelled = saleRepository.countByBranchAndStatusAndDateRange(branchId, PosSaleStatus.CANCELLED, from, to);
+        long unpaid = saleRepository.countByBranchAndStatusAndDateRange(branchId, PosSaleStatus.UNPAID, from, to);
+        long total = completed + cancelled;
         BigDecimal revenue = saleRepository.sumTotalByBranchAndStatusAndDateRange(branchId, PosSaleStatus.COMPLETED, from, to);
+        BigDecimal unpaidTotal = saleRepository.sumTotalByBranchAndStatusAndDateRange(branchId, PosSaleStatus.UNPAID, from, to);
+        long partiallyPaidCount = saleRepository.countPartiallyPaidByBranchAndDateRange(branchId, from, to);
+        BigDecimal partiallyPaidBalanceDue = saleRepository.sumBalanceDuePartiallyPaidByBranchAndDateRange(branchId, from, to);
 
         return PosSummaryResponse.builder()
                 .branchId(branchId)
@@ -690,6 +693,10 @@ public class PosServiceImpl implements PosService {
                 .averageTransactionValue(completed > 0 && revenue != null ?
                         revenue.divide(BigDecimal.valueOf(completed), 2, java.math.RoundingMode.HALF_UP) :
                         BigDecimal.ZERO)
+                .unpaidCount(unpaid)
+                .unpaidTotal(unpaidTotal != null ? unpaidTotal : BigDecimal.ZERO)
+                .partiallyPaidCount(partiallyPaidCount)
+                .partiallyPaidBalanceDue(partiallyPaidBalanceDue != null ? partiallyPaidBalanceDue : BigDecimal.ZERO)
                 .build();
     }
 

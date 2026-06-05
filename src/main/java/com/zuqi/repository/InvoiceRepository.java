@@ -190,4 +190,42 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
 
     @Query("SELECT i FROM Invoice i LEFT JOIN FETCH i.merchant ORDER BY i.createdAt DESC")
     List<Invoice> findAllForExport();
+
+    // ── Payment stats aggregates ──────────────────────────────────────────────
+
+    @Query("SELECT COALESCE(SUM(i.totalAmount), 0) FROM Invoice i WHERE i.distributor.id = :distributorId AND i.status NOT IN ('CANCELLED', 'DRAFT')")
+    BigDecimal sumTotalAmountByDistributor(@Param("distributorId") UUID distributorId);
+
+    @Query("SELECT COALESCE(SUM(i.paidAmount), 0) FROM Invoice i WHERE i.distributor.id = :distributorId AND i.status NOT IN ('CANCELLED', 'DRAFT')")
+    BigDecimal sumPaidAmountByDistributor(@Param("distributorId") UUID distributorId);
+
+    @Query("SELECT COALESCE(SUM(i.totalAmount - COALESCE(i.paidAmount, 0)), 0) FROM Invoice i WHERE i.distributor.id = :distributorId AND i.dueDate < CURRENT_DATE AND i.status NOT IN ('PAID', 'CANCELLED', 'DRAFT')")
+    BigDecimal sumOverdueAmountByDistributor(@Param("distributorId") UUID distributorId);
+
+    @Query("SELECT COUNT(i) FROM Invoice i WHERE i.distributor.id = :distributorId AND i.dueDate < CURRENT_DATE AND i.status NOT IN ('PAID', 'CANCELLED', 'DRAFT')")
+    long countOverdueByDistributor(@Param("distributorId") UUID distributorId);
+
+    @Query("SELECT COALESCE(SUM(i.totalAmount), 0) FROM Invoice i WHERE i.distributor.merchant.id = :merchantId AND i.status NOT IN ('CANCELLED', 'DRAFT')")
+    BigDecimal sumTotalAmountByMerchant(@Param("merchantId") UUID merchantId);
+
+    @Query("SELECT COALESCE(SUM(i.paidAmount), 0) FROM Invoice i WHERE i.distributor.merchant.id = :merchantId AND i.status NOT IN ('CANCELLED', 'DRAFT')")
+    BigDecimal sumPaidAmountByMerchant(@Param("merchantId") UUID merchantId);
+
+    @Query("SELECT COALESCE(SUM(i.totalAmount - COALESCE(i.paidAmount, 0)), 0) FROM Invoice i WHERE i.distributor.merchant.id = :merchantId AND i.dueDate < CURRENT_DATE AND i.status NOT IN ('PAID', 'CANCELLED', 'DRAFT')")
+    BigDecimal sumOverdueAmountByMerchant(@Param("merchantId") UUID merchantId);
+
+    @Query("SELECT COUNT(i) FROM Invoice i WHERE i.distributor.merchant.id = :merchantId AND i.dueDate < CURRENT_DATE AND i.status NOT IN ('PAID', 'CANCELLED', 'DRAFT')")
+    long countOverdueByMerchant(@Param("merchantId") UUID merchantId);
+
+    @Query("SELECT COALESCE(SUM(i.totalAmount), 0) FROM Invoice i WHERE i.status NOT IN ('CANCELLED', 'DRAFT')")
+    BigDecimal sumTotalAmountAll();
+
+    @Query("SELECT COALESCE(SUM(i.paidAmount), 0) FROM Invoice i WHERE i.status NOT IN ('CANCELLED', 'DRAFT')")
+    BigDecimal sumPaidAmountAll();
+
+    @Query("SELECT COALESCE(SUM(i.totalAmount - COALESCE(i.paidAmount, 0)), 0) FROM Invoice i WHERE i.dueDate < CURRENT_DATE AND i.status NOT IN ('PAID', 'CANCELLED', 'DRAFT')")
+    BigDecimal sumOverdueAmountAll();
+
+    @Query("SELECT COUNT(i) FROM Invoice i WHERE i.dueDate < CURRENT_DATE AND i.status NOT IN ('PAID', 'CANCELLED', 'DRAFT')")
+    long countOverdueAll();
 }

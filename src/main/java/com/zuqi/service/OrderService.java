@@ -54,4 +54,6 @@ public interface OrderService {
     OrderResponse assignDriver(UUID orderId, UUID driverId, String notes, User currentUser);
 
     List<DriverDto> getAvailableDrivers();
+
+    OrderStatsResponse getOrderStats();
 }

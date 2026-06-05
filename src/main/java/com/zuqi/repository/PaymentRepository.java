@@ -161,4 +161,55 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
             @Param("distributorId") UUID distributorId,
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate);
+
+    // ── Payment stats (aggregate totals for stat cards) ──────────────────────
+
+    interface PaymentStatsView {
+        BigDecimal getTotalAmount();
+        BigDecimal getCompletedAmount();
+        BigDecimal getPendingAmount();
+        Long getPaymentCount();
+    }
+
+    @Query(value = "SELECT " +
+            "COALESCE(SUM(p.amount), 0) AS total_amount, " +
+            "COALESCE(SUM(CASE WHEN p.status = 'COMPLETED' THEN p.amount ELSE 0 END), 0) AS completed_amount, " +
+            "COALESCE(SUM(CASE WHEN p.status = 'PENDING' THEN p.amount ELSE 0 END), 0) AS pending_amount, " +
+            "COUNT(*) AS payment_count " +
+            "FROM payments p WHERE p.distributor_id = :distributorId " +
+            "AND (:status IS NULL OR p.status = CAST(:status AS VARCHAR)) " +
+            "AND (CAST(:merchantId AS UUID) IS NULL OR p.merchant_id = CAST(:merchantId AS UUID)) " +
+            "AND (:reconciled IS NULL OR p.reconciled = :reconciled) " +
+            "AND (:paymentMethodId IS NULL OR p.payment_method_id = :paymentMethodId) " +
+            "AND (CAST(:startDate AS TIMESTAMP) IS NULL OR p.created_at >= CAST(:startDate AS TIMESTAMP)) " +
+            "AND (CAST(:endDate AS TIMESTAMP) IS NULL OR p.created_at <= CAST(:endDate AS TIMESTAMP))",
+            nativeQuery = true)
+    PaymentStatsView statsForDistributorByFilters(
+            @Param("distributorId") UUID distributorId,
+            @Param("status") String status,
+            @Param("merchantId") UUID merchantId,
+            @Param("reconciled") Boolean reconciled,
+            @Param("paymentMethodId") Long paymentMethodId,
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate);
+
+    @Query(value = "SELECT " +
+            "COALESCE(SUM(p.amount), 0) AS total_amount, " +
+            "COALESCE(SUM(CASE WHEN p.status = 'COMPLETED' THEN p.amount ELSE 0 END), 0) AS completed_amount, " +
+            "COALESCE(SUM(CASE WHEN p.status = 'PENDING' THEN p.amount ELSE 0 END), 0) AS pending_amount, " +
+            "COUNT(*) AS payment_count " +
+            "FROM payments p " +
+            "JOIN distributors d ON p.distributor_id = d.id " +
+            "WHERE d.merchant_id = :merchantId",
+            nativeQuery = true)
+    PaymentStatsView statsForMerchant(@Param("merchantId") UUID merchantId);
+
+    @Query(value = "SELECT " +
+            "COALESCE(SUM(p.amount), 0) AS total_amount, " +
+            "COALESCE(SUM(CASE WHEN p.status = 'COMPLETED' THEN p.amount ELSE 0 END), 0) AS completed_amount, " +
+            "COALESCE(SUM(CASE WHEN p.status = 'PENDING' THEN p.amount ELSE 0 END), 0) AS pending_amount, " +
+            "COUNT(*) AS payment_count " +
+            "FROM payments p",
+            nativeQuery = true)
+    PaymentStatsView statsAll();
 }

@@ -1,5 +1,6 @@
 package com.zuqi.service.impl;
 
+import com.zuqi.api.dto.customer.CreditStatsResponse;
 import com.zuqi.api.dto.customer.CustomerCategoryRequest;
 import com.zuqi.api.dto.customer.CustomerCategoryResponse;
 import com.zuqi.api.dto.customer.CustomerRequest;
@@ -502,6 +503,42 @@ public class CustomerServiceImpl implements CustomerService {
     @Transactional(readOnly = true)
     public List<String> getDistinctCities() {
         return customerRepository.findDistinctCities();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CreditStatsResponse getCreditStats() {
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        UUID distributorId = securityUtils.getDistributorIdForFiltering();
+
+        java.math.BigDecimal totalLimit;
+        java.math.BigDecimal totalUsed;
+        long atRisk;
+
+        if (merchantId != null) {
+            totalLimit = coalesce(customerRepository.sumCreditLimitByMerchant(merchantId));
+            totalUsed  = coalesce(customerRepository.sumCurrentBalanceByMerchant(merchantId));
+            atRisk     = customerRepository.countAtRiskByMerchant(merchantId);
+        } else if (distributorId != null) {
+            totalLimit = coalesce(customerRepository.sumCreditLimitByDistributor(distributorId));
+            totalUsed  = coalesce(customerRepository.sumCurrentBalanceByDistributor(distributorId));
+            atRisk     = customerRepository.countAtRiskByDistributor(distributorId);
+        } else {
+            totalLimit = coalesce(customerRepository.sumCreditLimitAll());
+            totalUsed  = coalesce(customerRepository.sumCurrentBalanceAll());
+            atRisk     = customerRepository.countAtRiskAll();
+        }
+
+        return CreditStatsResponse.builder()
+                .totalCreditLimit(totalLimit)
+                .totalOutstanding(totalUsed)
+                .totalAvailable(totalLimit.subtract(totalUsed).max(java.math.BigDecimal.ZERO))
+                .atRiskCount(atRisk)
+                .build();
+    }
+
+    private java.math.BigDecimal coalesce(java.math.BigDecimal value) {
+        return value != null ? value : java.math.BigDecimal.ZERO;
     }
 
     /**

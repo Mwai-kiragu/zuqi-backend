@@ -46,6 +46,22 @@ public interface PosSaleRepository extends JpaRepository<PosSale, UUID> {
                                                      @Param("from") LocalDateTime from,
                                                      @Param("to") LocalDateTime to);
 
+    @Query("SELECT COUNT(s) FROM PosSale s WHERE s.branch.id = :branchId " +
+           "AND s.status = com.zuqi.domain.pos.PosSaleStatus.COMPLETED " +
+           "AND s.amountPaid > 0 AND s.amountPaid < s.totalAmount " +
+           "AND s.createdAt BETWEEN :from AND :to")
+    long countPartiallyPaidByBranchAndDateRange(@Param("branchId") UUID branchId,
+                                                @Param("from") LocalDateTime from,
+                                                @Param("to") LocalDateTime to);
+
+    @Query("SELECT COALESCE(SUM(s.totalAmount - s.amountPaid), 0) FROM PosSale s WHERE s.branch.id = :branchId " +
+           "AND s.status = com.zuqi.domain.pos.PosSaleStatus.COMPLETED " +
+           "AND s.amountPaid > 0 AND s.amountPaid < s.totalAmount " +
+           "AND s.createdAt BETWEEN :from AND :to")
+    BigDecimal sumBalanceDuePartiallyPaidByBranchAndDateRange(@Param("branchId") UUID branchId,
+                                                              @Param("from") LocalDateTime from,
+                                                              @Param("to") LocalDateTime to);
+
     List<PosSale> findByBranchIdAndStatusAndCreatedAtBetween(UUID branchId, PosSaleStatus status,
                                                               LocalDateTime from, LocalDateTime to);
 
@@ -75,4 +91,42 @@ public interface PosSaleRepository extends JpaRepository<PosSale, UUID> {
 
     @Query("SELECT s FROM PosSale s JOIN FETCH s.branch ORDER BY s.createdAt DESC")
     List<PosSale> findAllFetched();
+
+    // ── Financial overview queries ────────────────────────────────────────────
+
+    @Query("SELECT COALESCE(SUM(s.totalAmount), 0) FROM PosSale s " +
+           "WHERE s.branch.distributor.id = :distributorId " +
+           "AND s.status = com.zuqi.domain.pos.PosSaleStatus.COMPLETED " +
+           "AND s.createdAt >= :from AND s.createdAt <= :to")
+    BigDecimal sumCompletedByDistributorAndDateRange(
+            @Param("distributorId") UUID distributorId,
+            @Param("from") java.time.LocalDateTime from,
+            @Param("to") java.time.LocalDateTime to);
+
+    @Query("SELECT COALESCE(SUM(s.totalAmount), 0) FROM PosSale s " +
+           "WHERE s.branch.distributor.merchant.id = :merchantId " +
+           "AND s.status = com.zuqi.domain.pos.PosSaleStatus.COMPLETED " +
+           "AND s.createdAt >= :from AND s.createdAt <= :to")
+    BigDecimal sumCompletedByMerchantAndDateRange(
+            @Param("merchantId") UUID merchantId,
+            @Param("from") java.time.LocalDateTime from,
+            @Param("to") java.time.LocalDateTime to);
+
+    @Query("SELECT YEAR(s.createdAt), MONTH(s.createdAt), COALESCE(SUM(s.totalAmount), 0) " +
+           "FROM PosSale s WHERE s.branch.distributor.id = :distributorId " +
+           "AND s.status = com.zuqi.domain.pos.PosSaleStatus.COMPLETED " +
+           "AND s.createdAt >= :from " +
+           "GROUP BY YEAR(s.createdAt), MONTH(s.createdAt)")
+    List<Object[]> monthlyCompletedByDistributor(
+            @Param("distributorId") UUID distributorId,
+            @Param("from") java.time.LocalDateTime from);
+
+    @Query("SELECT YEAR(s.createdAt), MONTH(s.createdAt), COALESCE(SUM(s.totalAmount), 0) " +
+           "FROM PosSale s WHERE s.branch.distributor.merchant.id = :merchantId " +
+           "AND s.status = com.zuqi.domain.pos.PosSaleStatus.COMPLETED " +
+           "AND s.createdAt >= :from " +
+           "GROUP BY YEAR(s.createdAt), MONTH(s.createdAt)")
+    List<Object[]> monthlyCompletedByMerchant(
+            @Param("merchantId") UUID merchantId,
+            @Param("from") java.time.LocalDateTime from);
 }

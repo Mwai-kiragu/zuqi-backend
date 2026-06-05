@@ -3,6 +3,7 @@ package com.zuqi.api.controller;
 import com.zuqi.api.dto.ApiResponse;
 import com.zuqi.api.dto.common.DeactivateRequest;
 import com.zuqi.api.dto.customer.BlacklistRequest;
+import com.zuqi.api.dto.customer.CreditStatsResponse;
 import com.zuqi.api.dto.customer.CustomerCategoryRequest;
 import com.zuqi.api.dto.customer.CustomerCategoryResponse;
 import com.zuqi.api.dto.customer.CustomerRequest;
@@ -158,5 +159,11 @@ public class CustomerController {
     @GetMapping("/cities")
     public ResponseEntity<ApiResponse<List<String>>> getCities() {
         return ResponseEntity.ok(ApiResponse.success(customerService.getDistinctCities()));
+    }
+
+    @GetMapping("/credit-stats")
+    @Operation(summary = "Credit summary statistics", description = "Returns aggregate credit limits, outstanding balances, and at-risk count for the current user scope")
+    public ResponseEntity<ApiResponse<CreditStatsResponse>> getCreditStats() {
+        return ResponseEntity.ok(ApiResponse.success(customerService.getCreditStats()));
     }
 }

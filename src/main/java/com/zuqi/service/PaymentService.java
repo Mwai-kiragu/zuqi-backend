@@ -52,4 +52,13 @@ public interface PaymentService {
     List<PaymentMethodResponse> getActivePaymentMethods();
 
     void createPaymentsForPosSale(PosSale sale);
+
+    PaymentStatsResponse getPaymentStats(
+            UUID distributorId,
+            PaymentStatus status,
+            UUID merchantId,
+            Boolean reconciled,
+            Long paymentMethodId,
+            LocalDate startDate,
+            LocalDate endDate);
 }
