@@ -78,4 +78,16 @@ public class ExportController {
         exportService.exportPriceListsToEmail();
         return ResponseEntity.ok(ApiResponse.success("Export is being prepared and will be sent to your email shortly."));
     }
+
+    @PostMapping("/orders/email")
+    public ResponseEntity<ApiResponse<Void>> exportOrdersEmail() {
+        exportService.exportOrdersToEmail();
+        return ResponseEntity.ok(ApiResponse.success("Export is being prepared and will be sent to your email shortly."));
+    }
+
+    @PostMapping("/payments/email")
+    public ResponseEntity<ApiResponse<Void>> exportPaymentsEmail() {
+        exportService.exportPaymentsToEmail();
+        return ResponseEntity.ok(ApiResponse.success("Export is being prepared and will be sent to your email shortly."));
+    }
 }

@@ -6,6 +6,8 @@ import com.zuqi.domain.expense.Expense;
 import com.zuqi.domain.inventory.Stock;
 import com.zuqi.domain.inventory.Warehouse;
 import com.zuqi.domain.invoice.Invoice;
+import com.zuqi.domain.order.Order;
+import com.zuqi.domain.payment.Payment;
 import com.zuqi.domain.pos.PosSale;
 import com.zuqi.domain.pricing.PriceList;
 import com.zuqi.domain.product.Product;
@@ -16,6 +18,8 @@ import com.zuqi.repository.CustomerRepository;
 import com.zuqi.repository.DistributorBranchRepository;
 import com.zuqi.repository.ExpenseRepository;
 import com.zuqi.repository.InvoiceRepository;
+import com.zuqi.repository.OrderRepository;
+import com.zuqi.repository.PaymentRepository;
 import com.zuqi.repository.PosSaleRepository;
 import com.zuqi.repository.PriceListRepository;
 import com.zuqi.repository.ProductCategoryRepository;
@@ -50,6 +54,8 @@ public class ExportServiceImpl implements ExportService {
     private final PosSaleRepository posSaleRepository;
     private final ExpenseRepository expenseRepository;
     private final PriceListRepository priceListRepository;
+    private final OrderRepository orderRepository;
+    private final PaymentRepository paymentRepository;
     private final EmailService emailService;
     private final SecurityUtils securityUtils;
 
@@ -440,6 +446,77 @@ public class ExportServiceImpl implements ExportService {
             "Price Lists", priceLists.size(), csv.toString(), "price_lists_export.csv"
         );
         log.info("Price lists export email sent to {} — {} records", user.getEmail(), priceLists.size());
+    }
+
+    @Override
+    @Async
+    public void exportOrdersToEmail() {
+        User user = securityUtils.getCurrentUser();
+        UUID distributorId = securityUtils.getCurrentUserDistributorId();
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+
+        List<Order> orders;
+        if (merchantId != null) {
+            orders = orderRepository.findByDistributorMerchantIdOrderByCreatedAtDesc(merchantId);
+        } else if (distributorId != null) {
+            orders = orderRepository.findByDistributorIdOrderByCreatedAtDesc(distributorId);
+        } else {
+            orders = orderRepository.findAll(org.springframework.data.domain.Sort.by("createdAt").descending());
+        }
+
+        StringBuilder csv = new StringBuilder();
+        csv.append("Order #,Customer,Total (KES),Paid (KES),Payment Status,Order Status,Date\n");
+        for (Order o : orders) {
+            csv.append(escape(o.getOrderNumber())).append(',')
+               .append(escape(o.getMerchant() != null ? o.getMerchant().getBusinessName() : "Walk In")).append(',')
+               .append(o.getTotalAmount() != null ? o.getTotalAmount() : 0).append(',')
+               .append(o.getPaidAmount() != null ? o.getPaidAmount() : 0).append(',')
+               .append(o.getPaymentStatus() != null ? o.getPaymentStatus().name() : "").append(',')
+               .append(o.getStatus() != null ? o.getStatus().name() : "").append(',')
+               .append(o.getCreatedAt() != null ? o.getCreatedAt().toLocalDate() : "").append('\n');
+        }
+
+        emailService.sendDataExportEmail(
+            user.getEmail(), user.getFirstName(),
+            "Orders", orders.size(), csv.toString(), "orders_export.csv"
+        );
+        log.info("Orders export email sent to {} — {} records", user.getEmail(), orders.size());
+    }
+
+    @Override
+    @Async
+    public void exportPaymentsToEmail() {
+        User user = securityUtils.getCurrentUser();
+        UUID distributorId = securityUtils.getCurrentUserDistributorId();
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+
+        List<Payment> payments;
+        if (merchantId != null) {
+            payments = paymentRepository.findByDistributorMerchantIdOrderByCreatedAtDesc(merchantId);
+        } else if (distributorId != null) {
+            payments = paymentRepository.findByDistributorIdOrderByCreatedAtDesc(distributorId);
+        } else {
+            payments = paymentRepository.findAll(org.springframework.data.domain.Sort.by("createdAt").descending());
+        }
+
+        StringBuilder csv = new StringBuilder();
+        csv.append("Payment #,Customer,Order #,Amount (KES),Method,Status,Date\n");
+        for (Payment p : payments) {
+            csv.append(escape(p.getPaymentNumber())).append(',')
+               .append(escape(p.getMerchant() != null ? p.getMerchant().getBusinessName() : "")).append(',')
+               .append(escape(p.getOrder() != null ? p.getOrder().getOrderNumber() : "")).append(',')
+               .append(p.getAmount() != null ? p.getAmount() : 0).append(',')
+               .append(escape(p.getPaymentMethod() != null ? p.getPaymentMethod().getName() : "")).append(',')
+               .append(p.getStatus() != null ? p.getStatus().name() : "").append(',')
+               .append(p.getPaymentDate() != null ? p.getPaymentDate().toLocalDate()
+                       : p.getCreatedAt() != null ? p.getCreatedAt().toLocalDate() : "").append('\n');
+        }
+
+        emailService.sendDataExportEmail(
+            user.getEmail(), user.getFirstName(),
+            "Payments", payments.size(), csv.toString(), "payments_export.csv"
+        );
+        log.info("Payments export email sent to {} — {} records", user.getEmail(), payments.size());
     }
 
     /** CSV-safe quoting: wrap value in quotes if it contains comma, quote, or newline */

@@ -12,4 +12,6 @@ public interface ExportService {
     void exportPosSalesToEmail();
     void exportFinancialReportToEmail();
     void exportPriceListsToEmail();
+    void exportOrdersToEmail();
+    void exportPaymentsToEmail();
 }

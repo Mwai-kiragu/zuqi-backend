@@ -96,6 +96,7 @@ public class SupplierBill {
     @JoinColumn(name = "created_by")
     private User createdBy;
 
+    @Builder.Default
     @Column(name = "approval_status", length = 30)
     private String approvalStatus = "NOT_REQUIRED";
 

@@ -15,6 +15,7 @@ import com.zuqi.repository.CreditScoreRepository;
 import com.zuqi.repository.CustomerCategoryRepository;
 import com.zuqi.repository.CustomerRepository;
 import com.zuqi.repository.DistributorRepository;
+import com.zuqi.repository.InvoiceRepository;
 import com.zuqi.repository.OrderRepository;
 import com.zuqi.repository.UserRepository;
 import com.zuqi.ai.event.MerchantCreatedEvent;
@@ -53,6 +54,7 @@ public class CustomerServiceImpl implements CustomerService {
     private final DistributorRepository distributorRepository;
     private final UserRepository userRepository;
     private final OrderRepository orderRepository;
+    private final InvoiceRepository invoiceRepository;
     private final SecurityUtils securityUtils;
     private final ActivityLogService activityLogService;
     private final ApplicationEventPublisher eventPublisher;
@@ -172,8 +174,8 @@ public class CustomerServiceImpl implements CustomerService {
         Customer customer = customerRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", id.toString()));
         CustomerResponse response = CustomerResponse.fromEntity(customer);
-        // Real-time outstanding balance computed from unpaid orders
-        java.math.BigDecimal outstanding = orderRepository.sumOutstandingByCustomerId(id);
+        // Real-time credit balance from unpaid invoices (invoices are the authoritative payment document)
+        java.math.BigDecimal outstanding = invoiceRepository.sumUnpaidByCustomerId(id);
         response.setCurrentBalance(outstanding != null ? outstanding : java.math.BigDecimal.ZERO);
         return response;
     }
@@ -235,6 +237,9 @@ public class CustomerServiceImpl implements CustomerService {
 
         boolean needsApproval = securityUtils.currentUserRequiresApprovalFor("CUSTOMERS");
         customer.setApprovalStatus(needsApproval ? "PENDING_APPROVAL" : "APPROVED");
+        if (needsApproval) {
+            customer.setActive(false);
+        }
         UUID currentUserId = securityUtils.getCurrentUserId();
         customer.setCreatedById(currentUserId);
 
@@ -329,6 +334,13 @@ public class CustomerServiceImpl implements CustomerService {
 
         Customer updated = customerRepository.save(customer);
         featureStore.invalidateMerchantCache(id);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(currentUser.getId(), currentUser.getEmail(),
+                    currentUser.getFirstName() + " " + currentUser.getLastName(),
+                    ActivityAction.UPDATE, "CUSTOMER", updated.getId(),
+                    updated.getBusinessName(), "MERCHANTS", "Updated customer: " + updated.getBusinessName());
+        }
         return CustomerResponse.fromEntity(updated);
     }
 
@@ -349,7 +361,15 @@ public class CustomerServiceImpl implements CustomerService {
         Customer customer = customerRepository.findById(customerId)
                 .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", customerId.toString()));
         customer.setVerified(true);
-        return CustomerResponse.fromEntity(customerRepository.save(customer));
+        Customer verified = customerRepository.save(customer);
+        User verifyUser = securityUtils.getCurrentUser();
+        if (verifyUser != null) {
+            activityLogService.log(verifyUser.getId(), verifyUser.getEmail(),
+                    verifyUser.getFirstName() + " " + verifyUser.getLastName(),
+                    ActivityAction.UPDATE, "CUSTOMER", verified.getId(),
+                    verified.getBusinessName(), "MERCHANTS", "Verified customer: " + verified.getBusinessName());
+        }
+        return CustomerResponse.fromEntity(verified);
     }
 
     @Override
@@ -392,6 +412,12 @@ public class CustomerServiceImpl implements CustomerService {
         customer.setDeactivatedAt(LocalDateTime.now());
         customer.setDeactivatedBy(currentUser);
         customerRepository.save(customer);
+        if (currentUser != null) {
+            activityLogService.log(currentUser.getId(), currentUser.getEmail(),
+                    currentUser.getFirstName() + " " + currentUser.getLastName(),
+                    ActivityAction.DEACTIVATE, "CUSTOMER", customer.getId(),
+                    customer.getBusinessName(), "MERCHANTS", "Deactivated customer: " + customer.getBusinessName());
+        }
     }
 
     @Override
@@ -404,6 +430,13 @@ public class CustomerServiceImpl implements CustomerService {
         customer.setDeactivatedAt(null);
         customer.setDeactivatedBy(null);
         customerRepository.save(customer);
+        User activateUser = securityUtils.getCurrentUser();
+        if (activateUser != null) {
+            activityLogService.log(activateUser.getId(), activateUser.getEmail(),
+                    activateUser.getFirstName() + " " + activateUser.getLastName(),
+                    ActivityAction.ACTIVATE, "CUSTOMER", customer.getId(),
+                    customer.getBusinessName(), "MERCHANTS", "Activated customer: " + customer.getBusinessName());
+        }
     }
 
     @Override
@@ -416,7 +449,12 @@ public class CustomerServiceImpl implements CustomerService {
         customer.setBlacklistedAt(LocalDateTime.now());
         customer.setBlacklistedBy(currentUser);
         customer.setActive(false);
-        return CustomerResponse.fromEntity(customerRepository.save(customer));
+        Customer blacklisted = customerRepository.save(customer);
+        activityLogService.log(currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.DEACTIVATE, "CUSTOMER", blacklisted.getId(),
+                blacklisted.getBusinessName(), "MERCHANTS", "Blacklisted customer: " + blacklisted.getBusinessName());
+        return CustomerResponse.fromEntity(blacklisted);
     }
 
     @Override
@@ -429,7 +467,15 @@ public class CustomerServiceImpl implements CustomerService {
         customer.setBlacklistedAt(null);
         customer.setBlacklistedBy(null);
         customer.setActive(true);
-        return CustomerResponse.fromEntity(customerRepository.save(customer));
+        Customer unblacklisted = customerRepository.save(customer);
+        User unblacklistUser = securityUtils.getCurrentUser();
+        if (unblacklistUser != null) {
+            activityLogService.log(unblacklistUser.getId(), unblacklistUser.getEmail(),
+                    unblacklistUser.getFirstName() + " " + unblacklistUser.getLastName(),
+                    ActivityAction.ACTIVATE, "CUSTOMER", unblacklisted.getId(),
+                    unblacklisted.getBusinessName(), "MERCHANTS", "Removed blacklist from customer: " + unblacklisted.getBusinessName());
+        }
+        return CustomerResponse.fromEntity(unblacklisted);
     }
 
     @Override
@@ -537,6 +583,27 @@ public class CustomerServiceImpl implements CustomerService {
                 .build();
     }
 
+    @Override
+    @Transactional
+    public CustomerResponse setCreditTerms(UUID id, BigDecimal creditLimit, Integer paymentTermsDays) {
+        Customer customer = customerRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", id.toString()));
+        if (creditLimit != null) customer.setCreditLimit(creditLimit);
+        if (paymentTermsDays != null) customer.setPaymentTermsDays(paymentTermsDays);
+        Customer saved = customerRepository.save(customer);
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(currentUser.getId(), currentUser.getEmail(),
+                    currentUser.getFirstName() + " " + currentUser.getLastName(),
+                    ActivityAction.UPDATE, "CUSTOMER", saved.getId(),
+                    saved.getBusinessName(), "MERCHANTS",
+                    "Updated credit terms for customer: " + saved.getBusinessName()
+                    + (creditLimit != null ? " — limit: " + creditLimit : "")
+                    + (paymentTermsDays != null ? " — terms: " + paymentTermsDays + " days" : ""));
+        }
+        return CustomerResponse.fromEntity(saved);
+    }
+
     private java.math.BigDecimal coalesce(java.math.BigDecimal value) {
         return value != null ? value : java.math.BigDecimal.ZERO;
     }
@@ -566,7 +633,9 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     private void enrichWithRealTimeBalances(Page<CustomerResponse> page, List<UUID> ids) {
-        List<Object[]> balanceRows = orderRepository.sumOutstandingByCustomerIds(ids);
+        // Use invoice outstanding balances — invoices are the authoritative payment document;
+        // payments recorded on invoices do not update order paidAmount, so order-based sums go stale.
+        List<Object[]> balanceRows = invoiceRepository.sumUnpaidByCustomerIds(ids);
         Map<UUID, BigDecimal> balanceMap = new HashMap<>();
         for (Object[] row : balanceRows) {
             balanceMap.put((UUID) row[0], (BigDecimal) row[1]);

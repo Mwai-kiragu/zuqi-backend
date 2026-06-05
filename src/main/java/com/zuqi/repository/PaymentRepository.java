@@ -212,4 +212,10 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
             "FROM payments p",
             nativeQuery = true)
     PaymentStatsView statsAll();
+
+    // ── Export (all, no pagination) ─────────────────────────────────────────
+    List<Payment> findByDistributorIdOrderByCreatedAtDesc(UUID distributorId);
+
+    @Query("SELECT p FROM Payment p WHERE p.distributor.merchant.id = :merchantId ORDER BY p.createdAt DESC")
+    List<Payment> findByDistributorMerchantIdOrderByCreatedAtDesc(@Param("merchantId") UUID merchantId);
 }

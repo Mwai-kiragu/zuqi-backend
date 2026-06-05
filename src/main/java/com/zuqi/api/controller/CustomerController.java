@@ -3,6 +3,7 @@ package com.zuqi.api.controller;
 import com.zuqi.api.dto.ApiResponse;
 import com.zuqi.api.dto.common.DeactivateRequest;
 import com.zuqi.api.dto.customer.BlacklistRequest;
+import java.math.BigDecimal;
 import com.zuqi.api.dto.customer.CreditStatsResponse;
 import com.zuqi.api.dto.customer.CustomerCategoryRequest;
 import com.zuqi.api.dto.customer.CustomerCategoryResponse;
@@ -92,6 +93,15 @@ public class CustomerController {
     @PatchMapping("/{id}/verify")
     public ResponseEntity<ApiResponse<CustomerResponse>> verifyCustomer(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success("Customer verified successfully", customerService.verifyCustomer(id)));
+    }
+
+    @PatchMapping("/{id}/credit-terms")
+    public ResponseEntity<ApiResponse<CustomerResponse>> setCreditTerms(
+            @PathVariable UUID id,
+            @RequestParam(required = false) BigDecimal creditLimit,
+            @RequestParam(required = false) Integer paymentTermsDays) {
+        return ResponseEntity.ok(ApiResponse.success("Credit terms updated successfully",
+                customerService.setCreditTerms(id, creditLimit, paymentTermsDays)));
     }
 
     @DeleteMapping("/{id}")

@@ -28,6 +28,8 @@ public interface InventoryService {
 
     Page<StockResponse> getLowStock(UUID distributorId, Pageable pageable);
 
+    StockStatsResponse getStockStats(UUID distributorId, UUID warehouseId, UUID branchId);
+
     // Warehouse operations
     List<WarehouseResponse> getWarehousesByDistributor(UUID distributorId);
 

@@ -164,4 +164,36 @@ public interface StockRepository extends JpaRepository<Stock, UUID> {
     List<Stock> findAllFetched();
 
     boolean existsByWarehouseIdAndProductId(UUID warehouseId, UUID productId);
+
+    // ── Stats aggregate queries (respect the same filters as findByFilters) ───
+
+    @Query("SELECT COUNT(s) FROM Stock s WHERE " +
+            "(:distributorId IS NULL OR s.warehouse.distributor.id = :distributorId) AND " +
+            "(:warehouseId IS NULL OR s.warehouse.id = :warehouseId) AND " +
+            "(:branchId IS NULL OR s.warehouse.branch.id = :branchId) AND " +
+            "s.product.hasVariants = false")
+    long countByFilters(
+            @Param("distributorId") UUID distributorId,
+            @Param("warehouseId") UUID warehouseId,
+            @Param("branchId") UUID branchId);
+
+    @Query("SELECT COUNT(s) FROM Stock s WHERE " +
+            "(:distributorId IS NULL OR s.warehouse.distributor.id = :distributorId) AND " +
+            "(:warehouseId IS NULL OR s.warehouse.id = :warehouseId) AND " +
+            "(:branchId IS NULL OR s.warehouse.branch.id = :branchId) AND " +
+            "s.product.hasVariants = false AND s.quantity <= 0")
+    long countOutOfStockByFilters(
+            @Param("distributorId") UUID distributorId,
+            @Param("warehouseId") UUID warehouseId,
+            @Param("branchId") UUID branchId);
+
+    @Query("SELECT COUNT(s) FROM Stock s WHERE " +
+            "(:distributorId IS NULL OR s.warehouse.distributor.id = :distributorId) AND " +
+            "(:warehouseId IS NULL OR s.warehouse.id = :warehouseId) AND " +
+            "(:branchId IS NULL OR s.warehouse.branch.id = :branchId) AND " +
+            "s.product.hasVariants = false AND s.quantity > 0 AND s.quantity <= COALESCE(s.reorderLevel, 10)")
+    long countLowStockByFilters(
+            @Param("distributorId") UUID distributorId,
+            @Param("warehouseId") UUID warehouseId,
+            @Param("branchId") UUID branchId);
 }

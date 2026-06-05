@@ -349,4 +349,10 @@ public interface OrderRepository extends JpaRepository<Order, UUID> {
 
     @Query("SELECT COALESCE(SUM(o.totalAmount - o.paidAmount), 0) FROM Order o WHERE o.paymentStatus = 'PARTIAL'")
     java.math.BigDecimal sumPartialBalanceDueAll();
+
+    // ── Export (all, no pagination) ─────────────────────────────────────────
+    List<Order> findByDistributorIdOrderByCreatedAtDesc(UUID distributorId);
+
+    @Query("SELECT o FROM Order o WHERE o.distributor.merchant.id = :merchantId ORDER BY o.createdAt DESC")
+    List<Order> findByDistributorMerchantIdOrderByCreatedAtDesc(@Param("merchantId") UUID merchantId);
 }

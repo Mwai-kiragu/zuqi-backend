@@ -473,6 +473,21 @@ public class PaymentServiceImpl implements PaymentService {
                 .build();
     }
 
+    @Override
+    public List<PaymentResponse> getAllForExport() {
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        UUID distributorId = securityUtils.getDistributorIdForFiltering();
+        if (merchantId != null) {
+            return paymentRepository.findByDistributorMerchantIdOrderByCreatedAtDesc(merchantId)
+                    .stream().map(PaymentResponse::fromEntity).collect(java.util.stream.Collectors.toList());
+        } else if (distributorId != null) {
+            return paymentRepository.findByDistributorIdOrderByCreatedAtDesc(distributorId)
+                    .stream().map(PaymentResponse::fromEntity).collect(java.util.stream.Collectors.toList());
+        }
+        return paymentRepository.findAll(org.springframework.data.domain.Sort.by("createdAt").descending())
+                .stream().map(PaymentResponse::fromEntity).collect(java.util.stream.Collectors.toList());
+    }
+
     private BigDecimal coalesce(BigDecimal val) {
         return val != null ? val : BigDecimal.ZERO;
     }
