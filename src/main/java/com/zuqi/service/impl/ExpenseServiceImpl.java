@@ -126,6 +126,10 @@ public class ExpenseServiceImpl implements ExpenseService {
         if (expense.getStatus() == ExpenseStatus.APPROVED || expense.getStatus() == ExpenseStatus.PAID) {
             throw new IllegalStateException("Cannot modify an approved or paid expense");
         }
+        // Editing a pending-approval expense retracts it back to DRAFT for re-submission
+        if (expense.getStatus() == ExpenseStatus.PENDING_APPROVAL) {
+            expense.setStatus(ExpenseStatus.DRAFT);
+        }
         expense.setTitle(request.getTitle());
         expense.setDescription(request.getDescription());
         expense.setCategory(request.getCategory());

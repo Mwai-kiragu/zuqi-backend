@@ -369,6 +369,16 @@ public class InvoiceServiceImpl implements InvoiceService {
             }
         }
 
+        // Sync customer's stored currentBalance so credit-stats aggregates reflect the new obligation
+        try {
+            Customer merchant = order.getMerchant();
+            BigDecimal outstanding = invoiceRepository.sumUnpaidByCustomerId(merchant.getId());
+            merchant.setCurrentBalance(outstanding != null ? outstanding : BigDecimal.ZERO);
+            customerRepository.save(merchant);
+        } catch (Exception e) {
+            log.warn("Failed to sync currentBalance after creating invoice {}: {}", invoice.getInvoiceNumber(), e.getMessage());
+        }
+
         return InvoiceResponse.fromEntity(invoice);
     }
 
@@ -627,6 +637,26 @@ public class InvoiceServiceImpl implements InvoiceService {
         InvoiceStatus previousStatus = invoice.getStatus();
         invoice.recordPayment(amount);
         invoice = invoiceRepository.save(invoice);
+        User payUser = securityUtils.getCurrentUser();
+        if (payUser != null) {
+            activityLogService.log(payUser.getId(), payUser.getEmail(),
+                    payUser.getFirstName() + " " + payUser.getLastName(),
+                    ActivityAction.UPDATE, "INVOICE", invoice.getId(),
+                    invoice.getInvoiceNumber(), "INVOICES",
+                    "Recorded payment of KES " + amount.toPlainString() + " on invoice: " + invoice.getInvoiceNumber());
+        }
+
+        // Sync customer's stored currentBalance so credit-stats aggregates stay accurate
+        try {
+            Customer customer = invoice.getMerchant();
+            if (customer != null) {
+                BigDecimal outstanding = invoiceRepository.sumUnpaidByCustomerId(customer.getId());
+                customer.setCurrentBalance(outstanding != null ? outstanding : java.math.BigDecimal.ZERO);
+                customerRepository.save(customer);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to sync currentBalance after payment on invoice {}: {}", invoice.getInvoiceNumber(), e.getMessage());
+        }
 
         log.info("Payment of {} recorded for invoice {}", amount, invoice.getInvoiceNumber());
 

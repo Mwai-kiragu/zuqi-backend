@@ -168,4 +168,10 @@ public class OrderController {
     public ResponseEntity<ApiResponse<OrderStatsResponse>> getOrderStats() {
         return ResponseEntity.ok(ApiResponse.success(orderService.getOrderStats()));
     }
+
+    @GetMapping("/export")
+    @Operation(summary = "Get all orders for export", description = "Returns all orders (no pagination) for CSV/Excel/PDF export")
+    public ResponseEntity<ApiResponse<List<OrderResponse>>> getAllForExport() {
+        return ResponseEntity.ok(ApiResponse.success("Export", orderService.getAllForExport()));
+    }
 }

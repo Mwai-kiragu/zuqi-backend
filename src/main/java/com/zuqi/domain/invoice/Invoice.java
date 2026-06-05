@@ -170,6 +170,32 @@ public class Invoice {
         }
     }
 
+    /**
+     * Apply a credit note: reduces the invoice total by the credited amount,
+     * then re-derives status from the new balance. Unlike recordPayment this
+     * does NOT touch paidAmount — it adjusts what was originally owed.
+     */
+    public void applyCredit(BigDecimal amount) {
+        this.totalAmount = this.totalAmount.subtract(amount);
+        if (this.totalAmount.compareTo(BigDecimal.ZERO) < 0) {
+            this.totalAmount = BigDecimal.ZERO;
+        }
+        this.calculateBalanceDue();
+
+        if (this.status == InvoiceStatus.CANCELLED) return;
+
+        if (this.balanceDue.compareTo(BigDecimal.ZERO) <= 0) {
+            this.status = InvoiceStatus.PAID;
+            if (this.paidAt == null) {
+                this.paidAt = java.time.LocalDateTime.now();
+            }
+        } else if (this.paidAmount != null && this.paidAmount.compareTo(BigDecimal.ZERO) > 0) {
+            this.status = InvoiceStatus.PARTIALLY_PAID;
+        }
+        // If no cash has been paid yet, preserve the current open status
+        // (SENT / VIEWED / UNPAID / OVERDUE) — only the amount owed has changed.
+    }
+
     public boolean isOverdue() {
         return this.dueDate.isBefore(LocalDate.now())
                 && this.status != InvoiceStatus.PAID

@@ -3,6 +3,7 @@ package com.zuqi.api.controller;
 import com.zuqi.api.dto.ApiResponse;
 import com.zuqi.api.dto.returns.CreateSalesReturnRequest;
 import com.zuqi.api.dto.returns.SalesReturnResponse;
+import com.zuqi.api.dto.returns.SalesReturnStatsResponse;
 import com.zuqi.domain.user.User;
 import com.zuqi.service.SalesReturnService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -16,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -56,5 +58,15 @@ public class SalesReturnController {
     @PostMapping("/{id}/cancel")
     public ResponseEntity<ApiResponse<SalesReturnResponse>> cancel(@PathVariable UUID id) {
         return ResponseEntity.ok(ApiResponse.success("Cancelled", salesReturnService.cancel(id)));
+    }
+
+    @GetMapping("/stats")
+    public ResponseEntity<ApiResponse<SalesReturnStatsResponse>> getStats() {
+        return ResponseEntity.ok(ApiResponse.success("Stats", salesReturnService.getStats()));
+    }
+
+    @GetMapping("/export")
+    public ResponseEntity<ApiResponse<List<SalesReturnResponse>>> getAllForExport() {
+        return ResponseEntity.ok(ApiResponse.success("Export", salesReturnService.getAllForExport()));
     }
 }

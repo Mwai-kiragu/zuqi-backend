@@ -2,6 +2,7 @@ package com.zuqi.service.impl;
 
 import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
 import com.zuqi.api.dto.returns.*;
+import com.zuqi.api.dto.returns.SalesReturnStatsResponse;
 import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.distributor.Distributor;
@@ -78,6 +79,14 @@ public class SalesReturnServiceImpl implements SalesReturnService {
         }
         if (distributor == null) throw new ValidationException("Cannot determine distributor for return");
 
+        // Required fields before creation
+        if (request.getRefundMethod() == null || request.getRefundMethod().isBlank()) {
+            throw new ValidationException("Refund method is required");
+        }
+        if (request.getReason() == null || request.getReason().isBlank()) {
+            throw new ValidationException("Return reason is required");
+        }
+
         Order order = request.getOrderId() != null
                 ? orderRepository.findById(request.getOrderId())
                         .orElseThrow(() -> new ResourceNotFoundException("Order", "id", request.getOrderId()))
@@ -90,6 +99,30 @@ public class SalesReturnServiceImpl implements SalesReturnService {
                     .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", request.getInvoiceId()));
             if (order == null && invoice.getOrder() != null) {
                 order = invoice.getOrder();
+            }
+
+            // Guard: total already returned (non-CANCELLED) must not reach the invoice total
+            BigDecimal alreadyReturned = salesReturnRepository.sumActiveReturnedAmountByInvoiceId(invoice.getId());
+            if (alreadyReturned == null) alreadyReturned = BigDecimal.ZERO;
+
+            BigDecimal invoiceTotal = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO;
+            BigDecimal remainingReturnable = invoiceTotal.subtract(alreadyReturned);
+
+            if (remainingReturnable.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new ValidationException(
+                    "Invoice " + invoice.getInvoiceNumber() + " has already been fully returned. " +
+                    "Total returnable: KES " + invoiceTotal + ", already returned: KES " + alreadyReturned + ".");
+            }
+
+            // Also validate that the new return items don't exceed the remaining returnable amount
+            BigDecimal newReturnTotal = request.getItems().stream()
+                    .map(i -> i.getUnitPrice().multiply(i.getQuantity()))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            if (newReturnTotal.compareTo(remainingReturnable) > 0) {
+                throw new ValidationException(
+                    "Return total KES " + newReturnTotal + " exceeds the remaining returnable amount of KES " +
+                    remainingReturnable + " on invoice " + invoice.getInvoiceNumber() + ".");
             }
         }
 
@@ -173,6 +206,12 @@ public class SalesReturnServiceImpl implements SalesReturnService {
         if (sr.getStatus() != ReturnStatus.DRAFT && sr.getStatus() != ReturnStatus.PENDING_APPROVAL) {
             throw new ValidationException("Only DRAFT or PENDING_APPROVAL returns can be confirmed");
         }
+        if (sr.getRefundMethod() == null || sr.getRefundMethod().isBlank()) {
+            throw new ValidationException("Refund method must be set before confirming this return");
+        }
+        if (sr.getReason() == null || sr.getReason().isBlank()) {
+            throw new ValidationException("Return reason must be set before confirming this return");
+        }
         sr.setStatus(ReturnStatus.CONFIRMED);
         SalesReturn saved = salesReturnRepository.save(sr);
 
@@ -218,17 +257,14 @@ public class SalesReturnServiceImpl implements SalesReturnService {
             );
         }
 
-        // Credit the return amount against the linked invoice
+        // Apply credit note: reduce the invoice total by the returned amount
         if (sr.getInvoice() != null) {
             Invoice invoice = sr.getInvoice();
-            InvoiceStatus currentStatus = invoice.getStatus();
-            // Only adjust invoices that still have an open balance
-            if (currentStatus != InvoiceStatus.PAID
-                    && currentStatus != InvoiceStatus.CANCELLED) {
-                invoice.recordPayment(sr.getTotalAmount());
+            if (invoice.getStatus() != InvoiceStatus.CANCELLED) {
+                invoice.applyCredit(sr.getTotalAmount());
                 invoiceRepository.save(invoice);
-                log.info("Invoice {} balance reduced by KES {} due to confirmed return {}",
-                        invoice.getInvoiceNumber(), sr.getTotalAmount(), sr.getReturnNumber());
+                log.info("Invoice {} total reduced by KES {} (credit note {}) — new status: {}",
+                        invoice.getInvoiceNumber(), sr.getTotalAmount(), sr.getReturnNumber(), invoice.getStatus());
             }
         }
 
@@ -271,6 +307,58 @@ public class SalesReturnServiceImpl implements SalesReturnService {
             return salesReturnRepository.findByDistributorMerchantId(merchantId, pageable).map(this::toResponse);
         }
         return salesReturnRepository.findAll(pageable).map(this::toResponse);
+    }
+
+    @Override
+    public SalesReturnStatsResponse getStats() {
+        UUID distId    = securityUtils.getDistributorIdForFiltering();
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+
+        long total, pending, confirmed, cancelled;
+        java.math.BigDecimal totalValue;
+
+        if (distId != null) {
+            total     = salesReturnRepository.countByDistributorId(distId);
+            pending   = salesReturnRepository.countByDistributorIdAndStatus(distId, com.zuqi.domain.returns.ReturnStatus.PENDING_APPROVAL);
+            confirmed = salesReturnRepository.countByDistributorIdAndStatus(distId, com.zuqi.domain.returns.ReturnStatus.CONFIRMED);
+            cancelled = salesReturnRepository.countByDistributorIdAndStatus(distId, com.zuqi.domain.returns.ReturnStatus.CANCELLED);
+            totalValue = salesReturnRepository.sumTotalAmountByDistributorId(distId);
+        } else if (merchantId != null) {
+            total     = salesReturnRepository.countByDistributorMerchantId(merchantId);
+            pending   = salesReturnRepository.countByDistributorMerchantIdAndStatus(merchantId, com.zuqi.domain.returns.ReturnStatus.PENDING_APPROVAL);
+            confirmed = salesReturnRepository.countByDistributorMerchantIdAndStatus(merchantId, com.zuqi.domain.returns.ReturnStatus.CONFIRMED);
+            cancelled = salesReturnRepository.countByDistributorMerchantIdAndStatus(merchantId, com.zuqi.domain.returns.ReturnStatus.CANCELLED);
+            totalValue = salesReturnRepository.sumTotalAmountByDistributorMerchantId(merchantId);
+        } else {
+            total     = salesReturnRepository.count();
+            pending   = salesReturnRepository.countByStatus(com.zuqi.domain.returns.ReturnStatus.PENDING_APPROVAL);
+            confirmed = salesReturnRepository.countByStatus(com.zuqi.domain.returns.ReturnStatus.CONFIRMED);
+            cancelled = salesReturnRepository.countByStatus(com.zuqi.domain.returns.ReturnStatus.CANCELLED);
+            totalValue = salesReturnRepository.sumTotalAmountAll();
+        }
+
+        return SalesReturnStatsResponse.builder()
+                .totalCount(total)
+                .pendingCount(pending)
+                .confirmedCount(confirmed)
+                .cancelledCount(cancelled)
+                .totalValue(totalValue != null ? totalValue : java.math.BigDecimal.ZERO)
+                .build();
+    }
+
+    @Override
+    public List<SalesReturnResponse> getAllForExport() {
+        UUID distId    = securityUtils.getDistributorIdForFiltering();
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        if (distId != null) {
+            return salesReturnRepository.findByDistributorIdOrderByCreatedAtDesc(distId)
+                    .stream().map(this::toResponse).collect(java.util.stream.Collectors.toList());
+        } else if (merchantId != null) {
+            return salesReturnRepository.findByDistributorMerchantIdOrderByCreatedAtDesc(merchantId)
+                    .stream().map(this::toResponse).collect(java.util.stream.Collectors.toList());
+        }
+        return salesReturnRepository.findAll(org.springframework.data.domain.Sort.by("createdAt").descending())
+                .stream().map(this::toResponse).collect(java.util.stream.Collectors.toList());
     }
 
     private SalesReturn findOrThrow(UUID id) {

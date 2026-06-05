@@ -150,4 +150,10 @@ public class PaymentController {
         List<PaymentMethodResponse> methods = paymentService.getActivePaymentMethods();
         return ResponseEntity.ok(ApiResponse.success(methods));
     }
+
+    @GetMapping("/export")
+    @Operation(summary = "Get all payments for export", description = "Returns all payments (no pagination) for CSV/Excel/PDF export")
+    public ResponseEntity<ApiResponse<List<PaymentResponse>>> getAllForExport() {
+        return ResponseEntity.ok(ApiResponse.success("Export", paymentService.getAllForExport()));
+    }
 }

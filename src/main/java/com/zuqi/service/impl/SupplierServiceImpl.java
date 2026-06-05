@@ -330,7 +330,12 @@ public class SupplierServiceImpl implements SupplierService {
         supplier.setBlacklistedAt(LocalDateTime.now());
         supplier.setBlacklistedBy(currentUser);
         supplier.setActive(false);
-        return SupplierResponse.fromEntity(supplierRepository.save(supplier));
+        Supplier blacklisted = supplierRepository.save(supplier);
+        activityLogService.log(currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.DEACTIVATE, "SUPPLIER", blacklisted.getId(),
+                blacklisted.getName(), "SUPPLIERS", "Blacklisted supplier: " + blacklisted.getName());
+        return SupplierResponse.fromEntity(blacklisted);
     }
 
     @Override
@@ -342,7 +347,15 @@ public class SupplierServiceImpl implements SupplierService {
         supplier.setBlacklistedAt(null);
         supplier.setBlacklistedBy(null);
         supplier.setActive(true);
-        return SupplierResponse.fromEntity(supplierRepository.save(supplier));
+        Supplier unblacklisted = supplierRepository.save(supplier);
+        User unblacklistUser = securityUtils.getCurrentUser();
+        if (unblacklistUser != null) {
+            activityLogService.log(unblacklistUser.getId(), unblacklistUser.getEmail(),
+                    unblacklistUser.getFirstName() + " " + unblacklistUser.getLastName(),
+                    ActivityAction.ACTIVATE, "SUPPLIER", unblacklisted.getId(),
+                    unblacklisted.getName(), "SUPPLIERS", "Removed blacklist from supplier: " + unblacklisted.getName());
+        }
+        return SupplierResponse.fromEntity(unblacklisted);
     }
 
     @Override

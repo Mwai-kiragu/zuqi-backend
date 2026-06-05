@@ -116,7 +116,7 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID>, JpaSp
     Page<Customer> findByKycStatusNot(KycStatus status, Pageable pageable);
 
     @Modifying
-    @Query("UPDATE Customer c SET c.approvalStatus = :status WHERE c.id = :id")
+    @Query("UPDATE Customer c SET c.approvalStatus = :status, c.active = CASE WHEN :status = 'APPROVED' THEN true ELSE c.active END WHERE c.id = :id")
     void updateApprovalStatus(@Param("id") UUID id, @Param("status") String status);
 
     // Non-paginated exports

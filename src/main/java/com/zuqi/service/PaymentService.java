@@ -61,4 +61,6 @@ public interface PaymentService {
             Long paymentMethodId,
             LocalDate startDate,
             LocalDate endDate);
+
+    List<PaymentResponse> getAllForExport();
 }

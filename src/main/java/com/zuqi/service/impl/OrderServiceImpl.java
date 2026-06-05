@@ -323,14 +323,7 @@ public class OrderServiceImpl implements OrderService {
         // Save order
         order = orderRepository.save(order);
 
-        // Sync customer's stored currentBalance with real outstanding from all unpaid orders
-        try {
-            BigDecimal outstanding = orderRepository.sumOutstandingByCustomerId(merchant.getId());
-            merchant.setCurrentBalance(outstanding != null ? outstanding : BigDecimal.ZERO);
-            customerRepository.save(merchant);
-        } catch (Exception e) {
-            log.warn("Failed to sync currentBalance for customer {}: {}", merchant.getId(), e.getMessage());
-        }
+        // currentBalance is synced from invoice outstanding in InvoiceServiceImpl when the invoice is created/paid
 
         // Add initial status history
         addStatusHistory(order, order.getStatus(), "Order created", currentUser);
@@ -438,6 +431,13 @@ public class OrderServiceImpl implements OrderService {
         }
 
         order = orderRepository.save(order);
+        User updateUser = securityUtils.getCurrentUser();
+        if (updateUser != null) {
+            activityLogService.log(updateUser.getId(), updateUser.getEmail(),
+                    updateUser.getFirstName() + " " + updateUser.getLastName(),
+                    ActivityAction.UPDATE, "ORDER", order.getId(),
+                    order.getOrderNumber(), "ORDERS", "Updated order: " + order.getOrderNumber());
+        }
         return OrderResponse.fromEntity(order);
     }
 
@@ -468,6 +468,13 @@ public class OrderServiceImpl implements OrderService {
 
         order = orderRepository.save(order);
         log.info("Order {} status updated from {} to {}", order.getOrderNumber(), currentStatus, newStatus);
+        if (currentUser != null) {
+            activityLogService.log(currentUser.getId(), currentUser.getEmail(),
+                    currentUser.getFirstName() + " " + currentUser.getLastName(),
+                    ActivityAction.UPDATE, "ORDER", order.getId(),
+                    order.getOrderNumber(), "ORDERS",
+                    "Updated order " + order.getOrderNumber() + " status: " + currentStatus + " → " + newStatus);
+        }
 
         // Publish delivery event when order is delivered — closes the route optimization feedback loop
         if (newStatus == OrderStatus.DELIVERED) {
@@ -498,6 +505,13 @@ public class OrderServiceImpl implements OrderService {
 
         order = orderRepository.save(order);
         log.info("Order {} cancelled", order.getOrderNumber());
+        if (currentUser != null) {
+            activityLogService.log(currentUser.getId(), currentUser.getEmail(),
+                    currentUser.getFirstName() + " " + currentUser.getLastName(),
+                    ActivityAction.CANCEL, "ORDER", order.getId(),
+                    order.getOrderNumber(), "ORDERS", "Cancelled order: " + order.getOrderNumber()
+                    + (reason != null ? " — " + reason : ""));
+        }
 
         return OrderResponse.fromEntity(order);
     }
@@ -611,6 +625,21 @@ public class OrderServiceImpl implements OrderService {
                 .partialCount(orderRepository.countByPaymentStatus(PaymentStatus.PARTIAL))
                 .partialBalanceDue(coalesce(orderRepository.sumPartialBalanceDueAll()))
                 .build();
+    }
+
+    @Override
+    public List<OrderResponse> getAllForExport() {
+        UUID merchantId = securityUtils.getCurrentUserMerchantId();
+        UUID distributorId = securityUtils.getDistributorIdForFiltering();
+        if (merchantId != null) {
+            return orderRepository.findByDistributorMerchantIdOrderByCreatedAtDesc(merchantId)
+                    .stream().map(OrderResponse::fromEntity).collect(java.util.stream.Collectors.toList());
+        } else if (distributorId != null) {
+            return orderRepository.findByDistributorIdOrderByCreatedAtDesc(distributorId)
+                    .stream().map(OrderResponse::fromEntity).collect(java.util.stream.Collectors.toList());
+        }
+        return orderRepository.findAll(org.springframework.data.domain.Sort.by("createdAt").descending())
+                .stream().map(OrderResponse::fromEntity).collect(java.util.stream.Collectors.toList());
     }
 
     private BigDecimal coalesce(BigDecimal value) {

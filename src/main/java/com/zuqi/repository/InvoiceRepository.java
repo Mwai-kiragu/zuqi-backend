@@ -166,6 +166,11 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
            "WHERE i.merchant.id = :customerId AND i.status NOT IN ('PAID', 'CANCELLED')")
     BigDecimal sumUnpaidByCustomerId(@Param("customerId") UUID customerId);
 
+    /** Batch version: returns [customerId, outstandingInvoiceBalance] pairs. */
+    @Query("SELECT i.merchant.id, COALESCE(SUM(i.totalAmount - COALESCE(i.paidAmount, 0)), 0) FROM Invoice i " +
+           "WHERE i.merchant.id IN :customerIds AND i.status NOT IN ('PAID', 'CANCELLED') GROUP BY i.merchant.id")
+    java.util.List<Object[]> sumUnpaidByCustomerIds(@Param("customerIds") java.util.Collection<UUID> customerIds);
+
     // AI Phase 3 — cash flow feature queries
 
     @Query("SELECT i FROM Invoice i WHERE i.distributor.id = :distributorId " +

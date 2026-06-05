@@ -70,6 +70,15 @@ public class InventoryController {
         });
     }
 
+    @GetMapping("/stats")
+    @Operation(summary = "Get stock summary stats", description = "Returns overall counts of total, healthy, low, and out-of-stock items for the given scope")
+    public ResponseEntity<ApiResponse<StockStatsResponse>> getStockStats(
+            @RequestParam(required = false) UUID distributorId,
+            @RequestParam(required = false) UUID warehouseId,
+            @RequestParam(required = false) UUID branchId) {
+        return ResponseEntity.ok(ApiResponse.success(inventoryService.getStockStats(distributorId, warehouseId, branchId)));
+    }
+
     @GetMapping("/warehouse/{warehouseId}")
     @Operation(summary = "Get stock by warehouse", description = "Get all stock levels for a warehouse")
     public ResponseEntity<ApiResponse<Page<StockResponse>>> getStockByWarehouse(

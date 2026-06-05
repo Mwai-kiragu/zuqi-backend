@@ -2,6 +2,7 @@ package com.zuqi.service.impl;
 
 import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
 import com.zuqi.api.dto.inventory.*;
+import com.zuqi.api.dto.inventory.StockStatsResponse;
 import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.inventory.ProductBatch;
@@ -354,6 +355,19 @@ public class InventoryServiceImpl implements InventoryService {
         // SUPER_ADMIN can see all low stock items
         return stockRepository.findAllLowStock(pageable)
                 .map(this::mapToStockResponse);
+    }
+
+    @Override
+    public StockStatsResponse getStockStats(UUID distributorId, UUID warehouseId, UUID branchId) {
+        long total = stockRepository.countByFilters(distributorId, warehouseId, branchId);
+        long out   = stockRepository.countOutOfStockByFilters(distributorId, warehouseId, branchId);
+        long low   = stockRepository.countLowStockByFilters(distributorId, warehouseId, branchId);
+        return StockStatsResponse.builder()
+                .totalCount(total)
+                .outOfStockCount(out)
+                .lowStockCount(low)
+                .healthyCount(Math.max(0, total - low - out))
+                .build();
     }
 
 

@@ -56,4 +56,6 @@ public interface OrderService {
     List<DriverDto> getAvailableDrivers();
 
     OrderStatsResponse getOrderStats();
+
+    List<OrderResponse> getAllForExport();
 }
