@@ -19,6 +19,10 @@ public class PurchaseRequisitionRequest {
 
     private LocalDate expectedDeliveryDate;
 
+    private UUID preferredSupplierId;
+
+    private String preferredSupplierName;
+
     @NotEmpty(message = "At least one item is required")
     @Valid
     private List<ProcurementItemDto> items;

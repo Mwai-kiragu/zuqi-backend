@@ -91,6 +91,15 @@ public class PurchaseOrder {
     @Column(name = "received_at")
     private LocalDateTime receivedAt;
 
+    @Column(name = "supplier_response", length = 20)
+    private String supplierResponse;
+
+    @Column(name = "supplier_notes", columnDefinition = "TEXT")
+    private String supplierNotes;
+
+    @Column(name = "supplier_responded_at")
+    private LocalDateTime supplierRespondedAt;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by")
     private User createdBy;

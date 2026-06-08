@@ -86,7 +86,7 @@ public class InvoiceController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Get invoice by ID")
-    public ResponseEntity<ApiResponse<InvoiceResponse>> getInvoiceById(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<InvoiceResponse>> getInvoiceById(@PathVariable String id) {
         InvoiceResponse invoice = invoiceService.getInvoiceById(id);
         return ResponseEntity.ok(ApiResponse.success("Invoice retrieved successfully", invoice));
     }
@@ -141,7 +141,7 @@ public class InvoiceController {
     @PostMapping("/{id}/send")
     @Operation(summary = "Send invoice via email")
     public ResponseEntity<ApiResponse<InvoiceResponse>> sendInvoice(
-            @PathVariable UUID id,
+            @PathVariable String id,
             @Valid @RequestBody(required = false) SendInvoiceRequest request) {
 
         String email = request != null ? request.getEmail() : null;
@@ -152,7 +152,7 @@ public class InvoiceController {
 
     @PostMapping("/{id}/viewed")
     @Operation(summary = "Mark invoice as viewed")
-    public ResponseEntity<ApiResponse<InvoiceResponse>> markAsViewed(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<InvoiceResponse>> markAsViewed(@PathVariable String id) {
         InvoiceResponse invoice = invoiceService.markAsViewed(id);
         return ResponseEntity.ok(ApiResponse.success("Invoice marked as viewed", invoice));
     }
@@ -160,7 +160,7 @@ public class InvoiceController {
     @PostMapping("/{id}/payment")
     @Operation(summary = "Record payment against invoice")
     public ResponseEntity<ApiResponse<InvoiceResponse>> recordPayment(
-            @PathVariable UUID id,
+            @PathVariable String id,
             @RequestParam BigDecimal amount,
             @RequestParam(required = false) Long paymentMethodId,
             @RequestParam(required = false) String externalReference) {
@@ -171,7 +171,7 @@ public class InvoiceController {
 
     @PostMapping("/{id}/cancel")
     @Operation(summary = "Cancel invoice")
-    public ResponseEntity<ApiResponse<InvoiceResponse>> cancelInvoice(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<InvoiceResponse>> cancelInvoice(@PathVariable String id) {
         InvoiceResponse invoice = invoiceService.cancelInvoice(id);
         return ResponseEntity.ok(ApiResponse.success("Invoice cancelled successfully", invoice));
     }

@@ -13,11 +13,13 @@ public interface GrnService {
 
     Page<GrnResponse> getGrns(UUID distributorId, GrnStatus status, UUID supplierId, UUID purchaseOrderId, Pageable pageable);
 
-    GrnResponse getGrnById(UUID id);
+    GrnResponse getGrnById(String id);
 
     GrnResponse createGrn(GrnRequest request, User currentUser);
 
-    GrnResponse confirmGrn(UUID id, User currentUser);
+    GrnResponse confirmGrn(String id, User currentUser);
 
-    GrnResponse rejectGrn(UUID id, String reason, User currentUser);
+    GrnResponse rejectGrn(String id, String reason, User currentUser);
+
+    GrnResponse updateDeliveryNote(String id, String deliveryNoteNumber, User currentUser);
 }

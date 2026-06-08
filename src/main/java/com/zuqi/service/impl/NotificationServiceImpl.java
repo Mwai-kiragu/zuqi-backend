@@ -7,6 +7,7 @@ import com.zuqi.domain.approval.ApprovalRequest;
 import com.zuqi.domain.approval.ApprovalStatus;
 import com.zuqi.domain.inventory.Stock;
 import com.zuqi.domain.notification.Notification;
+import com.zuqi.domain.procurement.PurchaseOrder;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.repository.NotificationRepository;
@@ -252,6 +253,51 @@ public class NotificationServiceImpl implements NotificationService {
     public void markAllAsRead() {
         UUID userId = securityUtils.getCurrentUserId();
         notificationRepository.markAllReadByUserId(userId);
+    }
+
+    @Override
+    @Transactional
+    public void notifyPoSupplierResponse(PurchaseOrder po) {
+        try {
+            User creator = po.getCreatedBy();
+            if (creator == null) {
+                log.warn("PO {} has no createdBy user — skipping supplier response notification", po.getPoNumber());
+                return;
+            }
+
+            String supplierName = po.getSupplier() != null ? po.getSupplier().getName() : "Supplier";
+            String action = po.getSupplierResponse();
+            String title;
+            String message;
+
+            if ("CONFIRM".equals(action)) {
+                title = "Supplier confirmed: " + po.getPoNumber();
+                message = supplierName + " has confirmed availability for " + po.getPoNumber() + ".";
+            } else if ("DECLINE".equals(action)) {
+                title = "Supplier declined: " + po.getPoNumber();
+                message = supplierName + " cannot fulfill " + po.getPoNumber() + ". Please review and take action.";
+            } else {
+                title = "Partial fulfillment: " + po.getPoNumber();
+                message = supplierName + " indicated partial availability for " + po.getPoNumber() + ".";
+                if (po.getSupplierNotes() != null && !po.getSupplierNotes().isBlank()) {
+                    message += " Notes: " + po.getSupplierNotes();
+                }
+            }
+
+            notificationRepository.save(Notification.builder()
+                    .userId(creator.getId())
+                    .type("PO_SUPPLIER_RESPONSE")
+                    .title(title)
+                    .message(message)
+                    .entityType("PURCHASE_ORDER")
+                    .entityId(po.getId())
+                    .entityName(po.getPoNumber())
+                    .build());
+
+            log.info("Sent PO_SUPPLIER_RESPONSE notification to user {} for PO {}", creator.getId(), po.getPoNumber());
+        } catch (Exception e) {
+            log.error("Failed to send PO supplier response notification for PO {}: {}", po.getPoNumber(), e.getMessage(), e);
+        }
     }
 
     private NotificationResponse toResponse(Notification n) {

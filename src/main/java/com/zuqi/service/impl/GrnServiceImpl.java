@@ -64,7 +64,7 @@ public class GrnServiceImpl implements GrnService {
 
     @Override
     @Transactional(readOnly = true)
-    public GrnResponse getGrnById(UUID id) {
+    public GrnResponse getGrnById(String id) {
         GoodsReceiptNote grn = findById(id);
         return GrnResponse.fromEntity(grn, resolveWarehouseName(grn.getWarehouseId()));
     }
@@ -115,11 +115,14 @@ public class GrnServiceImpl implements GrnService {
 
     @Override
     @Transactional
-    public GrnResponse confirmGrn(UUID id, User currentUser) {
+    public GrnResponse confirmGrn(String id, User currentUser) {
         GoodsReceiptNote grn = findById(id);
 
         if (grn.getStatus() != GrnStatus.DRAFT) {
             throw new ValidationException("Only DRAFT GRNs can be confirmed");
+        }
+        if (grn.getDeliveryNoteNumber() == null || grn.getDeliveryNoteNumber().isBlank()) {
+            throw new ValidationException("Supplier delivery note number is required before confirming a GRN");
         }
 
         Warehouse warehouse = warehouseRepository.findById(grn.getWarehouseId())
@@ -154,11 +157,19 @@ public class GrnServiceImpl implements GrnService {
             stock.setQuantity(stock.getQuantity().add(qty));
             stockRepository.save(stock);
 
-            // Create ProductBatch if expiry date was provided
+            // Create ProductBatch if batch number or expiry date was provided
+            Object batchObj  = itemMap.get("batchNumber");
             Object expiryObj = itemMap.get("expiryDate");
+            String suppliedBatch = (batchObj != null && !batchObj.toString().isBlank())
+                    ? batchObj.toString().trim() : null;
+            LocalDate expiryDate = null;
             if (expiryObj != null && !expiryObj.toString().isBlank()) {
-                LocalDate expiryDate = LocalDate.parse(expiryObj.toString());
-                String batchNumber = "GRN-" + grn.getGrnNumber() + "-" + productId.toString().substring(0, 8).toUpperCase();
+                expiryDate = LocalDate.parse(expiryObj.toString());
+            }
+
+            if (suppliedBatch != null || expiryDate != null) {
+                String batchNumber = suppliedBatch != null ? suppliedBatch
+                        : "GRN-" + grn.getGrnNumber() + "-" + productId.toString().substring(0, 8).toUpperCase();
                 Distributor distributor = distributorRepository.findById(grn.getDistributorId())
                         .orElseThrow(() -> new ResourceNotFoundException("Distributor", "id", grn.getDistributorId()));
                 ProductBatch batch = ProductBatch.builder()
@@ -207,7 +218,7 @@ public class GrnServiceImpl implements GrnService {
 
     @Override
     @Transactional
-    public GrnResponse rejectGrn(UUID id, String reason, User currentUser) {
+    public GrnResponse rejectGrn(String id, String reason, User currentUser) {
         GoodsReceiptNote grn = findById(id);
 
         if (grn.getStatus() != GrnStatus.DRAFT) {
@@ -224,11 +235,32 @@ public class GrnServiceImpl implements GrnService {
         return GrnResponse.fromEntity(rejected, resolveWarehouseName(rejected.getWarehouseId()));
     }
 
+    @Override
+    @Transactional
+    public GrnResponse updateDeliveryNote(String id, String deliveryNoteNumber, User currentUser) {
+        GoodsReceiptNote grn = findById(id);
+        if (grn.getStatus() != GrnStatus.DRAFT) {
+            throw new ValidationException("Delivery note can only be updated on DRAFT GRNs");
+        }
+        if (deliveryNoteNumber == null || deliveryNoteNumber.isBlank()) {
+            throw new ValidationException("Delivery note number cannot be blank");
+        }
+        grn.setDeliveryNoteNumber(deliveryNoteNumber.trim());
+        GoodsReceiptNote saved = grnRepository.save(grn);
+        return GrnResponse.fromEntity(saved, resolveWarehouseName(saved.getWarehouseId()));
+    }
+
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
-    private GoodsReceiptNote findById(UUID id) {
-        return grnRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("GoodsReceiptNote", "id", id));
+    private GoodsReceiptNote findById(String identifier) {
+        try {
+            UUID uuid = UUID.fromString(identifier);
+            return grnRepository.findById(uuid)
+                    .orElseThrow(() -> new ResourceNotFoundException("GoodsReceiptNote", "id", identifier));
+        } catch (IllegalArgumentException e) {
+            return grnRepository.findByGrnNumber(identifier)
+                    .orElseThrow(() -> new ResourceNotFoundException("GoodsReceiptNote", "grnNumber", identifier));
+        }
     }
 
     private String generateGrnNumber() {

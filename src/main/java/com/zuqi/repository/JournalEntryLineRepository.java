@@ -15,6 +15,8 @@ public interface JournalEntryLineRepository extends JpaRepository<JournalEntryLi
 
     List<JournalEntryLine> findByJournalEntryIdOrderByLineNumberAsc(UUID journalEntryId);
 
+    boolean existsByAccountId(UUID accountId);
+
     @Query("""
         SELECT jel FROM JournalEntryLine jel
         JOIN jel.journalEntry je

@@ -18,8 +18,6 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.UUID;
-
 @RestController
 @RequestMapping("/v1/sales-returns")
 @RequiredArgsConstructor
@@ -46,17 +44,17 @@ public class SalesReturnController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<ApiResponse<SalesReturnResponse>> getById(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<SalesReturnResponse>> getById(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success("Sales return", salesReturnService.getById(id)));
     }
 
     @PostMapping("/{id}/confirm")
-    public ResponseEntity<ApiResponse<SalesReturnResponse>> confirm(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<SalesReturnResponse>> confirm(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success("Confirmed", salesReturnService.confirm(id)));
     }
 
     @PostMapping("/{id}/cancel")
-    public ResponseEntity<ApiResponse<SalesReturnResponse>> cancel(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<SalesReturnResponse>> cancel(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success("Cancelled", salesReturnService.cancel(id)));
     }
 

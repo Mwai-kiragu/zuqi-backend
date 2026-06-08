@@ -357,7 +357,7 @@ public class KcbServiceImpl implements KcbService {
             String receipt       = stkRequest.getZedStkId();
 
             if ("INVOICE".equalsIgnoreCase(referenceType)) {
-                invoiceService.recordPayment(UUID.fromString(referenceId), amount, kcbMethodId, receipt);
+                invoiceService.recordPayment(referenceId, amount, kcbMethodId, receipt);
                 log.info("Auto-reconciled invoice {} via KCB receipt {}", referenceId, receipt);
 
             } else if ("ORDER".equalsIgnoreCase(referenceType)) {

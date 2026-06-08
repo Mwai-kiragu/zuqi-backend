@@ -69,7 +69,7 @@ public class OrderController {
     @GetMapping("/{id}")
     @Operation(summary = "Get order by ID", description = "Retrieves a specific order by ID")
     public ResponseEntity<ApiResponse<OrderResponse>> getOrderById(
-            @Parameter(description = "Order ID") @PathVariable UUID id) {
+            @Parameter(description = "Order ID") @PathVariable String id) {
         OrderResponse order = orderService.getOrderById(id);
         return ResponseEntity.ok(ApiResponse.success(order));
     }
@@ -96,7 +96,7 @@ public class OrderController {
     @PutMapping("/{id}")
     @Operation(summary = "Update order", description = "Updates an existing order (only pending orders)")
     public ResponseEntity<ApiResponse<OrderResponse>> updateOrder(
-            @Parameter(description = "Order ID") @PathVariable UUID id,
+            @Parameter(description = "Order ID") @PathVariable String id,
             @Valid @RequestBody OrderRequest request) {
         OrderResponse order = orderService.updateOrder(id, request);
         return ResponseEntity.ok(ApiResponse.success("Order updated successfully", order));
@@ -105,7 +105,7 @@ public class OrderController {
     @PatchMapping("/{id}/status")
     @Operation(summary = "Update order status", description = "Updates the status of an order")
     public ResponseEntity<ApiResponse<OrderResponse>> updateOrderStatus(
-            @Parameter(description = "Order ID") @PathVariable UUID id,
+            @Parameter(description = "Order ID") @PathVariable String id,
             @Valid @RequestBody StatusUpdateRequest request,
             @AuthenticationPrincipal User currentUser) {
         OrderResponse order = orderService.updateOrderStatus(id, request, currentUser);
@@ -115,7 +115,7 @@ public class OrderController {
     @PostMapping("/{id}/cancel")
     @Operation(summary = "Cancel order", description = "Cancels an order")
     public ResponseEntity<ApiResponse<OrderResponse>> cancelOrder(
-            @Parameter(description = "Order ID") @PathVariable UUID id,
+            @Parameter(description = "Order ID") @PathVariable String id,
             @RequestParam(required = false) String reason,
             @AuthenticationPrincipal User currentUser) {
         OrderResponse order = orderService.cancelOrder(id, reason, currentUser);
@@ -125,7 +125,7 @@ public class OrderController {
     @GetMapping("/{id}/history")
     @Operation(summary = "Get order history", description = "Retrieves the status history of an order")
     public ResponseEntity<ApiResponse<List<OrderStatusHistoryResponse>>> getOrderHistory(
-            @Parameter(description = "Order ID") @PathVariable UUID id) {
+            @Parameter(description = "Order ID") @PathVariable String id) {
         List<OrderStatusHistoryResponse> history = orderService.getOrderStatusHistory(id);
         return ResponseEntity.ok(ApiResponse.success(history));
     }
@@ -149,7 +149,7 @@ public class OrderController {
     @PatchMapping("/{id}/assign-driver")
     @Operation(summary = "Assign driver", description = "Assigns a driver to an order for delivery")
     public ResponseEntity<ApiResponse<OrderResponse>> assignDriver(
-            @Parameter(description = "Order ID") @PathVariable UUID id,
+            @Parameter(description = "Order ID") @PathVariable String id,
             @Valid @RequestBody AssignDriverRequest request,
             @AuthenticationPrincipal User currentUser) {
         OrderResponse order = orderService.assignDriver(id, request.getDriverId(), request.getNotes(), currentUser);

@@ -81,6 +81,7 @@ public class CasbinAuthorizationFilter extends OncePerRequestFilter {
         Map.entry("STOCK_TRANSFERS",        List.of("/v1/inventory/transfers")),
         Map.entry("STOCK_TAKES",            List.of("/v1/inventory/stock-takes")),
         Map.entry("SALES_RETURNS",          List.of("/v1/sales-returns")),
+        Map.entry("CREDIT_NOTES",           List.of("/v1/credit-notes")),
         Map.entry("DISTRIBUTORS",           List.of("/v1/distributors")),
         Map.entry("PROMOTIONS",             List.of("/v1/promotions")),
         Map.entry("PRICE_LISTS",            List.of("/v1/price-lists", "/v1/export/price-lists")),
@@ -180,6 +181,8 @@ public class CasbinAuthorizationFilter extends OncePerRequestFilter {
     private static final List<String> PUBLIC_PATHS = List.of(
             "/v1/auth",
             "/api/v1/auth",
+            "/v1/po-confirm",
+            "/api/v1/po-confirm",
             "/v1/invoices/public",
             "/api/v1/invoices/public",
             "/v1/payments/methods",

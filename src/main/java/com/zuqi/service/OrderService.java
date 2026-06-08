@@ -33,25 +33,25 @@ public interface OrderService {
 
     Page<OrderResponse> searchOrders(UUID distributorId, String search, Pageable pageable);
 
-    OrderResponse getOrderById(UUID id);
+    OrderResponse getOrderById(String id);
 
     OrderResponse getOrderByNumber(String orderNumber);
 
     OrderResponse createOrder(OrderRequest request, User currentUser);
 
-    OrderResponse updateOrder(UUID id, OrderRequest request);
+    OrderResponse updateOrder(String id, OrderRequest request);
 
-    OrderResponse updateOrderStatus(UUID id, StatusUpdateRequest request, User currentUser);
+    OrderResponse updateOrderStatus(String id, StatusUpdateRequest request, User currentUser);
 
-    OrderResponse cancelOrder(UUID id, String reason, User currentUser);
+    OrderResponse cancelOrder(String id, String reason, User currentUser);
 
-    List<OrderStatusHistoryResponse> getOrderStatusHistory(UUID orderId);
+    List<OrderStatusHistoryResponse> getOrderStatusHistory(String orderId);
 
     long getOrderCountByStatus(UUID distributorId, OrderStatus status);
 
     List<OrderResponse> getOverdueOrders();
 
-    OrderResponse assignDriver(UUID orderId, UUID driverId, String notes, User currentUser);
+    OrderResponse assignDriver(String orderId, UUID driverId, String notes, User currentUser);
 
     List<DriverDto> getAvailableDrivers();
 

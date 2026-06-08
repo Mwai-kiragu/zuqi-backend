@@ -474,11 +474,20 @@ public class InvoiceServiceImpl implements InvoiceService {
         return InvoiceResponse.fromEntity(invoice);
     }
 
+    private Invoice resolveInvoice(String identifier) {
+        try {
+            UUID uuid = UUID.fromString(identifier);
+            return invoiceRepository.findById(uuid)
+                    .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", identifier));
+        } catch (IllegalArgumentException e) {
+            return invoiceRepository.findByInvoiceNumber(identifier)
+                    .orElseThrow(() -> new ResourceNotFoundException("Invoice", "invoiceNumber", identifier));
+        }
+    }
+
     @Override
-    public InvoiceResponse getInvoiceById(UUID id) {
-        Invoice invoice = invoiceRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", id));
-        return InvoiceResponse.fromEntity(invoice);
+    public InvoiceResponse getInvoiceById(String id) {
+        return InvoiceResponse.fromEntity(resolveInvoice(id));
     }
 
     @Override
@@ -567,9 +576,8 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     @Override
     @Transactional
-    public InvoiceResponse sendInvoice(UUID invoiceId, String email) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
+    public InvoiceResponse sendInvoice(String invoiceId, String email) {
+        Invoice invoice = resolveInvoice(invoiceId);
 
         // Block sending invoices that are still in DRAFT (pending approval)
         if (invoice.getStatus() == InvoiceStatus.DRAFT) {
@@ -610,9 +618,8 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     @Override
     @Transactional
-    public InvoiceResponse markAsViewed(UUID invoiceId) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
+    public InvoiceResponse markAsViewed(String invoiceId) {
+        Invoice invoice = resolveInvoice(invoiceId);
 
         invoice.markAsViewed();
         invoice = invoiceRepository.save(invoice);
@@ -622,9 +629,8 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     @Override
     @Transactional
-    public InvoiceResponse recordPayment(UUID invoiceId, BigDecimal amount, Long paymentMethodId, String externalReference) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
+    public InvoiceResponse recordPayment(String invoiceId, BigDecimal amount, Long paymentMethodId, String externalReference) {
+        Invoice invoice = resolveInvoice(invoiceId);
 
         if (invoice.getStatus() == InvoiceStatus.CANCELLED) {
             throw new ValidationException("Cannot record payment for cancelled invoice");
@@ -710,9 +716,8 @@ public class InvoiceServiceImpl implements InvoiceService {
 
     @Override
     @Transactional
-    public InvoiceResponse cancelInvoice(UUID invoiceId) {
-        Invoice invoice = invoiceRepository.findById(invoiceId)
-                .orElseThrow(() -> new ResourceNotFoundException("Invoice", "id", invoiceId));
+    public InvoiceResponse cancelInvoice(String invoiceId) {
+        Invoice invoice = resolveInvoice(invoiceId);
 
         if (invoice.getStatus() == InvoiceStatus.PAID) {
             throw new ValidationException("Cannot cancel a paid invoice");

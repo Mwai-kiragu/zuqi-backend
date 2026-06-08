@@ -11,9 +11,9 @@ import java.util.UUID;
 
 public interface SalesReturnService {
     SalesReturnResponse create(CreateSalesReturnRequest request, UUID createdById);
-    SalesReturnResponse confirm(UUID id);
-    SalesReturnResponse cancel(UUID id);
-    SalesReturnResponse getById(UUID id);
+    SalesReturnResponse confirm(String id);
+    SalesReturnResponse cancel(String id);
+    SalesReturnResponse getById(String id);
     Page<SalesReturnResponse> getAll(Pageable pageable);
     SalesReturnStatsResponse getStats();
     List<SalesReturnResponse> getAllForExport();

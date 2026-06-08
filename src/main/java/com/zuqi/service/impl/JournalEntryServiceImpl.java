@@ -46,11 +46,15 @@ public class JournalEntryServiceImpl implements JournalEntryService {
     public Page<JournalEntryResponse> getAll(UUID distributorId, UUID merchantId, JournalEntryStatus status,
                                               LocalDate fromDate, LocalDate toDate,
                                               JournalSourceModule sourceModule, Pageable pageable) {
+        if (distributorId != null) {
+            return journalEntryRepository.findByFilters(distributorId, status, fromDate, toDate, sourceModule, pageable)
+                    .map(JournalEntryResponse::fromEntity);
+        }
         if (merchantId != null) {
             return journalEntryRepository.findByMerchantIdWithFilters(merchantId, status, fromDate, toDate, sourceModule, pageable)
                     .map(JournalEntryResponse::fromEntity);
         }
-        return journalEntryRepository.findByFilters(distributorId, status, fromDate, toDate, sourceModule, pageable)
+        return journalEntryRepository.findByFilters(null, status, fromDate, toDate, sourceModule, pageable)
                 .map(JournalEntryResponse::fromEntity);
     }
 

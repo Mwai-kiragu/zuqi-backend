@@ -2,6 +2,8 @@ package com.zuqi.service.impl;
 
 import com.zuqi.api.dto.returns.*;
 import com.zuqi.domain.distributor.Distributor;
+import com.zuqi.domain.procurement.GoodsReceiptNote;
+import com.zuqi.domain.procurement.GrnStatus;
 import com.zuqi.domain.product.Product;
 import com.zuqi.domain.returns.*;
 import com.zuqi.domain.supplier.Supplier;
@@ -22,7 +24,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -31,14 +35,15 @@ import java.util.stream.Collectors;
 @Slf4j
 public class PurchaseReturnServiceImpl implements PurchaseReturnService {
 
-    private final PurchaseReturnRepository purchaseReturnRepository;
-    private final SupplierRepository        supplierRepository;
-    private final SupplierBillRepository    supplierBillRepository;
-    private final ProductRepository         productRepository;
-    private final UserRepository            userRepository;
-    private final DistributorRepository     distributorRepository;
-    private final SecurityUtils             securityUtils;
-    private final ActivityLogService        activityLogService;
+    private final PurchaseReturnRepository    purchaseReturnRepository;
+    private final SupplierRepository          supplierRepository;
+    private final SupplierBillRepository      supplierBillRepository;
+    private final ProductRepository           productRepository;
+    private final UserRepository              userRepository;
+    private final DistributorRepository       distributorRepository;
+    private final GoodsReceiptNoteRepository  grnRepository;
+    private final SecurityUtils               securityUtils;
+    private final ActivityLogService          activityLogService;
 
     @Override
     @Transactional
@@ -58,6 +63,56 @@ public class PurchaseReturnServiceImpl implements PurchaseReturnService {
                         .orElseThrow(() -> new ResourceNotFoundException("SupplierBill", "id", request.getSupplierBillId()))
                 : null;
 
+        GoodsReceiptNote grn = null;
+        if (request.getGrnId() != null) {
+            grn = grnRepository.findById(request.getGrnId())
+                    .orElseThrow(() -> new ResourceNotFoundException("GoodsReceiptNote", "id", request.getGrnId()));
+            if (grn.getStatus() != GrnStatus.CONFIRMED) {
+                throw new ValidationException("Only goods received on a CONFIRMED GRN can be returned");
+            }
+            if (grn.getSupplier() != null && !grn.getSupplier().getId().equals(supplier.getId())) {
+                throw new ValidationException("The selected GRN does not belong to the chosen supplier");
+            }
+        }
+
+        // Validate return quantities against GRN received quantities
+        if (grn != null) {
+            // Build map: productId → net receivable quantity (received − rejected) from GRN
+            Map<UUID, BigDecimal> grnReceived = new HashMap<>();
+            for (Map<String, Object> item : grn.getItems()) {
+                Object pidObj = item.get("productId");
+                Object recvObj = item.get("receivedQuantity");
+                Object rejObj  = item.get("rejectedQuantity");
+                if (pidObj == null || recvObj == null) continue;
+                UUID pid    = UUID.fromString(pidObj.toString());
+                BigDecimal received = new BigDecimal(recvObj.toString());
+                BigDecimal rejected = rejObj != null ? new BigDecimal(rejObj.toString()) : BigDecimal.ZERO;
+                grnReceived.merge(pid, received.subtract(rejected), BigDecimal::add);
+            }
+
+            // Build map: productId → already returned quantity (non-CANCELLED) against this GRN
+            Map<UUID, BigDecimal> alreadyReturned = new HashMap<>();
+            purchaseReturnRepository.sumReturnedQuantitiesByGrnId(grn.getId())
+                    .forEach(row -> alreadyReturned.put((UUID) row[0], (BigDecimal) row[1]));
+
+            // Validate each line
+            for (CreatePurchaseReturnRequest.LineItem line : request.getItems()) {
+                BigDecimal grnQty      = grnReceived.getOrDefault(line.getProductId(), BigDecimal.ZERO);
+                BigDecimal returnedQty = alreadyReturned.getOrDefault(line.getProductId(), BigDecimal.ZERO);
+                BigDecimal available   = grnQty.subtract(returnedQty);
+                if (line.getQuantity().compareTo(available) > 0) {
+                    Product p = productRepository.findById(line.getProductId()).orElse(null);
+                    String name = p != null ? p.getName() : line.getProductId().toString();
+                    throw new ValidationException(
+                        "Return quantity " + line.getQuantity().stripTrailingZeros().toPlainString() +
+                        " for '" + name + "' exceeds the returnable quantity of " +
+                        available.stripTrailingZeros().toPlainString() +
+                        " (received from GRN " + grn.getGrnNumber() + ")."
+                    );
+                }
+            }
+        }
+
         User createdBy = createdById != null
                 ? userRepository.findById(createdById).orElse(null)
                 : null;
@@ -67,6 +122,7 @@ public class PurchaseReturnServiceImpl implements PurchaseReturnService {
                 .distributor(distributor)
                 .supplier(supplier)
                 .supplierBill(bill)
+                .grn(grn)
                 .reason(request.getReason())
                 .status(ReturnStatus.DRAFT)
                 .totalAmount(BigDecimal.ZERO)
@@ -178,6 +234,8 @@ public class PurchaseReturnServiceImpl implements PurchaseReturnService {
                 .supplierId(pr.getSupplier().getId())
                 .supplierName(pr.getSupplier().getName())
                 .supplierBillId(pr.getSupplierBill() != null ? pr.getSupplierBill().getId() : null)
+                .grnId(pr.getGrn() != null ? pr.getGrn().getId() : null)
+                .grnNumber(pr.getGrn() != null ? pr.getGrn().getGrnNumber() : null)
                 .reason(pr.getReason())
                 .status(pr.getStatus().name())
                 .totalAmount(pr.getTotalAmount())

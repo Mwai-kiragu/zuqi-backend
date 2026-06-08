@@ -40,6 +40,7 @@ public class SecurityConfig {
 
     private static final String[] PUBLIC_ENDPOINTS = {
             "/v1/auth/**",
+            "/v1/po-confirm/**",
             "/v1/invoices/public/**",
             "/v1/payments/methods",
             "/v1/mpesa/callback",

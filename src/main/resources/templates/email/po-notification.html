@@ -160,15 +160,50 @@
                 <!-- ── CALL TO ACTION ── -->
                 <tr>
                     <td style="padding:24px 40px 32px 40px;">
-                        <div style="background-color:#f0f7ff;border:1px solid #c2d9f5;border-radius:6px;padding:20px;">
-                            <p style="margin:0 0 8px 0;font-size:14px;font-weight:700;color:#1565c0;">Please Confirm Availability</p>
-                            <p style="margin:0 0 16px 0;font-size:13px;color:#444444;line-height:1.6;">
-                                Please review this purchase order and confirm that you can supply the requested goods
-                                by the expected delivery date. Reply to this email or contact
-                                <strong th:text="${distributorName}">the company</strong> to acknowledge.
+                        <div style="background-color:#f0f7ff;border:1px solid #c2d9f5;border-radius:6px;padding:24px;">
+                            <p style="margin:0 0 6px 0;font-size:14px;font-weight:700;color:#1565c0;">Action Required: Confirm Availability</p>
+                            <p style="margin:0 0 20px 0;font-size:13px;color:#444444;line-height:1.6;">
+                                Please review this purchase order and let us know if you can fulfil the request
+                                by the expected delivery date. Click one of the buttons below to respond.
                             </p>
-                            <p style="margin:0;font-size:12px;color:#888888;">
-                                PO Reference: <strong th:text="${poNumber}">PO-001</strong>
+                            <!-- Action buttons — visible when tokens are provided -->
+                            <table th:if="${confirmUrl != null}" role="presentation" cellspacing="0" cellpadding="0" width="100%">
+                                <tr>
+                                    <td style="padding-bottom:10px;">
+                                        <a th:href="${confirmUrl}"
+                                           href="#"
+                                           style="display:block;background-color:#2e7d32;color:#ffffff;text-decoration:none;
+                                                  text-align:center;padding:12px 0;border-radius:5px;
+                                                  font-size:14px;font-weight:700;letter-spacing:0.5px;">
+                                            ✓ &nbsp; Confirm Availability — I can fulfil this order
+                                        </a>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding-bottom:10px;">
+                                        <a th:href="${partialUrl}"
+                                           href="#"
+                                           style="display:block;background-color:#e65100;color:#ffffff;text-decoration:none;
+                                                  text-align:center;padding:12px 0;border-radius:5px;
+                                                  font-size:14px;font-weight:700;letter-spacing:0.5px;">
+                                            ◑ &nbsp; Partial Fulfillment — I can supply some items
+                                        </a>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <a th:href="${declineUrl}"
+                                           href="#"
+                                           style="display:block;background-color:#c62828;color:#ffffff;text-decoration:none;
+                                                  text-align:center;padding:12px 0;border-radius:5px;
+                                                  font-size:14px;font-weight:700;letter-spacing:0.5px;">
+                                            ✕ &nbsp; Cannot Fulfill — I am unable to supply this order
+                                        </a>
+                                    </td>
+                                </tr>
+                            </table>
+                            <p style="margin:16px 0 0 0;font-size:12px;color:#888888;text-align:center;">
+                                These links expire in 7 days &bull; PO Reference: <strong th:text="${poNumber}">PO-001</strong>
                             </p>
                         </div>
                     </td>

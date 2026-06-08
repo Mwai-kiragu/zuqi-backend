@@ -14,6 +14,7 @@ public class CreatePurchaseReturnRequest {
     @NotNull
     private UUID supplierId;
     private UUID supplierBillId;
+    private UUID grnId;
     private String reason;
     @NotEmpty @Valid
     private List<LineItem> items;

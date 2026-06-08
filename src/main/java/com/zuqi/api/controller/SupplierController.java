@@ -44,7 +44,7 @@ public class SupplierController {
     @GetMapping("/{id}")
     @Operation(summary = "Get supplier by ID")
     public ResponseEntity<ApiResponse<SupplierResponse>> getSupplierById(
-            @Parameter(description = "Supplier ID") @PathVariable UUID id) {
+            @Parameter(description = "Supplier ID") @PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success(supplierService.getSupplierById(id)));
     }
 
@@ -60,7 +60,7 @@ public class SupplierController {
     @PutMapping("/{id}")
     @Operation(summary = "Update supplier", description = "Updates an existing supplier")
     public ResponseEntity<ApiResponse<SupplierResponse>> updateSupplier(
-            @Parameter(description = "Supplier ID") @PathVariable UUID id,
+            @Parameter(description = "Supplier ID") @PathVariable String id,
             @Valid @RequestBody SupplierRequest request) {
         return ResponseEntity.ok(ApiResponse.success("Supplier updated successfully", supplierService.updateSupplier(id, request)));
     }
@@ -68,14 +68,14 @@ public class SupplierController {
     @PatchMapping("/{id}/verify")
     @Operation(summary = "Verify supplier", description = "Marks a supplier as KYC-verified")
     public ResponseEntity<ApiResponse<SupplierResponse>> verifySupplier(
-            @Parameter(description = "Supplier ID") @PathVariable UUID id) {
+            @Parameter(description = "Supplier ID") @PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success("Supplier verified successfully", supplierService.verifySupplier(id)));
     }
 
     @PostMapping("/{id}/blacklist")
     @Operation(summary = "Blacklist supplier", description = "Blacklists a supplier with a reason")
     public ResponseEntity<ApiResponse<SupplierResponse>> blacklistSupplier(
-            @Parameter(description = "Supplier ID") @PathVariable UUID id,
+            @Parameter(description = "Supplier ID") @PathVariable String id,
             @RequestBody @Valid BlacklistBody body,
             @AuthenticationPrincipal User currentUser) {
         return ResponseEntity.ok(ApiResponse.success("Supplier blacklisted successfully",
@@ -85,7 +85,7 @@ public class SupplierController {
     @PostMapping("/{id}/unblacklist")
     @Operation(summary = "Remove supplier from blacklist")
     public ResponseEntity<ApiResponse<SupplierResponse>> unblacklistSupplier(
-            @Parameter(description = "Supplier ID") @PathVariable UUID id) {
+            @Parameter(description = "Supplier ID") @PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success("Supplier removed from blacklist", supplierService.unblacklistSupplier(id)));
     }
 
@@ -99,7 +99,7 @@ public class SupplierController {
     @DeleteMapping("/{id}")
     @Operation(summary = "Deactivate supplier", description = "Deactivates a supplier (soft delete)")
     public ResponseEntity<ApiResponse<Void>> deactivateSupplier(
-            @Parameter(description = "Supplier ID") @PathVariable UUID id,
+            @Parameter(description = "Supplier ID") @PathVariable String id,
             @Valid @RequestBody DeactivateRequest request,
             @AuthenticationPrincipal User currentUser) {
         supplierService.deactivateSupplier(id, request.getReason(), currentUser);
@@ -109,7 +109,7 @@ public class SupplierController {
     @PostMapping("/{id}/activate")
     @Operation(summary = "Activate supplier", description = "Reactivates a deactivated supplier")
     public ResponseEntity<ApiResponse<Void>> activateSupplier(
-            @Parameter(description = "Supplier ID") @PathVariable UUID id) {
+            @Parameter(description = "Supplier ID") @PathVariable String id) {
         supplierService.activateSupplier(id);
         return ResponseEntity.ok(ApiResponse.success("Supplier activated successfully"));
     }

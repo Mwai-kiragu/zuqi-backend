@@ -1,6 +1,7 @@
 package com.zuqi.domain.returns;
 
 import com.zuqi.domain.distributor.Distributor;
+import com.zuqi.domain.procurement.GoodsReceiptNote;
 import com.zuqi.domain.supplier.Supplier;
 import com.zuqi.domain.supplier.SupplierBill;
 import com.zuqi.domain.user.User;
@@ -47,6 +48,10 @@ public class PurchaseReturn {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "supplier_bill_id")
     private SupplierBill supplierBill;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "grn_id")
+    private GoodsReceiptNote grn;
 
     @Column(columnDefinition = "TEXT")
     private String reason;

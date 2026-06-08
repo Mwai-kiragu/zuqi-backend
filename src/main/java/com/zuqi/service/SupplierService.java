@@ -17,21 +17,21 @@ public interface SupplierService {
 
     Page<SupplierResponse> getBlacklistedSuppliers(Pageable pageable);
 
-    SupplierResponse getSupplierById(UUID id);
+    SupplierResponse getSupplierById(String id);
 
     SupplierResponse createSupplier(SupplierRequest request);
 
-    SupplierResponse updateSupplier(UUID id, SupplierRequest request);
+    SupplierResponse updateSupplier(String id, SupplierRequest request);
 
-    SupplierResponse verifySupplier(UUID id);
+    SupplierResponse verifySupplier(String id);
 
-    SupplierResponse blacklistSupplier(UUID id, String reason, User currentUser);
+    SupplierResponse blacklistSupplier(String id, String reason, User currentUser);
 
-    SupplierResponse unblacklistSupplier(UUID id);
+    SupplierResponse unblacklistSupplier(String id);
 
-    void deactivateSupplier(UUID id, String reason, User currentUser);
+    void deactivateSupplier(String id, String reason, User currentUser);
 
-    void activateSupplier(UUID id);
+    void activateSupplier(String id);
 
     List<SupplierCategoryResponse> getAllCategories();
 
