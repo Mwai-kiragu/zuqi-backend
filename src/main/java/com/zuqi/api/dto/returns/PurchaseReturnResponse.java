@@ -17,6 +17,8 @@ public class PurchaseReturnResponse {
     private UUID supplierId;
     private String supplierName;
     private UUID supplierBillId;
+    private UUID grnId;
+    private String grnNumber;
     private String reason;
     private String status;
     private BigDecimal totalAmount;

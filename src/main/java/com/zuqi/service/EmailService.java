@@ -28,5 +28,5 @@ public interface EmailService {
     void sendDataExportEmail(String to, String name, String entityType, int recordCount,
                              String csvContent, String attachmentFilename);
 
-    void sendPurchaseOrderEmail(PurchaseOrder po, String distributorName);
+    void sendPurchaseOrderEmail(PurchaseOrder po, String distributorName, java.util.Map<String, String> confirmationTokens);
 }

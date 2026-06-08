@@ -23,6 +23,9 @@ public class SalesReturnResponse {
     private String status;
     private BigDecimal totalAmount;
     private String refundMethod;
+    private UUID posTransactionId;
+    private UUID creditNoteId;
+    private String creditNoteNumber;
     private List<ItemResponse> items;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

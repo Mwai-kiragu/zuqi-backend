@@ -15,6 +15,7 @@ import com.zuqi.domain.order.Order;
 import com.zuqi.domain.product.Product;
 import com.zuqi.domain.returns.*;
 import com.zuqi.domain.user.User;
+import com.zuqi.repository.CreditNoteRepository;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
@@ -52,6 +53,7 @@ public class SalesReturnServiceImpl implements SalesReturnService {
     private final StockRepository          stockRepository;
     private final StockMovementRepository  stockMovementRepository;
     private final WarehouseRepository      warehouseRepository;
+    private final CreditNoteRepository     creditNoteRepository;
     private final SecurityUtils            securityUtils;
     private final ActivityLogService       activityLogService;
 
@@ -201,7 +203,7 @@ public class SalesReturnServiceImpl implements SalesReturnService {
 
     @Override
     @Transactional
-    public SalesReturnResponse confirm(UUID id) {
+    public SalesReturnResponse confirm(String id) {
         SalesReturn sr = findOrThrow(id);
         if (sr.getStatus() != ReturnStatus.DRAFT && sr.getStatus() != ReturnStatus.PENDING_APPROVAL) {
             throw new ValidationException("Only DRAFT or PENDING_APPROVAL returns can be confirmed");
@@ -232,9 +234,9 @@ public class SalesReturnServiceImpl implements SalesReturnService {
                 StockMovement movement = StockMovement.builder()
                         .warehouse(warehouse)
                         .product(product)
-                        .movementType(StockMovement.MovementType.IN)
+                        .movementType(StockMovement.MovementType.RETURN_IN)
                         .quantity(item.getQuantity())
-                        .referenceType("RETURN")
+                        .referenceType("SALES_RETURN")
                         .referenceId(sr.getId())
                         .notes("Sales return " + sr.getReturnNumber())
                         .build();
@@ -257,23 +259,79 @@ public class SalesReturnServiceImpl implements SalesReturnService {
             );
         }
 
-        // Apply credit note: reduce the invoice total by the returned amount
-        if (sr.getInvoice() != null) {
-            Invoice invoice = sr.getInvoice();
-            if (invoice.getStatus() != InvoiceStatus.CANCELLED) {
-                invoice.applyCredit(sr.getTotalAmount());
-                invoiceRepository.save(invoice);
-                log.info("Invoice {} total reduced by KES {} (credit note {}) — new status: {}",
-                        invoice.getInvoiceNumber(), sr.getTotalAmount(), sr.getReturnNumber(), invoice.getStatus());
+        // Apply credit to linked invoice if it still has an outstanding balance.
+        // If the invoice is already PAID, leave the credit note OPEN for future use.
+        Invoice linkedInvoice = sr.getInvoice();
+        BigDecimal returnAmount   = sr.getTotalAmount();
+        BigDecimal appliedAmount  = BigDecimal.ZERO;
+
+        if (linkedInvoice != null
+                && linkedInvoice.getStatus() != InvoiceStatus.CANCELLED
+                && linkedInvoice.getStatus() != InvoiceStatus.PAID) {
+
+            BigDecimal balanceDue = linkedInvoice.getBalanceDue() != null
+                    ? linkedInvoice.getBalanceDue() : BigDecimal.ZERO;
+            BigDecimal creditToApply = returnAmount.min(balanceDue);
+
+            if (creditToApply.compareTo(BigDecimal.ZERO) > 0) {
+                linkedInvoice.applyCredit(creditToApply);
+                invoiceRepository.save(linkedInvoice);
+                appliedAmount = creditToApply;
+                log.info("Invoice {} reduced by KES {} via return {}",
+                        linkedInvoice.getInvoiceNumber(), creditToApply, sr.getReturnNumber());
             }
+        } else if (linkedInvoice != null && linkedInvoice.getStatus() == InvoiceStatus.PAID) {
+            log.info("Invoice {} already PAID — credit note issued as OPEN for future use",
+                    linkedInvoice.getInvoiceNumber());
         }
+
+        // Determine credit note status based on how much was applied
+        BigDecimal remainingCredit = returnAmount.subtract(appliedAmount);
+        CreditNoteStatus cnStatus;
+        if (remainingCredit.compareTo(BigDecimal.ZERO) <= 0) {
+            cnStatus = CreditNoteStatus.FULLY_APPLIED;
+        } else if (appliedAmount.compareTo(BigDecimal.ZERO) > 0) {
+            cnStatus = CreditNoteStatus.PARTIALLY_APPLIED;
+        } else {
+            cnStatus = CreditNoteStatus.OPEN;
+        }
+
+        CreditNote creditNote = CreditNote.builder()
+                .creditNoteNumber(generateNumber("CN"))
+                .distributor(sr.getDistributor())
+                .customer(sr.getCustomer())
+                .salesReturn(saved)
+                .sourceInvoice(linkedInvoice)
+                .amount(returnAmount)
+                .remainingAmount(remainingCredit)
+                .status(cnStatus)
+                .notes("Auto-generated on confirmation of sales return " + sr.getReturnNumber())
+                .createdBy(securityUtils.getCurrentUser())
+                .build();
+        creditNoteRepository.save(creditNote);
+
+        // Record the application against the invoice when credit was partially or fully used
+        if (appliedAmount.compareTo(BigDecimal.ZERO) > 0) {
+            CreditNoteApplication app = CreditNoteApplication.builder()
+                    .creditNote(creditNote)
+                    .invoice(linkedInvoice)
+                    .amountApplied(appliedAmount)
+                    .appliedBy(securityUtils.getCurrentUser())
+                    .build();
+            creditNote.getApplications().add(app);
+            creditNoteRepository.save(creditNote);
+        }
+
+        log.info("Credit note {} ({}) issued for return {} — KES {} applied, KES {} remaining",
+                creditNote.getCreditNoteNumber(), cnStatus, sr.getReturnNumber(),
+                appliedAmount, remainingCredit);
 
         return toResponse(saved);
     }
 
     @Override
     @Transactional
-    public SalesReturnResponse cancel(UUID id) {
+    public SalesReturnResponse cancel(String id) {
         SalesReturn sr = findOrThrow(id);
         if (sr.getStatus() == ReturnStatus.CONFIRMED) {
             throw new ValidationException("Confirmed returns cannot be cancelled");
@@ -293,7 +351,7 @@ public class SalesReturnServiceImpl implements SalesReturnService {
     }
 
     @Override
-    public SalesReturnResponse getById(UUID id) {
+    public SalesReturnResponse getById(String id) {
         return toResponse(findOrThrow(id));
     }
 
@@ -361,9 +419,15 @@ public class SalesReturnServiceImpl implements SalesReturnService {
                 .stream().map(this::toResponse).collect(java.util.stream.Collectors.toList());
     }
 
-    private SalesReturn findOrThrow(UUID id) {
-        return salesReturnRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("SalesReturn", "id", id));
+    private SalesReturn findOrThrow(String identifier) {
+        try {
+            UUID uuid = UUID.fromString(identifier);
+            return salesReturnRepository.findById(uuid)
+                    .orElseThrow(() -> new ResourceNotFoundException("SalesReturn", "id", identifier));
+        } catch (IllegalArgumentException e) {
+            return salesReturnRepository.findByReturnNumber(identifier)
+                    .orElseThrow(() -> new ResourceNotFoundException("SalesReturn", "returnNumber", identifier));
+        }
     }
 
     /** Returns the warehouse to use for stock restoration: order warehouse → fallback to first distributor warehouse. */
@@ -401,6 +465,9 @@ public class SalesReturnServiceImpl implements SalesReturnService {
                         .reason(i.getReason())
                         .build())
                 .collect(Collectors.toList());
+        // Resolve linked credit note (if confirmed)
+        java.util.Optional<CreditNote> cnOpt = creditNoteRepository.findBySalesReturnId(sr.getId());
+
         return SalesReturnResponse.builder()
                 .id(sr.getId())
                 .returnNumber(sr.getReturnNumber())
@@ -414,6 +481,9 @@ public class SalesReturnServiceImpl implements SalesReturnService {
                 .status(sr.getStatus().name())
                 .totalAmount(sr.getTotalAmount())
                 .refundMethod(sr.getRefundMethod())
+                .posTransactionId(sr.getPosTransactionId())
+                .creditNoteId(cnOpt.map(CreditNote::getId).orElse(null))
+                .creditNoteNumber(cnOpt.map(CreditNote::getCreditNoteNumber).orElse(null))
                 .items(items)
                 .createdAt(sr.getCreatedAt())
                 .updatedAt(sr.getUpdatedAt())

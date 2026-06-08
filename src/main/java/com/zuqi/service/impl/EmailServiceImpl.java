@@ -178,7 +178,7 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     @Async
-    public void sendPurchaseOrderEmail(PurchaseOrder po, String distributorName) {
+    public void sendPurchaseOrderEmail(PurchaseOrder po, String distributorName, java.util.Map<String, String> confirmationTokens) {
         if (po.getSupplier() == null || po.getSupplier().getEmail() == null || po.getSupplier().getEmail().isBlank()) {
             log.info("PO email skipped — supplier {} has no email address", po.getSupplier() != null ? po.getSupplier().getId() : "null");
             return;
@@ -189,6 +189,7 @@ public class EmailServiceImpl implements EmailService {
         }
 
         try {
+            String frontendBase = appConfig.getUrl();
             Map<String, Object> variables = new HashMap<>();
             variables.put("poNumber", po.getPoNumber());
             variables.put("supplierName", po.getSupplier().getName());
@@ -201,6 +202,12 @@ public class EmailServiceImpl implements EmailService {
             variables.put("items", po.getItems() != null ? po.getItems() : java.util.Collections.emptyList());
             variables.put("notes", po.getNotes());
             variables.put("companyName", emailConfig.getFromName());
+
+            if (confirmationTokens != null) {
+                variables.put("confirmUrl",  frontendBase + "/po-confirm/" + confirmationTokens.getOrDefault("CONFIRM", ""));
+                variables.put("declineUrl",  frontendBase + "/po-confirm/" + confirmationTokens.getOrDefault("DECLINE", ""));
+                variables.put("partialUrl",  frontendBase + "/po-confirm/" + confirmationTokens.getOrDefault("PARTIAL", ""));
+            }
 
             sendTemplatedEmail(
                     po.getSupplier().getEmail(),

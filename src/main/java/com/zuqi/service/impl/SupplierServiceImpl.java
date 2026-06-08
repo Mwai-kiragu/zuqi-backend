@@ -106,7 +106,7 @@ public class SupplierServiceImpl implements SupplierService {
 
     @Override
     @Transactional(readOnly = true)
-    public SupplierResponse getSupplierById(UUID id) {
+    public SupplierResponse getSupplierById(String id) {
         return SupplierResponse.fromEntity(findById(id));
     }
 
@@ -202,7 +202,7 @@ public class SupplierServiceImpl implements SupplierService {
 
     @Override
     @Transactional
-    public SupplierResponse updateSupplier(UUID id, SupplierRequest request) {
+    public SupplierResponse updateSupplier(String id, SupplierRequest request) {
         Supplier supplier = findById(id);
 
         if (!supplier.getPhone().equals(request.getPhone()) && supplierRepository.existsByPhone(request.getPhone())) {
@@ -222,7 +222,7 @@ public class SupplierServiceImpl implements SupplierService {
 
         if (needsApproval && currentUserId != null) {
             boolean hasPending = !approvalRequestRepository
-                    .findByEntityTypeAndEntityIdAndStatus("SUPPLIER_UPDATE", id, ApprovalStatus.PENDING)
+                    .findByEntityTypeAndEntityIdAndStatus("SUPPLIER_UPDATE", supplier.getId(), ApprovalStatus.PENDING)
                     .isEmpty();
             if (hasPending) {
                 throw new ValidationException("This supplier already has a pending approval request. Please wait for it to be resolved before submitting new changes.");
@@ -315,7 +315,7 @@ public class SupplierServiceImpl implements SupplierService {
 
     @Override
     @Transactional
-    public SupplierResponse verifySupplier(UUID id) {
+    public SupplierResponse verifySupplier(String id) {
         Supplier supplier = findById(id);
         supplier.setVerified(true);
         return SupplierResponse.fromEntity(supplierRepository.save(supplier));
@@ -323,7 +323,7 @@ public class SupplierServiceImpl implements SupplierService {
 
     @Override
     @Transactional
-    public SupplierResponse blacklistSupplier(UUID id, String reason, User currentUser) {
+    public SupplierResponse blacklistSupplier(String id, String reason, User currentUser) {
         Supplier supplier = findById(id);
         supplier.setBlacklisted(true);
         supplier.setBlacklistedReason(reason);
@@ -340,7 +340,7 @@ public class SupplierServiceImpl implements SupplierService {
 
     @Override
     @Transactional
-    public SupplierResponse unblacklistSupplier(UUID id) {
+    public SupplierResponse unblacklistSupplier(String id) {
         Supplier supplier = findById(id);
         supplier.setBlacklisted(false);
         supplier.setBlacklistedReason(null);
@@ -360,7 +360,7 @@ public class SupplierServiceImpl implements SupplierService {
 
     @Override
     @Transactional
-    public void deactivateSupplier(UUID id, String reason, User currentUser) {
+    public void deactivateSupplier(String id, String reason, User currentUser) {
         Supplier supplier = findById(id);
         supplier.setActive(false);
         supplier.setDeactivationReason(reason);
@@ -379,7 +379,7 @@ public class SupplierServiceImpl implements SupplierService {
 
     @Override
     @Transactional
-    public void activateSupplier(UUID id) {
+    public void activateSupplier(String id) {
         Supplier supplier = findById(id);
         supplier.setActive(true);
         supplier.setDeactivationReason(null);
@@ -437,8 +437,14 @@ public class SupplierServiceImpl implements SupplierService {
         categoryRepository.delete(category);
     }
 
-    private Supplier findById(UUID id) {
-        return supplierRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Supplier", "id", id.toString()));
+    private Supplier findById(String identifier) {
+        try {
+            UUID uuid = UUID.fromString(identifier);
+            return supplierRepository.findById(uuid)
+                    .orElseThrow(() -> new ResourceNotFoundException("Supplier", "id", identifier));
+        } catch (IllegalArgumentException e) {
+            return supplierRepository.findBySupplierCode(identifier)
+                    .orElseThrow(() -> new ResourceNotFoundException("Supplier", "supplierCode", identifier));
+        }
     }
 }

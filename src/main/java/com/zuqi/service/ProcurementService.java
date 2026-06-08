@@ -17,34 +17,34 @@ public interface ProcurementService {
     // Purchase Requisitions
     Page<PurchaseRequisitionResponse> getPurchaseRequisitions(UUID distributorId, PrStatus status, UUID requestedById, Pageable pageable);
 
-    PurchaseRequisitionResponse getPurchaseRequisitionById(UUID id);
+    PurchaseRequisitionResponse getPurchaseRequisitionById(String id);
 
     PurchaseRequisitionResponse createPurchaseRequisition(PurchaseRequisitionRequest request, User currentUser);
 
-    PurchaseRequisitionResponse submitPurchaseRequisition(UUID id, User currentUser);
+    PurchaseRequisitionResponse submitPurchaseRequisition(String id, User currentUser);
 
-    PurchaseRequisitionResponse approvePurchaseRequisition(UUID id, User currentUser);
+    PurchaseRequisitionResponse approvePurchaseRequisition(String id, User currentUser);
 
-    PurchaseRequisitionResponse rejectPurchaseRequisition(UUID id, String reason, User currentUser);
+    PurchaseRequisitionResponse rejectPurchaseRequisition(String id, String reason, User currentUser);
 
-    PurchaseRequisitionResponse updatePurchaseRequisition(UUID id, PurchaseRequisitionRequest request, User currentUser);
+    PurchaseRequisitionResponse updatePurchaseRequisition(String id, PurchaseRequisitionRequest request, User currentUser);
 
-    PurchaseRequisitionResponse resubmitPurchaseRequisition(UUID id, User currentUser);
+    PurchaseRequisitionResponse resubmitPurchaseRequisition(String id, User currentUser);
 
-    PurchaseRequisitionResponse cancelPurchaseRequisition(UUID id, User currentUser);
+    PurchaseRequisitionResponse cancelPurchaseRequisition(String id, User currentUser);
 
     // Purchase Orders
     Page<PurchaseOrderResponse> getPurchaseOrders(UUID distributorId, PoStatus status, UUID supplierId, Pageable pageable);
 
-    PurchaseOrderResponse getPurchaseOrderById(UUID id);
+    PurchaseOrderResponse getPurchaseOrderById(String id);
 
     PurchaseOrderResponse createPurchaseOrder(PurchaseOrderRequest request, User currentUser);
 
-    PurchaseOrderResponse sendPurchaseOrder(UUID id, User currentUser);
+    PurchaseOrderResponse sendPurchaseOrder(String id, User currentUser);
 
-    PurchaseOrderResponse confirmPurchaseOrder(UUID id, User currentUser);
+    PurchaseOrderResponse confirmPurchaseOrder(String id, User currentUser);
 
-    PurchaseOrderResponse cancelPurchaseOrder(UUID id, User currentUser);
+    PurchaseOrderResponse cancelPurchaseOrder(String id, User currentUser);
 
-    PurchaseOrderResponse convertPrToPo(UUID prId, PurchaseOrderRequest request, User currentUser);
+    PurchaseOrderResponse convertPrToPo(String prId, PurchaseOrderRequest request, User currentUser);
 }

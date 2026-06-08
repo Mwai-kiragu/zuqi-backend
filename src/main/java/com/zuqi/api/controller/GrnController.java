@@ -44,7 +44,7 @@ public class GrnController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Get a GRN by ID")
-    public ResponseEntity<ApiResponse<GrnResponse>> getById(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<GrnResponse>> getById(@PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success(grnService.getGrnById(id)));
     }
 
@@ -59,7 +59,7 @@ public class GrnController {
 
     @PostMapping("/{id}/confirm")
     @Operation(summary = "Confirm a GRN — updates stock quantities in the warehouse")
-    public ResponseEntity<ApiResponse<GrnResponse>> confirm(@PathVariable UUID id) {
+    public ResponseEntity<ApiResponse<GrnResponse>> confirm(@PathVariable String id) {
         User currentUser = securityUtils.getCurrentUser();
         return ResponseEntity.ok(ApiResponse.success(grnService.confirmGrn(id, currentUser)));
     }
@@ -67,10 +67,22 @@ public class GrnController {
     @PostMapping("/{id}/reject")
     @Operation(summary = "Reject a GRN delivery — no stock update")
     public ResponseEntity<ApiResponse<GrnResponse>> reject(
-            @PathVariable UUID id,
+            @PathVariable String id,
             @RequestBody Map<String, String> body) {
         User currentUser = securityUtils.getCurrentUser();
         String reason = body.getOrDefault("reason", "");
         return ResponseEntity.ok(ApiResponse.success(grnService.rejectGrn(id, reason, currentUser)));
+    }
+
+    @PatchMapping("/{id}/delivery-note")
+    @Operation(summary = "Update the supplier delivery note number on a DRAFT GRN")
+    public ResponseEntity<ApiResponse<GrnResponse>> updateDeliveryNote(
+            @PathVariable String id,
+            @RequestBody Map<String, String> body) {
+        User currentUser = securityUtils.getCurrentUser();
+        String deliveryNoteNumber = body.getOrDefault("deliveryNoteNumber", "");
+        return ResponseEntity.ok(ApiResponse.success(
+                "Delivery note updated",
+                grnService.updateDeliveryNote(id, deliveryNoteNumber, currentUser)));
     }
 }

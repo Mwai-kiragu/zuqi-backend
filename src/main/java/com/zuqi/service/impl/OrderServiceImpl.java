@@ -163,11 +163,20 @@ public class OrderServiceImpl implements OrderService {
                 .map(OrderResponse::fromEntity);
     }
 
+    private Order resolveOrder(String identifier) {
+        try {
+            UUID uuid = UUID.fromString(identifier);
+            return orderRepository.findById(uuid)
+                    .orElseThrow(() -> new ResourceNotFoundException("Order", "id", identifier));
+        } catch (IllegalArgumentException e) {
+            return orderRepository.findByOrderNumber(identifier)
+                    .orElseThrow(() -> new ResourceNotFoundException("Order", "orderNumber", identifier));
+        }
+    }
+
     @Override
-    public OrderResponse getOrderById(UUID id) {
-        Order order = orderRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Order", "id", id));
-        return OrderResponse.fromEntity(order);
+    public OrderResponse getOrderById(String id) {
+        return OrderResponse.fromEntity(resolveOrder(id));
     }
 
     @Override
@@ -385,9 +394,8 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
-    public OrderResponse updateOrder(UUID id, OrderRequest request) {
-        Order order = orderRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Order", "id", id));
+    public OrderResponse updateOrder(String id, OrderRequest request) {
+        Order order = resolveOrder(id);
 
         // Only allow updates for pending orders
         if (order.getStatus() != OrderStatus.PENDING) {
@@ -443,9 +451,8 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
-    public OrderResponse updateOrderStatus(UUID id, StatusUpdateRequest request, User currentUser) {
-        Order order = orderRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Order", "id", id));
+    public OrderResponse updateOrderStatus(String id, StatusUpdateRequest request, User currentUser) {
+        Order order = resolveOrder(id);
 
         OrderStatus currentStatus = order.getStatus();
         OrderStatus newStatus = request.getStatus();
@@ -486,9 +493,8 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
-    public OrderResponse cancelOrder(UUID id, String reason, User currentUser) {
-        Order order = orderRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Order", "id", id));
+    public OrderResponse cancelOrder(String id, String reason, User currentUser) {
+        Order order = resolveOrder(id);
 
         // Can only cancel pending, confirmed, or processing orders
         if (order.getStatus() == OrderStatus.DELIVERED || order.getStatus() == OrderStatus.CANCELLED) {
@@ -517,13 +523,9 @@ public class OrderServiceImpl implements OrderService {
     }
 
     @Override
-    public List<OrderStatusHistoryResponse> getOrderStatusHistory(UUID orderId) {
-        // Verify order exists
-        if (!orderRepository.existsById(orderId)) {
-            throw new ResourceNotFoundException("Order", "id", orderId);
-        }
-
-        return statusHistoryRepository.findByOrderIdOrderByCreatedAtDesc(orderId)
+    public List<OrderStatusHistoryResponse> getOrderStatusHistory(String orderId) {
+        Order order = resolveOrder(orderId);
+        return statusHistoryRepository.findByOrderIdOrderByCreatedAtDesc(order.getId())
                 .stream()
                 .map(OrderStatusHistoryResponse::fromEntity)
                 .toList();
@@ -544,9 +546,8 @@ public class OrderServiceImpl implements OrderService {
 
     @Override
     @Transactional
-    public OrderResponse assignDriver(UUID orderId, UUID driverId, String notes, User currentUser) {
-        Order order = orderRepository.findById(orderId)
-                .orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
+    public OrderResponse assignDriver(String orderId, UUID driverId, String notes, User currentUser) {
+        Order order = resolveOrder(orderId);
 
         User driver = userRepository.findById(driverId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", driverId));

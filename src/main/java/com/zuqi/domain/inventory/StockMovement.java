@@ -70,9 +70,10 @@ public class StockMovement {
     private LocalDateTime createdAt;
 
     public enum MovementType {
-        IN,          // Stock received
-        OUT,         // Stock dispatched
+        IN,          // Stock received from supplier (GRN)
+        OUT,         // Stock dispatched to customer
         ADJUSTMENT,  // Manual adjustment
-        TRANSFER     // Transfer between warehouses
+        TRANSFER,    // Transfer between warehouses
+        RETURN_IN    // Stock returned by customer (sales return)
     }
 }

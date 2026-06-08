@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -21,6 +22,8 @@ public interface SalesReturnRepository extends JpaRepository<SalesReturn, UUID> 
     Page<SalesReturn> findByDistributorMerchantId(UUID merchantId, Pageable pageable);
 
     boolean existsByReturnNumber(String returnNumber);
+
+    Optional<SalesReturn> findByReturnNumber(String returnNumber);
 
     // ── Stats aggregates ────────────────────────────────────────────────────
 

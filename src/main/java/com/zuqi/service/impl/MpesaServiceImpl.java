@@ -367,7 +367,7 @@ public class MpesaServiceImpl implements MpesaService {
             String receipt       = stkRequest.getMpesaReceiptNumber();
 
             if ("INVOICE".equalsIgnoreCase(referenceType)) {
-                invoiceService.recordPayment(UUID.fromString(referenceId), amount, mpesaMethodId, receipt);
+                invoiceService.recordPayment(referenceId, amount, mpesaMethodId, receipt);
                 log.info("Auto-reconciled invoice {} via M-Pesa receipt {}", referenceId, receipt);
 
             } else if ("ORDER".equalsIgnoreCase(referenceType)) {

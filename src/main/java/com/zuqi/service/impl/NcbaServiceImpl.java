@@ -302,7 +302,7 @@ public class NcbaServiceImpl implements NcbaService {
             String receipt       = stkRequest.getTransactionId();
 
             if ("INVOICE".equalsIgnoreCase(referenceType)) {
-                invoiceService.recordPayment(UUID.fromString(referenceId), amount, ncbaMethodId, receipt);
+                invoiceService.recordPayment(referenceId, amount, ncbaMethodId, receipt);
                 log.info("Auto-reconciled invoice {} via NCBA transactionId={}", referenceId, receipt);
 
             } else if ("ORDER".equalsIgnoreCase(referenceType)) {

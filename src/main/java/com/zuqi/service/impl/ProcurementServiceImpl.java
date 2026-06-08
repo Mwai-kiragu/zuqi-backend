@@ -24,6 +24,7 @@ import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.ApprovalService;
 import com.zuqi.service.ApprovalThresholdService;
 import com.zuqi.service.EmailService;
+import com.zuqi.service.PoSupplierConfirmationService;
 import com.zuqi.service.ProcurementService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -55,6 +56,7 @@ public class ProcurementServiceImpl implements ProcurementService {
     private final ApprovalService approvalService;
     private final EmailService emailService;
     private final ActivityLogService activityLogService;
+    private final PoSupplierConfirmationService supplierConfirmationService;
 
     private String generatePrNumber(UUID distributorId) {
         String initials = resolveInitials(distributorId);
@@ -113,8 +115,8 @@ public class ProcurementServiceImpl implements ProcurementService {
 
     @Override
     @Transactional(readOnly = true)
-    public PurchaseRequisitionResponse getPurchaseRequisitionById(UUID id) {
-        PurchaseRequisition pr = findPrById(id);
+    public PurchaseRequisitionResponse getPurchaseRequisitionById(String id) {
+        PurchaseRequisition pr = findPrByIdentifier(id);
         return PurchaseRequisitionResponse.fromEntity(pr, resolveDistributorName(pr.getDistributorId()));
     }
 
@@ -134,6 +136,8 @@ public class ProcurementServiceImpl implements ProcurementService {
                 .description(request.getDescription())
                 .justification(request.getJustification())
                 .expectedDeliveryDate(request.getExpectedDeliveryDate())
+                .preferredSupplierId(request.getPreferredSupplierId())
+                .preferredSupplierName(request.getPreferredSupplierName())
                 .items(itemsToMaps(request.getItems()))
                 .estimatedTotalAmount(calculateTotal(request.getItems()))
                 .build();
@@ -150,8 +154,8 @@ public class ProcurementServiceImpl implements ProcurementService {
 
     @Override
     @Transactional
-    public PurchaseRequisitionResponse submitPurchaseRequisition(UUID id, User currentUser) {
-        PurchaseRequisition pr = findPrById(id);
+    public PurchaseRequisitionResponse submitPurchaseRequisition(String id, User currentUser) {
+        PurchaseRequisition pr = findPrByIdentifier(id);
         if (pr.getStatus() != PrStatus.DRAFT) {
             throw new IllegalStateException("Only DRAFT requisitions can be submitted");
         }
@@ -180,8 +184,8 @@ public class ProcurementServiceImpl implements ProcurementService {
 
     @Override
     @Transactional
-    public PurchaseRequisitionResponse approvePurchaseRequisition(UUID id, User currentUser) {
-        PurchaseRequisition pr = findPrById(id);
+    public PurchaseRequisitionResponse approvePurchaseRequisition(String id, User currentUser) {
+        PurchaseRequisition pr = findPrByIdentifier(id);
         if (pr.getStatus() != PrStatus.SUBMITTED) {
             throw new IllegalStateException("Only SUBMITTED requisitions can be approved");
         }
@@ -200,8 +204,8 @@ public class ProcurementServiceImpl implements ProcurementService {
 
     @Override
     @Transactional
-    public PurchaseRequisitionResponse rejectPurchaseRequisition(UUID id, String reason, User currentUser) {
-        PurchaseRequisition pr = findPrById(id);
+    public PurchaseRequisitionResponse rejectPurchaseRequisition(String id, String reason, User currentUser) {
+        PurchaseRequisition pr = findPrByIdentifier(id);
         if (pr.getStatus() != PrStatus.SUBMITTED) {
             throw new IllegalStateException("Only SUBMITTED requisitions can be rejected");
         }
@@ -219,14 +223,16 @@ public class ProcurementServiceImpl implements ProcurementService {
 
     @Override
     @Transactional
-    public PurchaseRequisitionResponse updatePurchaseRequisition(UUID id, PurchaseRequisitionRequest request, User currentUser) {
-        PurchaseRequisition pr = findPrById(id);
+    public PurchaseRequisitionResponse updatePurchaseRequisition(String id, PurchaseRequisitionRequest request, User currentUser) {
+        PurchaseRequisition pr = findPrByIdentifier(id);
         if (pr.getStatus() != PrStatus.DRAFT) {
             throw new IllegalStateException("Only DRAFT requisitions can be edited");
         }
         if (request.getDescription() != null) pr.setDescription(request.getDescription());
         if (request.getJustification() != null) pr.setJustification(request.getJustification());
         if (request.getExpectedDeliveryDate() != null) pr.setExpectedDeliveryDate(request.getExpectedDeliveryDate());
+        pr.setPreferredSupplierId(request.getPreferredSupplierId());
+        pr.setPreferredSupplierName(request.getPreferredSupplierName());
         if (request.getItems() != null && !request.getItems().isEmpty()) {
             pr.setItems(itemsToMaps(request.getItems()));
             pr.setEstimatedTotalAmount(calculateTotal(request.getItems()));
@@ -243,8 +249,8 @@ public class ProcurementServiceImpl implements ProcurementService {
 
     @Override
     @Transactional
-    public PurchaseRequisitionResponse resubmitPurchaseRequisition(UUID id, User currentUser) {
-        PurchaseRequisition pr = findPrById(id);
+    public PurchaseRequisitionResponse resubmitPurchaseRequisition(String id, User currentUser) {
+        PurchaseRequisition pr = findPrByIdentifier(id);
         if (pr.getStatus() != PrStatus.REJECTED) {
             throw new IllegalStateException("Only REJECTED requisitions can be resubmitted");
         }
@@ -265,8 +271,8 @@ public class ProcurementServiceImpl implements ProcurementService {
 
     @Override
     @Transactional
-    public PurchaseRequisitionResponse cancelPurchaseRequisition(UUID id, User currentUser) {
-        PurchaseRequisition pr = findPrById(id);
+    public PurchaseRequisitionResponse cancelPurchaseRequisition(String id, User currentUser) {
+        PurchaseRequisition pr = findPrByIdentifier(id);
         if (pr.getStatus() == PrStatus.CONVERTED_TO_PO) {
             throw new IllegalStateException("Cannot cancel a requisition that has been converted to a PO");
         }
@@ -285,8 +291,8 @@ public class ProcurementServiceImpl implements ProcurementService {
 
     @Override
     @Transactional(readOnly = true)
-    public PurchaseOrderResponse getPurchaseOrderById(UUID id) {
-        PurchaseOrder po = findPoById(id);
+    public PurchaseOrderResponse getPurchaseOrderById(String id) {
+        PurchaseOrder po = findPoByIdentifier(id);
         return PurchaseOrderResponse.fromEntity(po, resolveDistributorName(po.getDistributorId()));
     }
 
@@ -331,8 +337,8 @@ public class ProcurementServiceImpl implements ProcurementService {
 
     @Override
     @Transactional
-    public PurchaseOrderResponse sendPurchaseOrder(UUID id, User currentUser) {
-        PurchaseOrder po = findPoById(id);
+    public PurchaseOrderResponse sendPurchaseOrder(String id, User currentUser) {
+        PurchaseOrder po = findPoByIdentifier(id);
         if (po.getStatus() != PoStatus.DRAFT) {
             throw new IllegalStateException("Only DRAFT purchase orders can be sent");
         }
@@ -340,14 +346,15 @@ public class ProcurementServiceImpl implements ProcurementService {
         po.setSentAt(LocalDateTime.now());
         PurchaseOrder sentPo = poRepository.save(po);
         String distributorName = resolveDistributorName(sentPo.getDistributorId());
-        emailService.sendPurchaseOrderEmail(sentPo, distributorName);
+        Map<String, String> tokens = supplierConfirmationService.generateTokensForPo(sentPo);
+        emailService.sendPurchaseOrderEmail(sentPo, distributorName, tokens);
         return PurchaseOrderResponse.fromEntity(sentPo, distributorName);
     }
 
     @Override
     @Transactional
-    public PurchaseOrderResponse confirmPurchaseOrder(UUID id, User currentUser) {
-        PurchaseOrder po = findPoById(id);
+    public PurchaseOrderResponse confirmPurchaseOrder(String id, User currentUser) {
+        PurchaseOrder po = findPoByIdentifier(id);
         if (po.getStatus() != PoStatus.SENT) {
             throw new IllegalStateException("Only SENT purchase orders can be confirmed");
         }
@@ -359,8 +366,8 @@ public class ProcurementServiceImpl implements ProcurementService {
 
     @Override
     @Transactional
-    public PurchaseOrderResponse cancelPurchaseOrder(UUID id, User currentUser) {
-        PurchaseOrder po = findPoById(id);
+    public PurchaseOrderResponse cancelPurchaseOrder(String id, User currentUser) {
+        PurchaseOrder po = findPoByIdentifier(id);
         if (po.getStatus() == PoStatus.RECEIVED) {
             throw new IllegalStateException("Cannot cancel a received purchase order");
         }
@@ -371,13 +378,13 @@ public class ProcurementServiceImpl implements ProcurementService {
 
     @Override
     @Transactional
-    public PurchaseOrderResponse convertPrToPo(UUID prId, PurchaseOrderRequest request, User currentUser) {
-        PurchaseRequisition pr = findPrById(prId);
+    public PurchaseOrderResponse convertPrToPo(String prId, PurchaseOrderRequest request, User currentUser) {
+        PurchaseRequisition pr = findPrByIdentifier(prId);
         if (pr.getStatus() != PrStatus.APPROVED) {
             throw new IllegalStateException("Only APPROVED requisitions can be converted to a PO");
         }
 
-        request.setPurchaseRequisitionId(prId);
+        request.setPurchaseRequisitionId(pr.getId());
         PurchaseOrderResponse poResponse = createPurchaseOrder(request, currentUser);
 
         pr.setStatus(PrStatus.CONVERTED_TO_PO);
@@ -386,9 +393,31 @@ public class ProcurementServiceImpl implements ProcurementService {
         return poResponse;
     }
 
+    private PurchaseRequisition findPrByIdentifier(String identifier) {
+        try {
+            UUID uuid = UUID.fromString(identifier);
+            return prRepository.findById(uuid)
+                    .orElseThrow(() -> new ResourceNotFoundException("PurchaseRequisition", "id", identifier));
+        } catch (IllegalArgumentException e) {
+            return prRepository.findByPrNumber(identifier)
+                    .orElseThrow(() -> new ResourceNotFoundException("PurchaseRequisition", "prNumber", identifier));
+        }
+    }
+
     private PurchaseRequisition findPrById(UUID id) {
         return prRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("PurchaseRequisition", "id", id.toString()));
+    }
+
+    private PurchaseOrder findPoByIdentifier(String identifier) {
+        try {
+            UUID uuid = UUID.fromString(identifier);
+            return poRepository.findById(uuid)
+                    .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrder", "id", identifier));
+        } catch (IllegalArgumentException e) {
+            return poRepository.findByPoNumber(identifier)
+                    .orElseThrow(() -> new ResourceNotFoundException("PurchaseOrder", "poNumber", identifier));
+        }
     }
 
     private PurchaseOrder findPoById(UUID id) {

@@ -37,7 +37,14 @@ public class GrnItemDto {
 
     private String unitOfMeasure;
 
+    private String batchNumber;
+
     private String notes;
 
     private LocalDate expiryDate;
+
+    @Min(value = 0, message = "Rejected quantity cannot be negative")
+    private Integer rejectedQuantity;
+
+    private String rejectionReason;
 }

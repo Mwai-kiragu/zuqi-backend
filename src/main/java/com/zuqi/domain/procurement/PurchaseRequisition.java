@@ -69,6 +69,12 @@ public class PurchaseRequisition {
     @Builder.Default
     private BigDecimal estimatedTotalAmount = BigDecimal.ZERO;
 
+    @Column(name = "preferred_supplier_id")
+    private UUID preferredSupplierId;
+
+    @Column(name = "preferred_supplier_name", length = 255)
+    private String preferredSupplierName;
+
     @Column(name = "rejection_reason", length = 500)
     private String rejectionReason;
 

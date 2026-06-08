@@ -69,6 +69,9 @@ public class SalesReturn {
     @Column(name = "refund_method", length = 30)
     private String refundMethod;
 
+    @Column(name = "pos_transaction_id")
+    private UUID posTransactionId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by_id")
     private User createdBy;

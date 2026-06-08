@@ -206,7 +206,14 @@ public class ApprovalServiceImpl implements ApprovalService {
         }
 
         if (request.getRequestedById().equals(approverId)) {
-            throw new ValidationException("The maker cannot approve their own request");
+            User self = securityUtils.getCurrentUser();
+            boolean isOwner = self != null && (
+                    securityUtils.hasRole(self, "SUPER_ADMIN") ||
+                    securityUtils.hasRole(self, "DISTRIBUTOR_ADMIN") ||
+                    securityUtils.hasRole(self, "MERCHANT_ADMIN"));
+            if (!isOwner) {
+                throw new ValidationException("The maker cannot approve their own request");
+            }
         }
 
         User approver = userRepository.findById(approverId)

@@ -23,7 +23,7 @@ public interface InvoiceService {
 
     InvoiceResponse getInvoiceBySaleId(UUID saleId);
 
-    InvoiceResponse getInvoiceById(UUID id);
+    InvoiceResponse getInvoiceById(String id);
 
     InvoiceResponse getInvoiceByNumber(String invoiceNumber);
 
@@ -45,13 +45,13 @@ public interface InvoiceService {
 
     Page<InvoiceResponse> searchInvoices(UUID distributorId, String search, Pageable pageable);
 
-    InvoiceResponse sendInvoice(UUID invoiceId, String email);
+    InvoiceResponse sendInvoice(String invoiceId, String email);
 
-    InvoiceResponse markAsViewed(UUID invoiceId);
+    InvoiceResponse markAsViewed(String invoiceId);
 
-    InvoiceResponse recordPayment(UUID invoiceId, BigDecimal amount, Long paymentMethodId, String externalReference);
+    InvoiceResponse recordPayment(String invoiceId, BigDecimal amount, Long paymentMethodId, String externalReference);
 
-    InvoiceResponse cancelInvoice(UUID invoiceId);
+    InvoiceResponse cancelInvoice(String invoiceId);
 
     List<InvoiceResponse> getOverdueInvoices();
 

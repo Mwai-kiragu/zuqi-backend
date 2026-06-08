@@ -4,6 +4,7 @@ public enum PoStatus {
     DRAFT,
     SENT,
     CONFIRMED,
+    DECLINED,
     PARTIALLY_RECEIVED,
     RECEIVED,
     CANCELLED

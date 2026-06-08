@@ -40,6 +40,9 @@ public class PurchaseOrderResponse {
     private LocalDateTime sentAt;
     private LocalDateTime confirmedAt;
     private LocalDateTime receivedAt;
+    private String supplierResponse;
+    private String supplierNotes;
+    private LocalDateTime supplierRespondedAt;
     private String createdByName;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -70,6 +73,9 @@ public class PurchaseOrderResponse {
                 .sentAt(po.getSentAt())
                 .confirmedAt(po.getConfirmedAt())
                 .receivedAt(po.getReceivedAt())
+                .supplierResponse(po.getSupplierResponse())
+                .supplierNotes(po.getSupplierNotes())
+                .supplierRespondedAt(po.getSupplierRespondedAt())
                 .createdByName(po.getCreatedBy() != null ? po.getCreatedBy().getFullName() : null)
                 .createdAt(po.getCreatedAt())
                 .updatedAt(po.getUpdatedAt())

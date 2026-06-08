@@ -48,7 +48,7 @@ public class ProcurementController {
     @GetMapping("/v1/purchase-requisitions/{id}")
     @Operation(summary = "Get purchase requisition by ID")
     public ResponseEntity<ApiResponse<PurchaseRequisitionResponse>> getPurchaseRequisitionById(
-            @PathVariable UUID id) {
+            @PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success(procurementService.getPurchaseRequisitionById(id)));
     }
 
@@ -65,7 +65,7 @@ public class ProcurementController {
     @PostMapping("/v1/purchase-requisitions/{id}/submit")
     @Operation(summary = "Submit purchase requisition for approval")
     public ResponseEntity<ApiResponse<PurchaseRequisitionResponse>> submitPurchaseRequisition(
-            @PathVariable UUID id,
+            @PathVariable String id,
             @AuthenticationPrincipal User currentUser) {
         return ResponseEntity.ok(ApiResponse.success("Requisition submitted for approval",
                 procurementService.submitPurchaseRequisition(id, currentUser)));
@@ -74,7 +74,7 @@ public class ProcurementController {
     @PostMapping("/v1/purchase-requisitions/{id}/approve")
     @Operation(summary = "Approve purchase requisition")
     public ResponseEntity<ApiResponse<PurchaseRequisitionResponse>> approvePurchaseRequisition(
-            @PathVariable UUID id,
+            @PathVariable String id,
             @AuthenticationPrincipal User currentUser) {
         return ResponseEntity.ok(ApiResponse.success("Requisition approved",
                 procurementService.approvePurchaseRequisition(id, currentUser)));
@@ -83,7 +83,7 @@ public class ProcurementController {
     @PostMapping("/v1/purchase-requisitions/{id}/reject")
     @Operation(summary = "Reject purchase requisition")
     public ResponseEntity<ApiResponse<PurchaseRequisitionResponse>> rejectPurchaseRequisition(
-            @PathVariable UUID id,
+            @PathVariable String id,
             @RequestBody RejectBody body,
             @AuthenticationPrincipal User currentUser) {
         return ResponseEntity.ok(ApiResponse.success("Requisition rejected",
@@ -93,7 +93,7 @@ public class ProcurementController {
     @PutMapping("/v1/purchase-requisitions/{id}")
     @Operation(summary = "Update a DRAFT purchase requisition")
     public ResponseEntity<ApiResponse<PurchaseRequisitionResponse>> updatePurchaseRequisition(
-            @PathVariable UUID id,
+            @PathVariable String id,
             @Valid @RequestBody PurchaseRequisitionRequest request,
             @AuthenticationPrincipal User currentUser) {
         return ResponseEntity.ok(ApiResponse.success("Requisition updated",
@@ -103,7 +103,7 @@ public class ProcurementController {
     @PostMapping("/v1/purchase-requisitions/{id}/resubmit")
     @Operation(summary = "Reset a rejected requisition to draft for revision and resubmission")
     public ResponseEntity<ApiResponse<PurchaseRequisitionResponse>> resubmitPurchaseRequisition(
-            @PathVariable UUID id,
+            @PathVariable String id,
             @AuthenticationPrincipal User currentUser) {
         return ResponseEntity.ok(ApiResponse.success("Requisition reset to draft for revision",
                 procurementService.resubmitPurchaseRequisition(id, currentUser)));
@@ -112,7 +112,7 @@ public class ProcurementController {
     @PostMapping("/v1/purchase-requisitions/{id}/cancel")
     @Operation(summary = "Cancel purchase requisition")
     public ResponseEntity<ApiResponse<PurchaseRequisitionResponse>> cancelPurchaseRequisition(
-            @PathVariable UUID id,
+            @PathVariable String id,
             @AuthenticationPrincipal User currentUser) {
         return ResponseEntity.ok(ApiResponse.success("Requisition cancelled",
                 procurementService.cancelPurchaseRequisition(id, currentUser)));
@@ -121,7 +121,7 @@ public class ProcurementController {
     @PostMapping("/v1/purchase-requisitions/{id}/convert-to-po")
     @Operation(summary = "Convert approved requisition to purchase order")
     public ResponseEntity<ApiResponse<PurchaseOrderResponse>> convertToPo(
-            @PathVariable UUID id,
+            @PathVariable String id,
             @Valid @RequestBody PurchaseOrderRequest request,
             @AuthenticationPrincipal User currentUser) {
         PurchaseOrderResponse po = procurementService.convertPrToPo(id, request, currentUser);
@@ -145,7 +145,7 @@ public class ProcurementController {
     @GetMapping("/v1/purchase-orders/{id}")
     @Operation(summary = "Get purchase order by ID")
     public ResponseEntity<ApiResponse<PurchaseOrderResponse>> getPurchaseOrderById(
-            @PathVariable UUID id) {
+            @PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success(procurementService.getPurchaseOrderById(id)));
     }
 
@@ -162,7 +162,7 @@ public class ProcurementController {
     @PostMapping("/v1/purchase-orders/{id}/send")
     @Operation(summary = "Send purchase order to supplier")
     public ResponseEntity<ApiResponse<PurchaseOrderResponse>> sendPurchaseOrder(
-            @PathVariable UUID id,
+            @PathVariable String id,
             @AuthenticationPrincipal User currentUser) {
         return ResponseEntity.ok(ApiResponse.success("Purchase order sent to supplier",
                 procurementService.sendPurchaseOrder(id, currentUser)));
@@ -171,7 +171,7 @@ public class ProcurementController {
     @PostMapping("/v1/purchase-orders/{id}/confirm")
     @Operation(summary = "Confirm purchase order (supplier acknowledged)")
     public ResponseEntity<ApiResponse<PurchaseOrderResponse>> confirmPurchaseOrder(
-            @PathVariable UUID id,
+            @PathVariable String id,
             @AuthenticationPrincipal User currentUser) {
         return ResponseEntity.ok(ApiResponse.success("Purchase order confirmed",
                 procurementService.confirmPurchaseOrder(id, currentUser)));
@@ -180,7 +180,7 @@ public class ProcurementController {
     @PostMapping("/v1/purchase-orders/{id}/cancel")
     @Operation(summary = "Cancel purchase order")
     public ResponseEntity<ApiResponse<PurchaseOrderResponse>> cancelPurchaseOrder(
-            @PathVariable UUID id,
+            @PathVariable String id,
             @AuthenticationPrincipal User currentUser) {
         return ResponseEntity.ok(ApiResponse.success("Purchase order cancelled",
                 procurementService.cancelPurchaseOrder(id, currentUser)));

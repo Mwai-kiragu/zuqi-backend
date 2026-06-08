@@ -11,6 +11,7 @@ import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.GlAccountRepository;
+import com.zuqi.repository.JournalEntryLineRepository;
 import com.zuqi.service.GlAccountService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,14 +30,22 @@ import java.util.stream.Collectors;
 public class GlAccountServiceImpl implements GlAccountService {
 
     private final GlAccountRepository glAccountRepository;
+    private final JournalEntryLineRepository journalEntryLineRepository;
 
     @Override
     public List<GlAccountResponse> getAll(UUID distributorId, UUID merchantId) {
+        // A concrete distributorId always takes precedence — use merchant-wide query only
+        // when no specific distributor is known (MERCHANT_ADMIN viewing all distributors).
+        if (distributorId != null) {
+            return glAccountRepository.findByDistributorIdOrderByAccountCodeAsc(distributorId)
+                    .stream().map(GlAccountResponse::fromEntity).collect(Collectors.toList());
+        }
         if (merchantId != null) {
             return glAccountRepository.findByDistributorMerchantIdOrderByAccountCodeAsc(merchantId)
                     .stream().map(GlAccountResponse::fromEntity).collect(Collectors.toList());
         }
-        return glAccountRepository.findByDistributorIdOrderByAccountCodeAsc(distributorId)
+        return glAccountRepository.findAll(
+                org.springframework.data.domain.Sort.by("accountCode"))
                 .stream().map(GlAccountResponse::fromEntity).collect(Collectors.toList());
     }
 
@@ -110,6 +119,16 @@ public class GlAccountServiceImpl implements GlAccountService {
         GlAccount account = findById(id);
         if (account.isSystemAccount()) {
             throw new ValidationException("Cannot deactivate a system account");
+        }
+        if (journalEntryLineRepository.existsByAccountId(id)) {
+            throw new ValidationException(
+                "Cannot deactivate account '" + account.getAccountCode() + " – " + account.getAccountName() +
+                "': it has existing journal entry lines. Deactivating it would break historical records.");
+        }
+        if (glAccountRepository.existsByParentId(id)) {
+            throw new ValidationException(
+                "Cannot deactivate account '" + account.getAccountCode() + " – " + account.getAccountName() +
+                "': it has child accounts. Deactivate or reassign the child accounts first.");
         }
         account.setActive(false);
         glAccountRepository.save(account);

@@ -34,6 +34,8 @@ public class PurchaseRequisitionResponse {
     private LocalDate expectedDeliveryDate;
     private List<Map<String, Object>> items;
     private BigDecimal estimatedTotalAmount;
+    private UUID preferredSupplierId;
+    private String preferredSupplierName;
     private String rejectionReason;
     private LocalDateTime submittedAt;
     private LocalDateTime approvedAt;
@@ -60,6 +62,8 @@ public class PurchaseRequisitionResponse {
                 .expectedDeliveryDate(pr.getExpectedDeliveryDate())
                 .items(pr.getItems())
                 .estimatedTotalAmount(pr.getEstimatedTotalAmount())
+                .preferredSupplierId(pr.getPreferredSupplierId())
+                .preferredSupplierName(pr.getPreferredSupplierName())
                 .rejectionReason(pr.getRejectionReason())
                 .submittedAt(pr.getSubmittedAt())
                 .approvedAt(pr.getApprovedAt())
