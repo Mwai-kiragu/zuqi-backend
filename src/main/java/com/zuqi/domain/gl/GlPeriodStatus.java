@@ -1,5 +1,5 @@
 package com.zuqi.domain.gl;
 
 public enum GlPeriodStatus {
-    OPEN, CLOSED, LOCKED
+    FUTURE, OPEN, LOCKED, CLOSED
 }

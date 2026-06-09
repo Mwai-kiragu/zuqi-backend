@@ -27,8 +27,12 @@ public class GlPeriodResponse {
     private GlPeriodStatus status;
     private LocalDateTime closedAt;
     private UUID closedBy;
+    private String closedNotes;
     private LocalDateTime lockedAt;
     private UUID lockedBy;
+    private int gracePeriodDays;
+    private boolean autoLocked;
+    private LocalDate autoLockDate;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -44,8 +48,12 @@ public class GlPeriodResponse {
                 .status(p.getStatus())
                 .closedAt(p.getClosedAt())
                 .closedBy(p.getClosedBy())
+                .closedNotes(p.getClosedNotes())
                 .lockedAt(p.getLockedAt())
                 .lockedBy(p.getLockedBy())
+                .gracePeriodDays(p.getGracePeriodDays())
+                .autoLocked(p.isAutoLocked())
+                .autoLockDate(p.getAutoLockDate())
                 .createdAt(p.getCreatedAt())
                 .updatedAt(p.getUpdatedAt())
                 .build();

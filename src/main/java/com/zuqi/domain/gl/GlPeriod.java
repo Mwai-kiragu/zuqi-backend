@@ -63,6 +63,22 @@ public class GlPeriod {
     @Column(name = "locked_by")
     private UUID lockedBy;
 
+    @Column(name = "grace_period_days", nullable = false)
+    @Builder.Default
+    private int gracePeriodDays = 5;
+
+    @Column(name = "auto_locked", nullable = false)
+    @Builder.Default
+    private boolean autoLocked = false;
+
+    @Column(name = "closed_notes", columnDefinition = "TEXT")
+    private String closedNotes;
+
+    /** Computed: first day after the grace period when auto-lock triggers. */
+    public LocalDate getAutoLockDate() {
+        return endDate != null ? endDate.plusDays(gracePeriodDays + 1) : null;
+    }
+
     @Version
     private Long version;
 
