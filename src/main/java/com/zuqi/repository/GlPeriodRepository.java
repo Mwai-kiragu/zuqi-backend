@@ -16,5 +16,7 @@ public interface GlPeriodRepository extends JpaRepository<GlPeriod, UUID> {
 
     List<GlPeriod> findByDistributorIdAndStatus(UUID distributorId, GlPeriodStatus status);
 
+    List<GlPeriod> findByStatus(GlPeriodStatus status);
+
     Optional<GlPeriod> findByDistributorIdAndPeriodYearAndPeriodMonth(UUID distributorId, int periodYear, int periodMonth);
 }

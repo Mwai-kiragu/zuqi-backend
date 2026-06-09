@@ -16,6 +16,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -47,15 +48,17 @@ public class GlPeriodController {
     }
 
     @PostMapping("/{id}/close")
-    @Operation(summary = "Close an accounting period")
+    @Operation(summary = "Manually close a LOCKED period (after month-end checklist)")
     public ResponseEntity<ApiResponse<GlPeriodResponse>> close(
             @PathVariable UUID id,
+            @RequestBody(required = false) Map<String, String> body,
             @AuthenticationPrincipal User currentUser) {
-        return ResponseEntity.ok(ApiResponse.success("Period closed", glPeriodService.close(id, currentUser)));
+        String notes = body != null ? body.get("closedNotes") : null;
+        return ResponseEntity.ok(ApiResponse.success("Period closed", glPeriodService.close(id, notes, currentUser)));
     }
 
     @PostMapping("/{id}/lock")
-    @Operation(summary = "Lock an accounting period (irreversible)")
+    @Operation(summary = "Manually lock an OPEN period (blocks all posting)")
     public ResponseEntity<ApiResponse<GlPeriodResponse>> lock(
             @PathVariable UUID id,
             @AuthenticationPrincipal User currentUser) {
@@ -63,10 +66,18 @@ public class GlPeriodController {
     }
 
     @PostMapping("/{id}/reopen")
-    @Operation(summary = "Reopen a closed accounting period")
+    @Operation(summary = "Reopen a LOCKED period to allow new postings")
     public ResponseEntity<ApiResponse<GlPeriodResponse>> reopen(
             @PathVariable UUID id,
             @AuthenticationPrincipal User currentUser) {
         return ResponseEntity.ok(ApiResponse.success("Period reopened", glPeriodService.reopen(id, currentUser)));
+    }
+
+    @PostMapping("/auto-lock")
+    @Operation(summary = "Trigger auto-lock sweep (normally runs on scheduler)")
+    public ResponseEntity<ApiResponse<Void>> triggerAutoLock() {
+        int count = glPeriodService.autoLockExpiredPeriods();
+        String msg = count + " period(s) auto-locked";
+        return ResponseEntity.ok(ApiResponse.success(msg));
     }
 }

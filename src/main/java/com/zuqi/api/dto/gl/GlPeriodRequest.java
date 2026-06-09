@@ -21,4 +21,9 @@ public class GlPeriodRequest {
     @NotNull(message = "Period month is required")
     @Min(1) @Max(12)
     private Integer periodMonth;
+
+    /** Days after period end before automatic lock fires. Defaults to 5. */
+    @Builder.Default
+    @Min(0) @Max(90)
+    private int gracePeriodDays = 5;
 }

@@ -14,9 +14,11 @@ public interface GlPeriodService {
     GlPeriodResponse getById(UUID id);
     GlPeriodResponse getOrCreate(UUID distributorId, int year, int month, User currentUser);
     GlPeriodResponse create(UUID distributorId, GlPeriodRequest request, User currentUser);
-    GlPeriodResponse close(UUID id, User currentUser);
+    GlPeriodResponse close(UUID id, String closedNotes, User currentUser);
     GlPeriodResponse lock(UUID id, User currentUser);
     GlPeriodResponse reopen(UUID id, User currentUser);
+    /** Called by the scheduler — locks all OPEN periods past their grace period. */
+    int autoLockExpiredPeriods();
     GlPeriod getOpenPeriodForDate(UUID distributorId, LocalDate date);
 
     /**
