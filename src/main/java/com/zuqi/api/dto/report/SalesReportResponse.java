@@ -59,6 +59,7 @@ public class SalesReportResponse {
         private LocalDate dueDate;
         private BigDecimal totalAmount;
         private String status;
+        private String salesRepName;
     }
 
     @Data

@@ -39,6 +39,11 @@ public interface PosService {
 
     PosSaleResponse refundSale(UUID saleId, UUID cashierId);
 
+    PosSaleResponse partialRefundSale(UUID saleId, com.zuqi.api.dto.pos.PartialRefundRequest request, UUID cashierId);
+
+    /** Called by ApprovalServiceImpl when a POS_REFUND approval is approved. */
+    PosSaleResponse executeApprovedRefund(UUID saleId, java.util.Map<String, Object> requestedValues, UUID cashierId);
+
     Page<PosSaleResponse> getSales(UUID branchId, String status, LocalDate startDate, LocalDate endDate, Pageable pageable);
 
     PosSaleResponse getSaleById(UUID saleId);

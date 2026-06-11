@@ -62,4 +62,10 @@ public interface InvoiceService {
     java.util.Map<String, Long> getAllStatusCounts(UUID distributorId);
 
     InvoiceStatsResponse getInvoiceStats();
+
+    /**
+     * Syncs paidAmount and status on the invoice linked to a POS sale.
+     * Uses the absolute total paid (not a delta) so the call is idempotent.
+     */
+    void syncPosSaleInvoicePayment(UUID posSaleId, java.math.BigDecimal totalPaid);
 }

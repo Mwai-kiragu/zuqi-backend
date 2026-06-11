@@ -1,5 +1,7 @@
 package com.zuqi.service;
 
+import com.zuqi.api.dto.gl.CostCenterBulkItemRequest;
+import com.zuqi.api.dto.gl.CostCenterBulkResponse;
 import com.zuqi.api.dto.gl.CostCenterRequest;
 import com.zuqi.api.dto.gl.CostCenterResponse;
 import com.zuqi.domain.user.User;
@@ -14,4 +16,5 @@ public interface CostCenterService {
     CostCenterResponse update(UUID id, CostCenterRequest request, User currentUser);
     void deactivate(UUID id, User currentUser);
     void activate(UUID id, User currentUser);
+    CostCenterBulkResponse bulkCreate(UUID distributorId, List<CostCenterBulkItemRequest> items, User currentUser);
 }

@@ -196,15 +196,13 @@ public class PurchaseReturnServiceImpl implements PurchaseReturnService {
     }
 
     @Override
-    public Page<PurchaseReturnResponse> getAll(Pageable pageable) {
+    public Page<PurchaseReturnResponse> getAll(String status, String search, Pageable pageable) {
         UUID distId = securityUtils.getDistributorIdForFiltering();
         UUID merchantId = securityUtils.getCurrentUserMerchantId();
-        if (distId != null) {
-            return purchaseReturnRepository.findByDistributorId(distId, pageable).map(this::toResponse);
-        } else if (merchantId != null) {
-            return purchaseReturnRepository.findByDistributorMerchantId(merchantId, pageable).map(this::toResponse);
-        }
-        return purchaseReturnRepository.findAll(pageable).map(this::toResponse);
+        ReturnStatus returnStatus = (status != null && !status.isBlank()) ? ReturnStatus.valueOf(status.toUpperCase()) : null;
+        String searchTerm = (search != null && !search.isBlank()) ? search.trim() : null;
+        return purchaseReturnRepository.findWithFilters(distId, merchantId, returnStatus, searchTerm, pageable)
+                .map(this::toResponse);
     }
 
     private PurchaseReturn findOrThrow(UUID id) {

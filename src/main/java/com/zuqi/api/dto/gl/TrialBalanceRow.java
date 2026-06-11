@@ -21,6 +21,8 @@ public class TrialBalanceRow {
     private String accountName;
     private AccountType accountType;
     private NormalBalance normalBalance;
+    private BigDecimal openingDebit;
+    private BigDecimal openingCredit;
     private BigDecimal periodDebit;
     private BigDecimal periodCredit;
     private BigDecimal closingDebit;

@@ -38,4 +38,8 @@ public class PosSaleResponse {
     private LocalDateTime cancelledAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+
+    /** Set when a refund request is routed for approval instead of executed immediately. */
+    private UUID pendingApprovalId;
+    private String pendingApprovalMessage;
 }

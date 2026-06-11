@@ -25,4 +25,6 @@ public class PosSummaryResponse {
     private BigDecimal unpaidTotal;
     private long partiallyPaidCount;
     private BigDecimal partiallyPaidBalanceDue;
+    private long refundedCount;
+    private BigDecimal refundedTotal;
 }

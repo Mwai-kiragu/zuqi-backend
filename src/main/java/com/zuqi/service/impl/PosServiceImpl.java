@@ -70,6 +70,7 @@ public class PosServiceImpl implements PosService {
     private final GlAutoPostingService glAutoPostingService;
     private final ApplicationEventPublisher eventPublisher;
     private final ApprovalService approvalService;
+    private final com.zuqi.repository.ApprovalRequestRepository approvalRequestRepository;
     private final PromotionRepository promotionRepository;
     private final TaxRateRepository taxRateRepository;
 
@@ -477,6 +478,13 @@ public class PosServiceImpl implements PosService {
             log.warn("Order payment status update failed for sale {}: {}", saleId, e.getMessage());
         }
 
+        // Sync the linked invoice so Order and Invoice stay consistent
+        try {
+            invoiceService.syncPosSaleInvoicePayment(savedSale.getId(), totalPaid);
+        } catch (Exception e) {
+            log.warn("Invoice payment sync failed for POS sale {}: {}", saleId, e.getMessage());
+        }
+
         return mapToSaleResponse(savedSale);
     }
 
@@ -526,6 +534,13 @@ public class PosServiceImpl implements PosService {
             });
         } catch (Exception e) {
             log.warn("Order payment status update failed for sale {}: {}", saleId, e.getMessage());
+        }
+
+        // Sync the linked invoice so Order and Invoice stay consistent
+        try {
+            invoiceService.syncPosSaleInvoicePayment(savedSale.getId(), totalPaid);
+        } catch (Exception e) {
+            log.warn("Invoice payment sync failed for POS sale {}: {}", saleId, e.getMessage());
         }
 
         return mapToSaleResponse(savedSale);
@@ -606,6 +621,38 @@ public class PosServiceImpl implements PosService {
             throw new ValidationException("Can only refund completed sales");
         }
 
+        boolean needsApproval = securityUtils.currentUserRequiresApprovalFor("POS");
+        if (needsApproval && cashierId != null) {
+            boolean hasPending = !approvalRequestRepository
+                    .findByEntityTypeAndEntityIdAndStatus("POS_REFUND", original.getId(), com.zuqi.domain.approval.ApprovalStatus.PENDING)
+                    .isEmpty();
+            if (hasPending) {
+                throw new ValidationException("A refund approval request is already pending for this sale.");
+            }
+            com.zuqi.api.dto.approval.ApprovalRequestResponse approvalReq = approvalService.createRequest(cashierId,
+                    CreateApprovalRequestDto.builder()
+                            .workflowType(ApprovalWorkflowType.POS_REFUND)
+                            .entityType("POS_REFUND")
+                            .entityId(original.getId())
+                            .entityName("Refund for " + (original.getReceiptNumber() != null ? original.getReceiptNumber() : original.getId().toString()))
+                            .description("Full refund requested for sale " + original.getReceiptNumber()
+                                    + " — total: " + original.getTotalAmount())
+                            .requestedValues(java.util.Map.of(
+                                    "refundType", "FULL",
+                                    "cashierId", cashierId.toString()))
+                            .requiredApprovals(1)
+                            .build());
+            log.info("Full refund for sale {} routed for approval — requestId={}", saleId, approvalReq.getId());
+            PosSaleResponse resp = mapToSaleResponse(original);
+            resp.setPendingApprovalId(approvalReq.getId());
+            resp.setPendingApprovalMessage("Refund submitted for approval. Awaiting manager authorization.");
+            return resp;
+        }
+
+        return doFullRefund(original, cashierId);
+    }
+
+    private PosSaleResponse doFullRefund(PosSale original, UUID cashierId) {
         User cashier = userRepository.findById(cashierId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", cashierId));
 
@@ -622,10 +669,194 @@ public class PosServiceImpl implements PosService {
                 .completedAt(LocalDateTime.now())
                 .build();
 
+        if (!original.getItems().isEmpty()) {
+            Warehouse warehouse = resolveWarehouse(
+                    original.getBranch().getId(), original.getBranch().getDistributor().getId());
+            if (warehouse != null) {
+                for (PosSaleItem item : original.getItems()) {
+                    adjustStock(warehouse, item.getProduct(), item.getQuantity(), true);
+                }
+            }
+        }
+
         original.setStatus(PosSaleStatus.REFUNDED);
         saleRepository.save(original);
-
         return mapToSaleResponse(saleRepository.save(refund));
+    }
+
+    @Override
+    @Transactional
+    public PosSaleResponse partialRefundSale(UUID saleId, com.zuqi.api.dto.pos.PartialRefundRequest request, UUID cashierId) {
+        PosSale original = getSaleEntity(saleId);
+        if (original.getStatus() != PosSaleStatus.COMPLETED) {
+            throw new ValidationException("Can only refund completed sales");
+        }
+
+        boolean needsApproval = securityUtils.currentUserRequiresApprovalFor("POS");
+        if (needsApproval && cashierId != null) {
+            boolean hasPending = !approvalRequestRepository
+                    .findByEntityTypeAndEntityIdAndStatus("POS_REFUND", original.getId(), com.zuqi.domain.approval.ApprovalStatus.PENDING)
+                    .isEmpty();
+            if (hasPending) {
+                throw new ValidationException("A refund approval request is already pending for this sale.");
+            }
+
+            boolean hasItems = request.getItems() != null && !request.getItems().isEmpty();
+            java.util.Map<String, Object> reqValues = new java.util.HashMap<>();
+            reqValues.put("refundType", "PARTIAL");
+            reqValues.put("cashierId", cashierId.toString());
+            if (request.getReason() != null) reqValues.put("reason", request.getReason());
+            if (request.getCustomAmount() != null) reqValues.put("customAmount", request.getCustomAmount().toString());
+            if (hasItems) {
+                java.util.List<java.util.Map<String, String>> itemsData = request.getItems().stream()
+                        .map(ir -> java.util.Map.of(
+                                "itemId", ir.getItemId().toString(),
+                                "quantity", ir.getQuantity().toString()))
+                        .collect(java.util.stream.Collectors.toList());
+                reqValues.put("items", itemsData);
+            }
+
+            com.zuqi.api.dto.approval.ApprovalRequestResponse approvalReq = approvalService.createRequest(cashierId,
+                    CreateApprovalRequestDto.builder()
+                            .workflowType(ApprovalWorkflowType.POS_REFUND)
+                            .entityType("POS_REFUND")
+                            .entityId(original.getId())
+                            .entityName("Partial refund for " + (original.getReceiptNumber() != null ? original.getReceiptNumber() : original.getId().toString()))
+                            .description("Partial refund requested for sale " + original.getReceiptNumber()
+                                    + " — total: " + original.getTotalAmount())
+                            .requestedValues(reqValues)
+                            .requiredApprovals(1)
+                            .build());
+            log.info("Partial refund for sale {} routed for approval — requestId={}", saleId, approvalReq.getId());
+            PosSaleResponse resp = mapToSaleResponse(original);
+            resp.setPendingApprovalId(approvalReq.getId());
+            resp.setPendingApprovalMessage("Refund submitted for approval. Awaiting manager authorization.");
+            return resp;
+        }
+
+        return doPartialRefund(original, request, cashierId);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    @Transactional
+    public PosSaleResponse executeApprovedRefund(UUID saleId, java.util.Map<String, Object> requestedValues, UUID cashierId) {
+        PosSale original = getSaleEntity(saleId);
+        if (original.getStatus() != PosSaleStatus.COMPLETED) {
+            throw new ValidationException("Sale is no longer eligible for refund (status: " + original.getStatus() + ")");
+        }
+
+        String refundType = requestedValues != null ? (String) requestedValues.get("refundType") : "FULL";
+
+        if ("PARTIAL".equals(refundType)) {
+            com.zuqi.api.dto.pos.PartialRefundRequest req = new com.zuqi.api.dto.pos.PartialRefundRequest();
+            req.setReason(requestedValues.containsKey("reason") ? (String) requestedValues.get("reason") : null);
+            if (requestedValues.containsKey("customAmount")) {
+                try { req.setCustomAmount(new java.math.BigDecimal(requestedValues.get("customAmount").toString())); } catch (Exception ignored) {}
+            }
+            if (requestedValues.containsKey("items")) {
+                try {
+                    java.util.List<java.util.Map<String, String>> itemsData =
+                            (java.util.List<java.util.Map<String, String>>) requestedValues.get("items");
+                    java.util.List<com.zuqi.api.dto.pos.PartialRefundRequest.ItemRefund> items = itemsData.stream()
+                            .map(m -> {
+                                com.zuqi.api.dto.pos.PartialRefundRequest.ItemRefund ir = new com.zuqi.api.dto.pos.PartialRefundRequest.ItemRefund();
+                                ir.setItemId(UUID.fromString(m.get("itemId")));
+                                ir.setQuantity(new java.math.BigDecimal(m.get("quantity")));
+                                return ir;
+                            })
+                            .collect(java.util.stream.Collectors.toList());
+                    req.setItems(items);
+                } catch (Exception e) {
+                    log.warn("Could not parse items from requestedValues for approved partial refund on sale {}: {}", saleId, e.getMessage());
+                }
+            }
+            return doPartialRefund(original, req, cashierId);
+        }
+
+        return doFullRefund(original, cashierId);
+    }
+
+    private PosSaleResponse doPartialRefund(PosSale original, com.zuqi.api.dto.pos.PartialRefundRequest request, UUID cashierId) {
+        User cashier = userRepository.findById(cashierId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", cashierId));
+
+        java.math.BigDecimal refundSubtotal;
+        java.math.BigDecimal refundTotal;
+        java.util.List<PosSaleItem> refundItems = new java.util.ArrayList<>();
+
+        boolean hasItems = request.getItems() != null && !request.getItems().isEmpty();
+        boolean hasAmount = request.getCustomAmount() != null && request.getCustomAmount().compareTo(java.math.BigDecimal.ZERO) > 0;
+
+        if (!hasItems && !hasAmount) {
+            throw new ValidationException("Either items or a custom amount must be provided");
+        }
+
+        if (hasItems) {
+            java.util.Map<UUID, PosSaleItem> itemMap = original.getItems().stream()
+                    .collect(java.util.stream.Collectors.toMap(PosSaleItem::getId, i -> i));
+
+            refundSubtotal = java.math.BigDecimal.ZERO;
+            for (com.zuqi.api.dto.pos.PartialRefundRequest.ItemRefund ir : request.getItems()) {
+                PosSaleItem orig = itemMap.get(ir.getItemId());
+                if (orig == null) continue;
+                java.math.BigDecimal qty = ir.getQuantity().min(orig.getQuantity());
+                java.math.BigDecimal itemTotal = orig.getUnitPrice().multiply(qty).subtract(
+                        orig.getDiscountAmount().multiply(qty).divide(orig.getQuantity(), 2, java.math.RoundingMode.HALF_UP));
+                refundItems.add(PosSaleItem.builder()
+                        .product(orig.getProduct())
+                        .productName(orig.getProductName())
+                        .productSku(orig.getProductSku())
+                        .quantity(qty.negate())
+                        .unitPrice(orig.getUnitPrice())
+                        .discountAmount(java.math.BigDecimal.ZERO)
+                        .lineTotal(itemTotal.negate())
+                        .build());
+                refundSubtotal = refundSubtotal.add(itemTotal);
+            }
+            refundTotal = refundSubtotal;
+        } else {
+            refundSubtotal = request.getCustomAmount();
+            refundTotal = request.getCustomAmount();
+        }
+
+        PosSale refund = PosSale.builder()
+                .branch(original.getBranch())
+                .shift(original.getShift())
+                .cashier(cashier)
+                .status(PosSaleStatus.REFUNDED)
+                .subtotal(refundSubtotal.negate())
+                .totalAmount(refundTotal.negate())
+                .amountPaid(refundTotal.negate())
+                .refundOf(original)
+                .notes(request.getReason())
+                .receiptNumber(generateReceiptNumber())
+                .completedAt(LocalDateTime.now())
+                .build();
+
+        PosSale savedRefund = saleRepository.save(refund);
+
+        for (PosSaleItem item : refundItems) {
+            item.setSale(savedRefund);
+        }
+        savedRefund.getItems().addAll(refundItems);
+        savedRefund = saleRepository.save(savedRefund);
+
+        // Restore stock only for item-based refunds — amount-only refunds have no
+        // physical item association so stock cannot be reliably attributed
+        if (hasItems && !refundItems.isEmpty()) {
+            Warehouse warehouse = resolveWarehouse(
+                    original.getBranch().getId(), original.getBranch().getDistributor().getId());
+            if (warehouse != null) {
+                for (PosSaleItem item : refundItems) {
+                    adjustStock(warehouse, item.getProduct(), item.getQuantity().abs(), true);
+                }
+            }
+        }
+
+        log.info("Partial refund created for sale {}: refundId={}, total={}, stockRestored={}",
+                original.getId(), savedRefund.getId(), refundTotal.negate(), hasItems);
+        return mapToSaleResponse(savedRefund);
     }
 
     @Override
@@ -675,9 +906,11 @@ public class PosServiceImpl implements PosService {
         long completed = saleRepository.countByBranchAndStatusAndDateRange(branchId, PosSaleStatus.COMPLETED, from, to);
         long cancelled = saleRepository.countByBranchAndStatusAndDateRange(branchId, PosSaleStatus.CANCELLED, from, to);
         long unpaid = saleRepository.countByBranchAndStatusAndDateRange(branchId, PosSaleStatus.UNPAID, from, to);
+        long refunded = saleRepository.countByBranchAndStatusAndDateRange(branchId, PosSaleStatus.REFUNDED, from, to);
         long total = completed + cancelled;
         BigDecimal revenue = saleRepository.sumTotalByBranchAndStatusAndDateRange(branchId, PosSaleStatus.COMPLETED, from, to);
         BigDecimal unpaidTotal = saleRepository.sumTotalByBranchAndStatusAndDateRange(branchId, PosSaleStatus.UNPAID, from, to);
+        BigDecimal refundedTotal = saleRepository.sumTotalByBranchAndStatusAndDateRange(branchId, PosSaleStatus.REFUNDED, from, to);
         long partiallyPaidCount = saleRepository.countPartiallyPaidByBranchAndDateRange(branchId, from, to);
         BigDecimal partiallyPaidBalanceDue = saleRepository.sumBalanceDuePartiallyPaidByBranchAndDateRange(branchId, from, to);
 
@@ -697,6 +930,8 @@ public class PosServiceImpl implements PosService {
                 .unpaidTotal(unpaidTotal != null ? unpaidTotal : BigDecimal.ZERO)
                 .partiallyPaidCount(partiallyPaidCount)
                 .partiallyPaidBalanceDue(partiallyPaidBalanceDue != null ? partiallyPaidBalanceDue : BigDecimal.ZERO)
+                .refundedCount(refunded)
+                .refundedTotal(refundedTotal != null ? refundedTotal.abs() : BigDecimal.ZERO)
                 .build();
     }
 

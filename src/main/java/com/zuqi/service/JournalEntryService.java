@@ -23,4 +23,5 @@ public interface JournalEntryService {
     JournalEntryResponse reject(UUID id, User currentUser, String reason);
     JournalEntryResponse reverse(UUID id, User currentUser);
     JournalEntryResponse postDirect(UUID distributorId, JournalEntryRequest request, User currentUser);
+    void deleteDraft(UUID id);
 }
