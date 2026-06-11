@@ -108,4 +108,11 @@ public class JournalEntryController {
             @AuthenticationPrincipal User currentUser) {
         return ResponseEntity.ok(ApiResponse.success("Journal entry reversed", journalEntryService.reverse(id, currentUser)));
     }
+
+    @DeleteMapping("/{id}")
+    @Operation(summary = "Delete a DRAFT journal entry")
+    public ResponseEntity<ApiResponse<Void>> deleteDraft(@PathVariable UUID id) {
+        journalEntryService.deleteDraft(id);
+        return ResponseEntity.ok(ApiResponse.success("Journal entry deleted", null));
+    }
 }

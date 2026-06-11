@@ -49,6 +49,7 @@ public enum ApprovalWorkflowType {
 
     // POS
     POS_SHIFT_RECONCILIATION,
+    POS_REFUND,
 
     // Finance
     EXPENSE,

@@ -137,10 +137,20 @@ public class PosController {
     }
 
     @PostMapping("/sales/{saleId}/refund")
-    @Operation(summary = "Refund a completed sale")
+    @Operation(summary = "Refund a completed sale (full refund)")
     public ResponseEntity<ApiResponse<PosSaleResponse>> refundSale(@PathVariable UUID saleId) {
         UUID cashierId = securityUtils.getCurrentUserId();
         return ResponseEntity.ok(ApiResponse.success("Sale refunded", posService.refundSale(saleId, cashierId)));
+    }
+
+    @PostMapping("/sales/{saleId}/partial-refund")
+    @Operation(summary = "Partial refund — by selected items or custom amount")
+    public ResponseEntity<ApiResponse<PosSaleResponse>> partialRefundSale(
+            @PathVariable UUID saleId,
+            @RequestBody com.zuqi.api.dto.pos.PartialRefundRequest request) {
+        UUID cashierId = securityUtils.getCurrentUserId();
+        return ResponseEntity.ok(ApiResponse.success("Partial refund processed",
+                posService.partialRefundSale(saleId, request, cashierId)));
     }
 
     @GetMapping("/sales")

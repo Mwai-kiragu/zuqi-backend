@@ -9,6 +9,7 @@ import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
 import com.zuqi.service.ApprovalService;
+import com.zuqi.service.ApprovalWorkflowConfigService;
 import com.zuqi.service.GlPeriodService;
 import com.zuqi.service.JournalEntryService;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,7 @@ public class JournalEntryServiceImpl implements JournalEntryService {
     private final GlAccountRepository glAccountRepository;
     private final CostCenterRepository costCenterRepository;
     private final GlPeriodService glPeriodService;
+    private final ApprovalWorkflowConfigService approvalWorkflowConfigService;
 
     @Lazy @Autowired
     private ApprovalService approvalService;
@@ -103,20 +105,32 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         if (entry.getStatus() != JournalEntryStatus.DRAFT) {
             throw new ValidationException("Only DRAFT entries can be submitted");
         }
-        entry.setStatus(JournalEntryStatus.PENDING_APPROVAL);
 
-        approvalService.createRequest(currentUser.getId(), CreateApprovalRequestDto.builder()
-                .workflowType(ApprovalWorkflowType.JOURNAL_ENTRY)
-                .entityType("JOURNAL_ENTRY")
-                .entityId(entry.getId())
-                .entityName(entry.getEntryNumber())
-                .description("Journal entry " + entry.getEntryNumber() + " pending approval")
-                .requestedValues(java.util.Map.of(
-                        "entryNumber", entry.getEntryNumber(),
-                        "totalDebit", entry.getTotalDebit(),
-                        "entryDate", entry.getEntryDate().toString()
-                ))
-                .build());
+        int activeLevels = approvalWorkflowConfigService
+                .countActiveLevels(entry.getDistributorId(), ApprovalWorkflowType.JOURNAL_ENTRY);
+
+        if (activeLevels == 0) {
+            // No approval workflow configured — post immediately
+            entry.setStatus(JournalEntryStatus.POSTED);
+            entry.setPostedAt(LocalDateTime.now());
+            entry.setPostedBy(currentUser.getId());
+            log.info("Journal entry {} auto-posted (no approval workflow configured)", entry.getEntryNumber());
+        } else {
+            entry.setStatus(JournalEntryStatus.PENDING_APPROVAL);
+            approvalService.createRequest(currentUser.getId(), CreateApprovalRequestDto.builder()
+                    .workflowType(ApprovalWorkflowType.JOURNAL_ENTRY)
+                    .entityType("JOURNAL_ENTRY")
+                    .entityId(entry.getId())
+                    .entityName(entry.getEntryNumber())
+                    .description("Journal entry " + entry.getEntryNumber() + " pending approval")
+                    .requestedValues(java.util.Map.of(
+                            "entryNumber", entry.getEntryNumber(),
+                            "totalDebit", entry.getTotalDebit(),
+                            "entryDate", entry.getEntryDate().toString()
+                    ))
+                    .build());
+            log.info("Journal entry {} routed for approval ({} level(s))", entry.getEntryNumber(), activeLevels);
+        }
 
         return JournalEntryResponse.fromEntity(journalEntryRepository.save(entry));
     }
@@ -215,6 +229,17 @@ public class JournalEntryServiceImpl implements JournalEntryService {
         populateLines(entry, request.getLines());
 
         return JournalEntryResponse.fromEntity(journalEntryRepository.save(entry));
+    }
+
+    @Override
+    @Transactional
+    public void deleteDraft(UUID id) {
+        JournalEntry entry = findById(id);
+        if (entry.getStatus() != JournalEntryStatus.DRAFT) {
+            throw new ValidationException("Only DRAFT journal entries can be deleted");
+        }
+        journalEntryRepository.delete(entry);
+        log.info("Deleted DRAFT journal entry {}", entry.getEntryNumber());
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

@@ -105,13 +105,28 @@ public class ReportServiceImpl implements ReportService {
         org.springframework.data.domain.Page<com.zuqi.domain.invoice.Invoice> invoicePage =
                 invoiceRepository.findByFilters(scopedDistributorId, null, null, startDate, endDate, PageRequest.of(0, 200));
         List<SalesReportResponse.InvoiceSummary> invoiceList = invoicePage.getContent().stream()
-                .map(inv -> SalesReportResponse.InvoiceSummary.builder()
-                        .invoiceId(inv.getId().toString()).invoiceNumber(inv.getInvoiceNumber())
-                        .customerName(inv.getMerchant() != null ? inv.getMerchant().getBusinessName() : "")
-                        .issueDate(inv.getIssueDate()).dueDate(inv.getDueDate())
-                        .totalAmount(inv.getTotalAmount())
-                        .status(inv.getStatus() != null ? inv.getStatus().name() : "")
-                        .build())
+                .map(inv -> {
+                    String repName = null;
+                    if (inv.getOrder() != null && inv.getOrder().getSalesRep() != null) {
+                        com.zuqi.domain.user.User rep = inv.getOrder().getSalesRep();
+                        repName = (rep.getFirstName() != null ? rep.getFirstName() : "")
+                                + (rep.getLastName() != null ? " " + rep.getLastName() : "");
+                        repName = repName.trim();
+                    } else if (inv.getPosOrder() != null && inv.getPosOrder().getCashier() != null) {
+                        com.zuqi.domain.user.User cashier = inv.getPosOrder().getCashier();
+                        repName = (cashier.getFirstName() != null ? cashier.getFirstName() : "")
+                                + (cashier.getLastName() != null ? " " + cashier.getLastName() : "");
+                        repName = repName.trim();
+                    }
+                    return SalesReportResponse.InvoiceSummary.builder()
+                            .invoiceId(inv.getId().toString()).invoiceNumber(inv.getInvoiceNumber())
+                            .customerName(inv.getMerchant() != null ? inv.getMerchant().getBusinessName() : "")
+                            .issueDate(inv.getIssueDate()).dueDate(inv.getDueDate())
+                            .totalAmount(inv.getTotalAmount())
+                            .status(inv.getStatus() != null ? inv.getStatus().name() : "")
+                            .salesRepName(repName != null && !repName.isEmpty() ? repName : null)
+                            .build();
+                })
                 .toList();
 
         List<Object[]> productRows = orderRepository.findTopProductsSold(scopedDistributorId, startDt, endDt, PageRequest.of(0, 20));

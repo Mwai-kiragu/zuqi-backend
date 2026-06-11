@@ -1,6 +1,8 @@
 package com.zuqi.api.controller;
 
 import com.zuqi.api.dto.ApiResponse;
+import com.zuqi.api.dto.gl.CostCenterBulkItemRequest;
+import com.zuqi.api.dto.gl.CostCenterBulkResponse;
 import com.zuqi.api.dto.gl.CostCenterRequest;
 import com.zuqi.api.dto.gl.CostCenterResponse;
 import com.zuqi.domain.user.User;
@@ -59,6 +61,19 @@ public class CostCenterController {
             @Valid @RequestBody CostCenterRequest request,
             @AuthenticationPrincipal User currentUser) {
         return ResponseEntity.ok(ApiResponse.success("Cost center updated", costCenterService.update(id, request, currentUser)));
+    }
+
+    @PostMapping("/bulk")
+    @Operation(summary = "Bulk import cost centers from CSV/spreadsheet data")
+    public ResponseEntity<ApiResponse<CostCenterBulkResponse>> bulkCreate(
+            @RequestBody List<CostCenterBulkItemRequest> items,
+            @RequestParam(required = false) UUID distributorId,
+            @AuthenticationPrincipal User currentUser) {
+        UUID effectiveDistributorId = distributorId != null ? distributorId : securityUtils.getDistributorIdForFiltering();
+        CostCenterBulkResponse result = costCenterService.bulkCreate(effectiveDistributorId, items, currentUser);
+        String message = result.getCreated() + " cost centre(s) imported";
+        if (result.getSkipped() > 0) message += ", " + result.getSkipped() + " skipped";
+        return ResponseEntity.ok(ApiResponse.success(message, result));
     }
 
     @DeleteMapping("/{id}")

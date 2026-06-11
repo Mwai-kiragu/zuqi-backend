@@ -722,6 +722,9 @@ public class InvoiceServiceImpl implements InvoiceService {
         if (invoice.getStatus() == InvoiceStatus.PAID) {
             throw new ValidationException("Cannot cancel a paid invoice");
         }
+        if (invoice.getPaidAmount() != null && invoice.getPaidAmount().compareTo(BigDecimal.ZERO) > 0) {
+            throw new ValidationException("Cannot cancel an invoice with recorded payments. Please reverse the payment first.");
+        }
 
         invoice.setStatus(InvoiceStatus.CANCELLED);
         invoice = invoiceRepository.save(invoice);
@@ -1045,5 +1048,24 @@ public class InvoiceServiceImpl implements InvoiceService {
                 (invoice.getDistributor() != null ? invoice.getDistributor().getName() : emailConfig.getFromName());
 
         emailService.sendInvoiceEmailAsync(email, subject, variables);
+    }
+
+    @Override
+    @Transactional
+    public void syncPosSaleInvoicePayment(UUID posSaleId, java.math.BigDecimal totalPaid) {
+        invoiceRepository.findByPosOrderId(posSaleId).ifPresent(invoice -> {
+            if (invoice.getStatus() == InvoiceStatus.CANCELLED) return;
+            invoice.setPaidAmount(totalPaid != null ? totalPaid : java.math.BigDecimal.ZERO);
+            java.math.BigDecimal total = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : java.math.BigDecimal.ZERO;
+            java.math.BigDecimal paid = invoice.getPaidAmount();
+            if (paid.compareTo(total) >= 0) {
+                invoice.setStatus(InvoiceStatus.PAID);
+            } else if (paid.compareTo(java.math.BigDecimal.ZERO) > 0) {
+                invoice.setStatus(InvoiceStatus.PARTIALLY_PAID);
+            }
+            invoice.setBalanceDue(total.subtract(paid).max(java.math.BigDecimal.ZERO));
+            invoiceRepository.save(invoice);
+            log.info("Synced invoice {} — paidAmount={}, status={}", invoice.getInvoiceNumber(), paid, invoice.getStatus());
+        });
     }
 }

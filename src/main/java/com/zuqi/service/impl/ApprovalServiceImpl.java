@@ -50,6 +50,7 @@ import com.zuqi.service.EmailService;
 import com.zuqi.service.GlAutoPostingService;
 import com.zuqi.service.InvoiceService;
 import com.zuqi.service.NotificationService;
+import com.zuqi.service.PosService;
 import com.zuqi.util.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -109,6 +110,9 @@ public class ApprovalServiceImpl implements ApprovalService {
 
     @Lazy @Autowired
     private ApprovalThresholdService approvalThresholdService;
+
+    @Lazy @Autowired
+    private PosService posService;
 
     private final AtomicLong sequenceCounter = new AtomicLong(0);
 
@@ -301,6 +305,12 @@ public class ApprovalServiceImpl implements ApprovalService {
                     applyApprovedSupplierUpdate(request);
                 }
             }
+            case "SUPPLIER_BLACKLIST" -> {
+                if ("APPROVED".equals(status)) {
+                    applyApprovedSupplierBlacklist(request);
+                }
+                // On REJECTED: no action — supplier remains active
+            }
             case "PRODUCT"        -> {
                 if ("APPROVED".equals(status)) {
                     productRepository.approveAndActivate(entityId);
@@ -375,6 +385,21 @@ public class ApprovalServiceImpl implements ApprovalService {
                 posShiftRepository.updateReconciliationStatus(entityId, reconcileStatus,
                         approverId, java.time.LocalDateTime.now());
             }
+            case "POS_REFUND" -> {
+                if ("APPROVED".equals(status)) {
+                    try {
+                        UUID cashierId = request.getRequestedValues() != null && request.getRequestedValues().containsKey("cashierId")
+                                ? UUID.fromString((String) request.getRequestedValues().get("cashierId"))
+                                : approverId;
+                        posService.executeApprovedRefund(entityId, request.getRequestedValues(), cashierId);
+                        log.info("Executed approved POS refund for sale {} by cashier {}", entityId, cashierId);
+                    } catch (Exception e) {
+                        log.error("Failed to execute approved POS refund for sale {}: {}", entityId, e.getMessage(), e);
+                        throw e;
+                    }
+                }
+                // On REJECTED: no action — sale remains COMPLETED
+            }
             case "PURCHASE_REQUISITION" -> {
                 PrStatus prStatus = "APPROVED".equals(status) ? PrStatus.APPROVED : PrStatus.REJECTED;
                 purchaseRequisitionRepository.updateStatus(entityId, prStatus);
@@ -448,6 +473,30 @@ public class ApprovalServiceImpl implements ApprovalService {
             if (v.containsKey("creditLimit")) supplier.setCreditLimit(new java.math.BigDecimal(v.get("creditLimit").toString()));
             supplierRepository.save(supplier);
             log.info("Applied approved supplier update for supplier {}", supplier.getId());
+        });
+    }
+
+    private void applyApprovedSupplierBlacklist(ApprovalRequest request) {
+        if (request.getEntityId() == null) return;
+        supplierRepository.findById(request.getEntityId()).ifPresent(supplier -> {
+            Map<String, Object> v = request.getRequestedValues();
+            String reason = v.containsKey("reason") ? (String) v.get("reason") : null;
+
+            User blacklistedByUser = null;
+            if (v.containsKey("blacklistedById")) {
+                try {
+                    blacklistedByUser = userRepository.findById(
+                            UUID.fromString((String) v.get("blacklistedById"))).orElse(null);
+                } catch (Exception ignored) {}
+            }
+
+            supplier.setBlacklisted(true);
+            supplier.setBlacklistedReason(reason);
+            supplier.setBlacklistedAt(java.time.LocalDateTime.now());
+            supplier.setBlacklistedBy(blacklistedByUser);
+            supplier.setActive(false);
+            supplierRepository.save(supplier);
+            log.info("Applied approved supplier blacklist for supplier {}", supplier.getId());
         });
     }
 
@@ -648,6 +697,7 @@ public class ApprovalServiceImpl implements ApprovalService {
             case SUPPLIER_CREATION -> "SUP";
             case SUPPLIER_DETAILS_UPDATE -> "SDU";
             case SUPPLIER_BANK_DETAILS_UPDATE -> "SBD";
+            case SUPPLIER_BLACKLIST -> "SBL";
             case PRODUCT_PRICE_EDIT -> "PRE";
             case PRODUCT_COST_EDIT -> "PCE";
             case DISCOUNT_APPROVAL -> "DIS";
@@ -658,6 +708,7 @@ public class ApprovalServiceImpl implements ApprovalService {
             case PAYMENT_APPROVAL -> "PAY";
             case CREDIT_NOTE -> "CRN";
             case JOURNAL_ENTRY -> "JNL";
+            case POS_REFUND -> "PRF";
             default -> "APR";
         };
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyMMddHHmmss"));

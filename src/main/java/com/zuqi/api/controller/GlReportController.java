@@ -32,6 +32,16 @@ public class GlReportController {
         return ResponseEntity.ok(ApiResponse.success(glReportService.getTrialBalance(effectiveDistributorId, periodId)));
     }
 
+    @GetMapping("/trial-balance/range")
+    @Operation(summary = "Get trial balance for a custom date range")
+    public ResponseEntity<ApiResponse<TrialBalanceResponse>> getTrialBalanceByRange(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+            @RequestParam(required = false) UUID distributorId) {
+        UUID effectiveDistributorId = distributorId != null ? distributorId : securityUtils.getDistributorIdForFiltering();
+        return ResponseEntity.ok(ApiResponse.success(glReportService.getTrialBalanceByRange(effectiveDistributorId, fromDate, toDate)));
+    }
+
     @GetMapping("/budget-variance")
     @Operation(summary = "Get budget vs actual variance report")
     public ResponseEntity<ApiResponse<BudgetVarianceResponse>> getBudgetVariance(

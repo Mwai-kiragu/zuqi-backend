@@ -7,6 +7,7 @@ import java.util.UUID;
 
 public interface GlReportService {
     TrialBalanceResponse getTrialBalance(UUID distributorId, UUID periodId);
+    TrialBalanceResponse getTrialBalanceByRange(UUID distributorId, LocalDate fromDate, LocalDate toDate);
     BudgetVarianceResponse getBudgetVariance(UUID distributorId, int year, Integer month);
     GeneralLedgerResponse getGeneralLedger(UUID distributorId, LocalDate fromDate, LocalDate toDate);
     BalanceSheetResponse getBalanceSheet(UUID distributorId, LocalDate asOfDate);

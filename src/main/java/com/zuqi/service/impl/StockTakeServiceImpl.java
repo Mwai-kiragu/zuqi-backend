@@ -195,16 +195,23 @@ public class StockTakeServiceImpl implements StockTakeService {
                     .findByDistributorIdAndWorkflowTypeAndActiveTrueOrderByLevelNumberAsc(
                             approvedBy.getDistributorId(), ApprovalWorkflowType.STOCK_TAKE_POSTING);
             if (!configs.isEmpty()) {
-                Set<String> allowedRoles = configs.stream()
-                        .map(ApprovalWorkflowConfig::getRequiredRole)
-                        .filter(r -> r != null && !r.isBlank())
-                        .collect(java.util.stream.Collectors.toSet());
-                boolean authorized = allowedRoles.isEmpty() ||
-                        securityUtils.hasRole(approvedBy, "SUPER_ADMIN") ||
-                        allowedRoles.stream().anyMatch(role ->
-                                securityUtils.hasRole(approvedBy, role) ||
-                                (approvedBy.getUserGroup() != null &&
-                                 approvedBy.getUserGroup().getId().toString().equals(role)));
+                // Per-level check: user satisfies a level if:
+                //   - the level has no requiredRole (open level — any user qualifies), OR
+                //   - their Casbin role matches, OR
+                //   - their UserGroup ID matches, OR
+                //   - their UserGroup's UserType ID matches
+                boolean authorized = securityUtils.hasRole(approvedBy, "SUPER_ADMIN") ||
+                        configs.stream().anyMatch(config -> {
+                            String role = config.getRequiredRole();
+                            if (role == null || role.isBlank()) return true;
+                            if (securityUtils.hasRole(approvedBy, role)) return true;
+                            if (approvedBy.getUserGroup() != null) {
+                                if (approvedBy.getUserGroup().getId().toString().equals(role)) return true;
+                                if (approvedBy.getUserGroup().getUserType() != null &&
+                                        approvedBy.getUserGroup().getUserType().getId().toString().equals(role)) return true;
+                            }
+                            return false;
+                        });
                 if (!authorized) {
                     String labels = configs.stream()
                             .map(ApprovalWorkflowConfig::getRoleLabel)

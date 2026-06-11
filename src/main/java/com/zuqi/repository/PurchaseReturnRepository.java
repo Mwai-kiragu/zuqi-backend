@@ -19,6 +19,24 @@ public interface PurchaseReturnRepository extends JpaRepository<PurchaseReturn, 
 
     Page<PurchaseReturn> findByDistributorMerchantId(UUID merchantId, Pageable pageable);
 
+    @Query("""
+        SELECT pr FROM PurchaseReturn pr
+        WHERE (:distributorId IS NULL OR pr.distributor.id = :distributorId)
+          AND (:merchantId    IS NULL OR pr.distributor.merchant.id = :merchantId)
+          AND (:status        IS NULL OR pr.status = :status)
+          AND (:search        IS NULL OR :search = ''
+               OR LOWER(pr.returnNumber) LIKE LOWER(CONCAT('%', :search, '%'))
+               OR LOWER(pr.supplier.name) LIKE LOWER(CONCAT('%', :search, '%'))
+               OR (pr.grn IS NOT NULL AND LOWER(pr.grn.grnNumber) LIKE LOWER(CONCAT('%', :search, '%'))))
+        ORDER BY pr.createdAt DESC
+        """)
+    Page<PurchaseReturn> findWithFilters(
+            @Param("distributorId") UUID distributorId,
+            @Param("merchantId") UUID merchantId,
+            @Param("status") com.zuqi.domain.returns.ReturnStatus status,
+            @Param("search") String search,
+            Pageable pageable);
+
     boolean existsByReturnNumber(String returnNumber);
 
     /** Sum of already-returned quantities per product for a given GRN, excluding cancelled returns. */

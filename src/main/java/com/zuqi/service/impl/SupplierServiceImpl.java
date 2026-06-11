@@ -325,16 +325,56 @@ public class SupplierServiceImpl implements SupplierService {
     @Transactional
     public SupplierResponse blacklistSupplier(String id, String reason, User currentUser) {
         Supplier supplier = findById(id);
+
+        boolean needsApproval = securityUtils.currentUserRequiresApprovalFor("SUPPLIERS");
+        UUID currentUserId = currentUser != null ? currentUser.getId() : securityUtils.getCurrentUserId();
+
+        if (needsApproval && currentUserId != null) {
+            boolean hasPending = !approvalRequestRepository
+                    .findByEntityTypeAndEntityIdAndStatus("SUPPLIER_BLACKLIST", supplier.getId(), ApprovalStatus.PENDING)
+                    .isEmpty();
+            if (hasPending) {
+                throw new ValidationException("This supplier already has a pending blacklist approval request.");
+            }
+
+            ApprovalRequestResponse approvalReq = approvalService.createRequest(currentUserId,
+                    CreateApprovalRequestDto.builder()
+                            .workflowType(ApprovalWorkflowType.SUPPLIER_BLACKLIST)
+                            .entityType("SUPPLIER_BLACKLIST")
+                            .entityId(supplier.getId())
+                            .entityName(supplier.getName())
+                            .description("Blacklist request for supplier: " + supplier.getName())
+                            .requestedValues(Map.of(
+                                    "reason", reason != null ? reason : "",
+                                    "blacklistedById", currentUserId.toString()))
+                            .requiredApprovals(1)
+                            .build());
+
+            if (currentUser != null) {
+                activityLogService.log(currentUser.getId(), currentUser.getEmail(),
+                        currentUser.getFirstName() + " " + currentUser.getLastName(),
+                        ActivityAction.DEACTIVATE, "SUPPLIER", supplier.getId(),
+                        supplier.getName(), "SUPPLIERS", "Submitted blacklist request for approval: " + supplier.getName());
+            }
+
+            SupplierResponse response = SupplierResponse.fromEntity(supplier);
+            response.setPendingApprovalId(approvalReq.getId());
+            return response;
+        }
+
+        // No approval needed — apply immediately
         supplier.setBlacklisted(true);
         supplier.setBlacklistedReason(reason);
         supplier.setBlacklistedAt(LocalDateTime.now());
         supplier.setBlacklistedBy(currentUser);
         supplier.setActive(false);
         Supplier blacklisted = supplierRepository.save(supplier);
-        activityLogService.log(currentUser.getId(), currentUser.getEmail(),
-                currentUser.getFirstName() + " " + currentUser.getLastName(),
-                ActivityAction.DEACTIVATE, "SUPPLIER", blacklisted.getId(),
-                blacklisted.getName(), "SUPPLIERS", "Blacklisted supplier: " + blacklisted.getName());
+        if (currentUser != null) {
+            activityLogService.log(currentUser.getId(), currentUser.getEmail(),
+                    currentUser.getFirstName() + " " + currentUser.getLastName(),
+                    ActivityAction.DEACTIVATE, "SUPPLIER", blacklisted.getId(),
+                    blacklisted.getName(), "SUPPLIERS", "Blacklisted supplier: " + blacklisted.getName());
+        }
         return SupplierResponse.fromEntity(blacklisted);
     }
 

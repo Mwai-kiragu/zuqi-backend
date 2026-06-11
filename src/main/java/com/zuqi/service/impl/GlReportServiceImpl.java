@@ -32,14 +32,24 @@ public class GlReportServiceImpl implements GlReportService {
         GlPeriod period = glPeriodRepository.findById(periodId)
                 .orElseThrow(() -> new ResourceNotFoundException("GlPeriod", "id", periodId));
 
-        List<JournalEntryLine> lines = journalEntryLineRepository.findPostedLinesForPeriod(distributorId, periodId);
+        // Opening balances: all posted activity strictly before period start
+        List<JournalEntryLine> openingLines = journalEntryLineRepository.findPostedLinesBeforeDate(distributorId, period.getStartDate());
+        Map<UUID, BigDecimal[]> openingTotals = new LinkedHashMap<>();
+        for (JournalEntryLine line : openingLines) {
+            UUID accountId = line.getAccount().getId();
+            openingTotals.computeIfAbsent(accountId, k -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
+            openingTotals.get(accountId)[0] = openingTotals.get(accountId)[0].add(line.getDebitAmount());
+            openingTotals.get(accountId)[1] = openingTotals.get(accountId)[1].add(line.getCreditAmount());
+        }
 
-        Map<UUID, BigDecimal[]> accountTotals = new LinkedHashMap<>();
+        // Period activity
+        List<JournalEntryLine> lines = journalEntryLineRepository.findPostedLinesForPeriod(distributorId, periodId);
+        Map<UUID, BigDecimal[]> periodTotals = new LinkedHashMap<>();
         for (JournalEntryLine line : lines) {
             UUID accountId = line.getAccount().getId();
-            accountTotals.computeIfAbsent(accountId, k -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
-            accountTotals.get(accountId)[0] = accountTotals.get(accountId)[0].add(line.getDebitAmount());
-            accountTotals.get(accountId)[1] = accountTotals.get(accountId)[1].add(line.getCreditAmount());
+            periodTotals.computeIfAbsent(accountId, k -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
+            periodTotals.get(accountId)[0] = periodTotals.get(accountId)[0].add(line.getDebitAmount());
+            periodTotals.get(accountId)[1] = periodTotals.get(accountId)[1].add(line.getCreditAmount());
         }
 
         List<GlAccount> accounts = glAccountRepository.findByDistributorIdOrderByAccountCodeAsc(distributorId);
@@ -49,14 +59,24 @@ public class GlReportServiceImpl implements GlReportService {
 
         for (GlAccount account : accounts) {
             if (!account.isPostingAccount()) continue;
-            BigDecimal[] totals = accountTotals.getOrDefault(account.getId(), new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
-            BigDecimal dr = totals[0];
-            BigDecimal cr = totals[1];
+            BigDecimal[] opening = openingTotals.getOrDefault(account.getId(), new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
+            BigDecimal[] perTotals = periodTotals.getOrDefault(account.getId(), new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
 
-            if (dr.compareTo(BigDecimal.ZERO) == 0 && cr.compareTo(BigDecimal.ZERO) == 0) continue;
+            BigDecimal openDr = opening[0];
+            BigDecimal openCr = opening[1];
+            BigDecimal perDr = perTotals[0];
+            BigDecimal perCr = perTotals[1];
 
-            BigDecimal closingDr = dr.compareTo(cr) > 0 ? dr.subtract(cr) : BigDecimal.ZERO;
-            BigDecimal closingCr = cr.compareTo(dr) > 0 ? cr.subtract(dr) : BigDecimal.ZERO;
+            if (openDr.compareTo(BigDecimal.ZERO) == 0 && openCr.compareTo(BigDecimal.ZERO) == 0
+                    && perDr.compareTo(BigDecimal.ZERO) == 0 && perCr.compareTo(BigDecimal.ZERO) == 0) continue;
+
+            BigDecimal totalDr = openDr.add(perDr);
+            BigDecimal totalCr = openCr.add(perCr);
+            BigDecimal closingDr = totalDr.compareTo(totalCr) > 0 ? totalDr.subtract(totalCr) : BigDecimal.ZERO;
+            BigDecimal closingCr = totalCr.compareTo(totalDr) > 0 ? totalCr.subtract(totalDr) : BigDecimal.ZERO;
+
+            BigDecimal openingNetDr = openDr.compareTo(openCr) > 0 ? openDr.subtract(openCr) : BigDecimal.ZERO;
+            BigDecimal openingNetCr = openCr.compareTo(openDr) > 0 ? openCr.subtract(openDr) : BigDecimal.ZERO;
 
             rows.add(TrialBalanceRow.builder()
                     .accountId(account.getId())
@@ -64,19 +84,97 @@ public class GlReportServiceImpl implements GlReportService {
                     .accountName(account.getAccountName())
                     .accountType(account.getAccountType())
                     .normalBalance(account.getNormalBalance())
-                    .periodDebit(dr)
-                    .periodCredit(cr)
+                    .openingDebit(openingNetDr)
+                    .openingCredit(openingNetCr)
+                    .periodDebit(perDr)
+                    .periodCredit(perCr)
                     .closingDebit(closingDr)
                     .closingCredit(closingCr)
                     .build());
 
-            totalDebits = totalDebits.add(dr);
-            totalCredits = totalCredits.add(cr);
+            totalDebits = totalDebits.add(closingDr);
+            totalCredits = totalCredits.add(closingCr);
         }
 
         return TrialBalanceResponse.builder()
                 .periodName(period.getPeriodName())
                 .asOfDate(period.getEndDate())
+                .rows(rows)
+                .totalDebits(totalDebits)
+                .totalCredits(totalCredits)
+                .build();
+    }
+
+    @Override
+    public TrialBalanceResponse getTrialBalanceByRange(UUID distributorId, LocalDate fromDate, LocalDate toDate) {
+        // Opening balances: all activity strictly before fromDate
+        List<JournalEntryLine> openingLines = journalEntryLineRepository.findPostedLinesBeforeDate(distributorId, fromDate);
+        Map<UUID, BigDecimal[]> openingTotals = new LinkedHashMap<>();
+        for (JournalEntryLine line : openingLines) {
+            UUID accountId = line.getAccount().getId();
+            openingTotals.computeIfAbsent(accountId, k -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
+            openingTotals.get(accountId)[0] = openingTotals.get(accountId)[0].add(line.getDebitAmount());
+            openingTotals.get(accountId)[1] = openingTotals.get(accountId)[1].add(line.getCreditAmount());
+        }
+
+        // Period activity: fromDate to toDate inclusive
+        List<JournalEntryLine> periodLines = journalEntryLineRepository.findPostedLinesForDateRange(distributorId, fromDate, toDate);
+        Map<UUID, BigDecimal[]> periodTotals = new LinkedHashMap<>();
+        for (JournalEntryLine line : periodLines) {
+            UUID accountId = line.getAccount().getId();
+            periodTotals.computeIfAbsent(accountId, k -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
+            periodTotals.get(accountId)[0] = periodTotals.get(accountId)[0].add(line.getDebitAmount());
+            periodTotals.get(accountId)[1] = periodTotals.get(accountId)[1].add(line.getCreditAmount());
+        }
+
+        List<GlAccount> accounts = glAccountRepository.findByDistributorIdOrderByAccountCodeAsc(distributorId);
+        List<TrialBalanceRow> rows = new ArrayList<>();
+        BigDecimal totalDebits = BigDecimal.ZERO;
+        BigDecimal totalCredits = BigDecimal.ZERO;
+
+        for (GlAccount account : accounts) {
+            if (!account.isPostingAccount()) continue;
+            BigDecimal[] opening = openingTotals.getOrDefault(account.getId(), new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
+            BigDecimal[] period = periodTotals.getOrDefault(account.getId(), new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
+
+            BigDecimal openDr = opening[0];
+            BigDecimal openCr = opening[1];
+            BigDecimal perDr = period[0];
+            BigDecimal perCr = period[1];
+
+            if (openDr.compareTo(BigDecimal.ZERO) == 0 && openCr.compareTo(BigDecimal.ZERO) == 0
+                    && perDr.compareTo(BigDecimal.ZERO) == 0 && perCr.compareTo(BigDecimal.ZERO) == 0) continue;
+
+            BigDecimal totalDr = openDr.add(perDr);
+            BigDecimal totalCr = openCr.add(perCr);
+            BigDecimal closingDr = totalDr.compareTo(totalCr) > 0 ? totalDr.subtract(totalCr) : BigDecimal.ZERO;
+            BigDecimal closingCr = totalCr.compareTo(totalDr) > 0 ? totalCr.subtract(totalDr) : BigDecimal.ZERO;
+
+            BigDecimal openingNetDr = openDr.compareTo(openCr) > 0 ? openDr.subtract(openCr) : BigDecimal.ZERO;
+            BigDecimal openingNetCr = openCr.compareTo(openDr) > 0 ? openCr.subtract(openDr) : BigDecimal.ZERO;
+
+            rows.add(TrialBalanceRow.builder()
+                    .accountId(account.getId())
+                    .accountCode(account.getAccountCode())
+                    .accountName(account.getAccountName())
+                    .accountType(account.getAccountType())
+                    .normalBalance(account.getNormalBalance())
+                    .openingDebit(openingNetDr)
+                    .openingCredit(openingNetCr)
+                    .periodDebit(perDr)
+                    .periodCredit(perCr)
+                    .closingDebit(closingDr)
+                    .closingCredit(closingCr)
+                    .build());
+
+            totalDebits = totalDebits.add(closingDr);
+            totalCredits = totalCredits.add(closingCr);
+        }
+
+        String rangeLabel = fromDate + " to " + toDate;
+        return TrialBalanceResponse.builder()
+                .periodName(rangeLabel)
+                .asOfDate(toDate)
                 .rows(rows)
                 .totalDebits(totalDebits)
                 .totalCredits(totalCredits)
@@ -116,6 +214,7 @@ public class GlReportServiceImpl implements GlReportService {
                     .accountId(b.getAccount().getId())
                     .accountCode(b.getAccount().getAccountCode())
                     .accountName(b.getAccount().getAccountName())
+                    .accountType(b.getAccount().getAccountType())
                     .periodMonth(b.getPeriodMonth())
                     .budgetedAmount(b.getBudgetedAmount())
                     .actualAmount(actual)

@@ -37,9 +37,11 @@ public class PurchaseReturnController {
     @GetMapping
     public ResponseEntity<ApiResponse<Page<PurchaseReturnResponse>>> getAll(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String search) {
         Page<PurchaseReturnResponse> result = purchaseReturnService.getAll(
-                PageRequest.of(page, size, Sort.by("createdAt").descending()));
+                status, search, PageRequest.of(page, size, Sort.by("createdAt").descending()));
         return ResponseEntity.ok(ApiResponse.success("Purchase returns", result));
     }
 

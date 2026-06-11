@@ -12,5 +12,5 @@ public interface PurchaseReturnService {
     PurchaseReturnResponse confirm(UUID id);
     PurchaseReturnResponse cancel(UUID id);
     PurchaseReturnResponse getById(UUID id);
-    Page<PurchaseReturnResponse> getAll(Pageable pageable);
+    Page<PurchaseReturnResponse> getAll(String status, String search, Pageable pageable);
 }
