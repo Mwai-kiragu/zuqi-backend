@@ -9,7 +9,7 @@ import java.util.UUID;
 
 public interface MerchantService {
 
-    Page<MerchantResponse> getAllMerchants(Boolean active, Pageable pageable);
+    Page<MerchantResponse> getAllMerchants(Boolean active, String search, Pageable pageable);
 
     MerchantResponse getMerchantById(UUID id);
 

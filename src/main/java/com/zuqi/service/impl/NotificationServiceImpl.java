@@ -5,11 +5,14 @@ import com.zuqi.api.dto.notification.NotificationResponse;
 import com.zuqi.config.EmailConfig;
 import com.zuqi.domain.approval.ApprovalRequest;
 import com.zuqi.domain.approval.ApprovalStatus;
+import com.zuqi.domain.approval.ApprovalWorkflowConfig;
+import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.inventory.Stock;
 import com.zuqi.domain.notification.Notification;
 import com.zuqi.domain.procurement.PurchaseOrder;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
+import com.zuqi.repository.ApprovalWorkflowConfigRepository;
 import com.zuqi.repository.NotificationRepository;
 import com.zuqi.repository.UserRepository;
 import com.zuqi.service.EmailService;
@@ -33,6 +36,7 @@ public class NotificationServiceImpl implements NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
+    private final ApprovalWorkflowConfigRepository approvalWorkflowConfigRepository;
     private final EmailService emailService;
     private final EmailConfig emailConfig;
     private final SecurityUtils securityUtils;
@@ -56,9 +60,10 @@ public class NotificationServiceImpl implements NotificationService {
                 return;
             }
 
-            List<User> approvers = userRepository.findActiveApproversByDistributorId(distributorId);
+            int nextLevel = request.getReceivedApprovals() + 1;
+            List<User> approvers = findApproversForLevel(distributorId, request.getWorkflowType(), nextLevel);
             if (approvers.isEmpty()) {
-                log.info("No approvers found for distributor {} — skipping in-app notifications", distributorId);
+                log.info("No approvers found for distributor {} level {} — skipping notifications", distributorId, nextLevel);
                 return;
             }
 
@@ -113,6 +118,29 @@ public class NotificationServiceImpl implements NotificationService {
             log.error("Failed to send in-app notifications to approvers for request {}: {}",
                     request.getRequestNumber(), e.getMessage(), e);
         }
+    }
+
+    private List<User> findApproversForLevel(UUID distributorId, ApprovalWorkflowType workflowType, int level) {
+        if (workflowType != null) {
+            List<ApprovalWorkflowConfig> configs = approvalWorkflowConfigRepository
+                    .findByDistributorIdAndWorkflowTypeAndActiveTrueOrderByLevelNumberAsc(distributorId, workflowType);
+
+            ApprovalWorkflowConfig levelConfig = configs.stream()
+                    .filter(c -> c.getLevelNumber() == level)
+                    .findFirst().orElse(null);
+
+            if (levelConfig != null && levelConfig.getRequiredRole() != null && !levelConfig.getRequiredRole().isBlank()) {
+                List<User> targeted = userRepository.findActiveByDistributorIdAndRole(
+                        distributorId, levelConfig.getRequiredRole());
+                if (!targeted.isEmpty()) {
+                    log.debug("Targeting {} approver(s) with role '{}' for level {} of {}",
+                            targeted.size(), levelConfig.getRequiredRole(), level, workflowType);
+                    return targeted;
+                }
+            }
+        }
+        // Fall back to all active approvers for this distributor
+        return userRepository.findActiveApproversByDistributorId(distributorId);
     }
 
     @Override

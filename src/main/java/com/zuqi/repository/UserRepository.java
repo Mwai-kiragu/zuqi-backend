@@ -158,4 +158,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
             "WHERE u.distributorId = :distributorId AND u.active = true " +
             "AND r.name IN ('WAREHOUSE_MANAGER', 'DISTRIBUTOR_ADMIN')")
     List<User> findWarehouseManagersByDistributorId(@Param("distributorId") UUID distributorId);
+
+    @Query("SELECT DISTINCT u FROM User u LEFT JOIN u.roles r " +
+            "WHERE u.distributorId = :distributorId AND u.active = true AND r.name = :roleName")
+    List<User> findActiveByDistributorIdAndRole(@Param("distributorId") UUID distributorId,
+                                                @Param("roleName") String roleName);
 }

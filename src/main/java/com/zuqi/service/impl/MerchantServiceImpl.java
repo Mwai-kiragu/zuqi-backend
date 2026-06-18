@@ -8,13 +8,16 @@ import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.repository.DistributorRepository;
 import com.zuqi.repository.MerchantRepository;
 import com.zuqi.service.MerchantService;
+import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -24,6 +27,7 @@ public class MerchantServiceImpl implements MerchantService {
 
     private final MerchantRepository merchantRepository;
     private final DistributorRepository distributorRepository;
+    private final SecurityUtils securityUtils;
 
     private MerchantResponse toResponse(Merchant merchant) {
         MerchantResponse response = MerchantResponse.fromEntity(merchant);
@@ -34,7 +38,25 @@ public class MerchantServiceImpl implements MerchantService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<MerchantResponse> getAllMerchants(Boolean active, Pageable pageable) {
+    public Page<MerchantResponse> getAllMerchants(Boolean active, String search, Pageable pageable) {
+        // Non-super-admin users may only see their own merchant
+        if (!securityUtils.isSuperAdmin()) {
+            UUID merchantId = securityUtils.getCurrentUserMerchantId();
+            if (merchantId == null) {
+                return new PageImpl<>(List.of(), pageable, 0);
+            }
+            return merchantRepository.findById(merchantId)
+                    .filter(m -> active == null || m.isActive() == active)
+                    .map(m -> (Page<MerchantResponse>) new PageImpl<>(List.of(toResponse(m)), pageable, 1))
+                    .orElseGet(() -> new PageImpl<>(List.of(), pageable, 0));
+        }
+
+        boolean hasSearch = search != null && !search.isBlank();
+        if (hasSearch) {
+            return active == null
+                    ? merchantRepository.search(search, pageable).map(this::toResponse)
+                    : merchantRepository.searchByActive(search, active, pageable).map(this::toResponse);
+        }
         if (active == null) {
             return merchantRepository.findAll(pageable).map(this::toResponse);
         }
