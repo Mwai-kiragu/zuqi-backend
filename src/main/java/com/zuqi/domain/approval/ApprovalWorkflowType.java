@@ -13,6 +13,7 @@ public enum ApprovalWorkflowType {
     SUPPLIER_DETAILS_UPDATE,
     SUPPLIER_BANK_DETAILS_UPDATE,
     SUPPLIER_BLACKLIST,
+    SUPPLIER_WHITELIST,
 
     // Product / Pricing
     PRODUCT_PRICE_EDIT,

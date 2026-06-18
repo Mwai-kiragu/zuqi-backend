@@ -2,6 +2,7 @@ package com.zuqi.service;
 
 import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.procurement.PurchaseOrder;
+import com.zuqi.domain.supplier.Supplier;
 import com.zuqi.domain.user.User;
 
 public interface EmailService {
@@ -9,6 +10,8 @@ public interface EmailService {
     void sendWelcomeEmail(User user, String temporaryPassword);
 
     void sendCustomerOnboardingEmail(Customer customer);
+
+    void sendSupplierOnboardingEmail(Supplier supplier);
 
     void sendPasswordResetEmail(User user, String resetToken);
 

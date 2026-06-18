@@ -523,6 +523,17 @@ public class InventoryServiceImpl implements InventoryService {
         Warehouse savedWarehouse = warehouseRepository.save(warehouse);
         log.info("Created warehouse: {} ({})", savedWarehouse.getName(), savedWarehouse.getCode());
 
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.CREATE, "WAREHOUSE", savedWarehouse.getId(),
+                savedWarehouse.getName() + " (" + savedWarehouse.getCode() + ")", "INVENTORY",
+                "Created warehouse: " + savedWarehouse.getName()
+            );
+        }
+
         // Initialize zero-stock records for all active non-parent products so they appear in inventory
         productRepository.findByDistributorIdAndActiveTrue(distributor.getId()).stream()
                 .filter(p -> !p.isHasVariants())
@@ -581,6 +592,17 @@ public class InventoryServiceImpl implements InventoryService {
         Warehouse savedWarehouse = warehouseRepository.save(warehouse);
         log.info("Updated warehouse: {} ({})", savedWarehouse.getName(), savedWarehouse.getCode());
 
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.UPDATE, "WAREHOUSE", savedWarehouse.getId(),
+                savedWarehouse.getName() + " (" + savedWarehouse.getCode() + ")", "INVENTORY",
+                "Updated warehouse: " + savedWarehouse.getName()
+            );
+        }
+
         return mapToWarehouseResponse(savedWarehouse);
     }
 
@@ -596,6 +618,16 @@ public class InventoryServiceImpl implements InventoryService {
         warehouse.setDeactivatedBy(currentUser);
         warehouseRepository.save(warehouse);
         log.info("Deactivated warehouse: {} ({}) with reason: {}", warehouse.getName(), warehouse.getCode(), reason);
+
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.DEACTIVATE, "WAREHOUSE", warehouse.getId(),
+                warehouse.getName() + " (" + warehouse.getCode() + ")", "INVENTORY",
+                "Deactivated warehouse: " + warehouse.getName() + (reason != null ? " — Reason: " + reason : "")
+            );
+        }
     }
 
     @Override
@@ -610,6 +642,17 @@ public class InventoryServiceImpl implements InventoryService {
         warehouse.setDeactivatedBy(null);
         warehouseRepository.save(warehouse);
         log.info("Activated warehouse: {} ({})", warehouse.getName(), warehouse.getCode());
+
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(
+                currentUser.getId(), currentUser.getEmail(),
+                currentUser.getFirstName() + " " + currentUser.getLastName(),
+                ActivityAction.ACTIVATE, "WAREHOUSE", warehouse.getId(),
+                warehouse.getName() + " (" + warehouse.getCode() + ")", "INVENTORY",
+                "Activated warehouse: " + warehouse.getName()
+            );
+        }
     }
 
 

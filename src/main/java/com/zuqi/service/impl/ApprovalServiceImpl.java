@@ -2,6 +2,7 @@ package com.zuqi.service.impl;
 
 import com.zuqi.api.dto.approval.ApprovalActionResponse;
 import com.zuqi.api.dto.approval.ApprovalRequestResponse;
+import com.zuqi.api.dto.approval.ApprovalWorkflowConfigResponse;
 import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
 import com.zuqi.api.dto.approval.ProcessApprovalRequest;
 import com.zuqi.api.dto.common.PageResponse;
@@ -20,7 +21,11 @@ import com.zuqi.domain.inventory.StockMovement;
 import com.zuqi.domain.order.Order;
 import com.zuqi.domain.order.OrderStatus;
 import com.zuqi.domain.procurement.PrStatus;
+import com.zuqi.domain.returns.PurchaseReturn;
+import com.zuqi.domain.returns.PurchaseReturnItem;
+import com.zuqi.domain.returns.SalesReturnItem;
 import com.zuqi.repository.ApprovalActionRepository;
+import com.zuqi.repository.PurchaseReturnRepository;
 import com.zuqi.repository.ApprovalRequestRepository;
 import com.zuqi.repository.CustomerRepository;
 import com.zuqi.domain.invoice.InvoiceStatus;
@@ -36,10 +41,18 @@ import com.zuqi.repository.StockRepository;
 import com.zuqi.domain.expense.ExpenseStatus;
 import com.zuqi.domain.returns.ReturnStatus;
 import com.zuqi.repository.ExpenseRepository;
+import com.zuqi.domain.gl.JournalEntry;
+import com.zuqi.domain.gl.JournalEntryStatus;
+import com.zuqi.repository.JournalEntryRepository;
 import com.zuqi.repository.SalesReturnRepository;
+import com.zuqi.repository.StockTakeBatchRepository;
+import com.zuqi.repository.StockTakeItemRepository;
 import com.zuqi.repository.StockTransferRepository;
 import com.zuqi.repository.SupplierRepository;
 import com.zuqi.repository.WarehouseRepository;
+import com.zuqi.domain.inventory.StockTakeBatch;
+import com.zuqi.domain.inventory.StockTakeBatchStatus;
+import com.zuqi.domain.inventory.StockTakeItem;
 import com.zuqi.domain.inventory.Warehouse;
 import com.zuqi.repository.UserRepository;
 import com.zuqi.service.ActivityLogService;
@@ -87,13 +100,17 @@ public class ApprovalServiceImpl implements ApprovalService {
     private final PromotionRepository promotionRepository;
     private final StockMovementRepository stockMovementRepository;
     private final StockRepository stockRepository;
+    private final StockTakeBatchRepository stockTakeBatchRepository;
+    private final StockTakeItemRepository stockTakeItemRepository;
     private final StockTransferRepository stockTransferRepository;
     private final WarehouseRepository warehouseRepository;
     private final PosShiftRepository posShiftRepository;
     private final PurchaseRequisitionRepository purchaseRequisitionRepository;
     private final OrderRepository orderRepository;
     private final InvoiceRepository invoiceRepository;
+    private final JournalEntryRepository journalEntryRepository;
     private final SalesReturnRepository salesReturnRepository;
+    private final PurchaseReturnRepository purchaseReturnRepository;
     private final ExpenseRepository expenseRepository;
     private final ActivityLogService activityLogService;
     private final EmailService emailService;
@@ -210,18 +227,13 @@ public class ApprovalServiceImpl implements ApprovalService {
         }
 
         if (request.getRequestedById().equals(approverId)) {
-            User self = securityUtils.getCurrentUser();
-            boolean isOwner = self != null && (
-                    securityUtils.hasRole(self, "SUPER_ADMIN") ||
-                    securityUtils.hasRole(self, "DISTRIBUTOR_ADMIN") ||
-                    securityUtils.hasRole(self, "MERCHANT_ADMIN"));
-            if (!isOwner) {
-                throw new ValidationException("The maker cannot approve their own request");
-            }
+            throw new ValidationException("The maker cannot approve their own request");
         }
 
         User approver = userRepository.findById(approverId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", approverId.toString()));
+
+        enforceApprovalHierarchy(request, approver);
 
         ApprovalAction action = ApprovalAction.builder()
                 .approvalRequest(request)
@@ -294,12 +306,69 @@ public class ApprovalServiceImpl implements ApprovalService {
         return toResponse(updated);
     }
 
+    private void enforceApprovalHierarchy(ApprovalRequest request, User approver) {
+        if (request.getDistributorId() == null || request.getWorkflowType() == null) return;
+
+        List<ApprovalWorkflowConfigResponse> levels = approvalWorkflowConfigService
+                .getByWorkflowType(request.getDistributorId(), request.getWorkflowType());
+
+        if (levels.isEmpty()) return;
+
+        boolean anyRoleConfigured = levels.stream()
+                .anyMatch(l -> l.getRequiredRole() != null && !l.getRequiredRole().isBlank());
+        if (!anyRoleConfigured) return;
+
+        int nextLevel = request.getReceivedApprovals() + 1;
+
+        // Block an approver whose role is configured for a higher level from acting
+        // before all lower levels have been satisfied.
+        for (ApprovalWorkflowConfigResponse level : levels) {
+            if (level.getRequiredRole() == null || level.getRequiredRole().isBlank()) continue;
+            if (level.getLevelNumber() > nextLevel) {
+                boolean approverBelongsToHigherLevel = approver.getRoles().stream()
+                        .anyMatch(r -> r.getName().equalsIgnoreCase(level.getRequiredRole()));
+                if (approverBelongsToHigherLevel) {
+                    throw new ValidationException(
+                            "Level " + nextLevel + " approval must be completed before level " +
+                            level.getLevelNumber() + " can proceed.");
+                }
+            }
+        }
+
+        // Enforce that the approver holds the role required at the current level.
+        ApprovalWorkflowConfigResponse currentLevel = levels.stream()
+                .filter(l -> l.getLevelNumber() == nextLevel)
+                .findFirst().orElse(null);
+
+        if (currentLevel != null && currentLevel.getRequiredRole() != null
+                && !currentLevel.getRequiredRole().isBlank()) {
+            boolean hasRequiredRole = approver.getRoles().stream()
+                    .anyMatch(r -> r.getName().equalsIgnoreCase(currentLevel.getRequiredRole()));
+            if (!hasRequiredRole) {
+                throw new ValidationException(
+                        "Approval at level " + nextLevel + " requires the '" +
+                        currentLevel.getRoleLabel() + "' role.");
+            }
+        }
+    }
+
     private void updateEntityApprovalStatus(ApprovalRequest request, String status, UUID approverId) {
         if (request.getEntityId() == null) return;
         UUID entityId = request.getEntityId();
         switch (request.getEntityType()) {
             case "CUSTOMER"       -> customerRepository.updateApprovalStatus(entityId, status);
-            case "SUPPLIER"       -> supplierRepository.updateApprovalStatus(entityId, status);
+            case "SUPPLIER"       -> {
+                supplierRepository.updateApprovalStatus(entityId, status);
+                if ("APPROVED".equals(status)) {
+                    supplierRepository.findById(entityId).ifPresent(supplier -> {
+                        try {
+                            emailService.sendSupplierOnboardingEmail(supplier);
+                        } catch (Exception e) {
+                            log.warn("Failed to send supplier onboarding email for {}: {}", entityId, e.getMessage());
+                        }
+                    });
+                }
+            }
             case "SUPPLIER_UPDATE" -> {
                 if ("APPROVED".equals(status)) {
                     applyApprovedSupplierUpdate(request);
@@ -310,6 +379,12 @@ public class ApprovalServiceImpl implements ApprovalService {
                     applyApprovedSupplierBlacklist(request);
                 }
                 // On REJECTED: no action — supplier remains active
+            }
+            case "SUPPLIER_WHITELIST" -> {
+                if ("APPROVED".equals(status)) {
+                    applyApprovedSupplierWhitelist(request);
+                }
+                // On REJECTED: no action — supplier remains blacklisted
             }
             case "PRODUCT"        -> {
                 if ("APPROVED".equals(status)) {
@@ -435,9 +510,32 @@ public class ApprovalServiceImpl implements ApprovalService {
                 }
             });
             case "STOCK_TRANSFER" -> stockTransferRepository.updateApprovalStatus(entityId, status);
+            case "JOURNAL_ENTRY" -> journalEntryRepository.findById(entityId).ifPresent(entry -> {
+                if ("APPROVED".equals(status)) {
+                    entry.setStatus(JournalEntryStatus.POSTED);
+                    entry.setPostedAt(java.time.LocalDateTime.now());
+                    entry.setPostedBy(approverId);
+                } else {
+                    entry.setStatus(JournalEntryStatus.REJECTED);
+                    entry.setRejectedAt(java.time.LocalDateTime.now());
+                    entry.setRejectionReason(request.getRejectionReason());
+                }
+                journalEntryRepository.save(entry);
+                log.info("Journal entry {} {} via approval workflow", entry.getEntryNumber(), status);
+            });
             case "SALES_RETURN" -> salesReturnRepository.findById(entityId).ifPresent(sr -> {
                 sr.setStatus("APPROVED".equals(status) ? ReturnStatus.CONFIRMED : ReturnStatus.CANCELLED);
                 salesReturnRepository.save(sr);
+                if ("APPROVED".equals(status)) {
+                    applySalesReturnStock(sr);
+                }
+            });
+            case "PURCHASE_RETURN" -> purchaseReturnRepository.findById(entityId).ifPresent(pr -> {
+                pr.setStatus("APPROVED".equals(status) ? ReturnStatus.CONFIRMED : ReturnStatus.CANCELLED);
+                purchaseReturnRepository.save(pr);
+                if ("APPROVED".equals(status)) {
+                    applyPurchaseReturnStock(pr);
+                }
             });
             case "EXPENSE" -> expenseRepository.findById(entityId).ifPresent(expense -> {
                 expense.setStatus("APPROVED".equals(status) ? ExpenseStatus.APPROVED : ExpenseStatus.REJECTED);
@@ -447,8 +545,58 @@ public class ApprovalServiceImpl implements ApprovalService {
                 }
                 expenseRepository.save(expense);
             });
+            case "STOCK_TAKE_POSTING" -> {
+                if ("APPROVED".equals(status)) {
+                    applyApprovedStockTakePosting(request, approverId);
+                }
+            }
             default -> { /* no-op for other entity types */ }
         }
+    }
+
+    private void applyApprovedStockTakePosting(ApprovalRequest request, UUID approverId) {
+        if (request.getEntityId() == null) return;
+        stockTakeBatchRepository.findById(request.getEntityId()).ifPresent(batch -> {
+            User approvedBy = approverId != null ? userRepository.findById(approverId).orElse(null) : null;
+
+            for (StockTakeItem item : stockTakeItemRepository.findByBatchId(batch.getId())) {
+                if (item.getCountedQuantity() == null) continue;
+
+                if (item.getVariance() == null && item.getSystemQuantity() != null) {
+                    item.setVariance(item.getCountedQuantity().subtract(item.getSystemQuantity()));
+                    stockTakeItemRepository.save(item);
+                }
+
+                java.math.BigDecimal counted = item.getCountedQuantity();
+                java.math.BigDecimal variance = item.getVariance() != null ? item.getVariance() : java.math.BigDecimal.ZERO;
+
+                stockRepository.findByWarehouseIdAndProductId(batch.getWarehouse().getId(), item.getProduct().getId())
+                        .ifPresent(stock -> {
+                            stock.setQuantity(counted.max(java.math.BigDecimal.ZERO));
+                            stockRepository.save(stock);
+
+                            if (variance.compareTo(java.math.BigDecimal.ZERO) != 0) {
+                                StockMovement movement = StockMovement.builder()
+                                        .warehouse(batch.getWarehouse())
+                                        .product(item.getProduct())
+                                        .movementType(StockMovement.MovementType.ADJUSTMENT)
+                                        .quantity(variance)
+                                        .referenceType("STOCK_TAKE")
+                                        .referenceId(batch.getId())
+                                        .notes("Stock take variance: " + batch.getReferenceNumber())
+                                        .createdBy(approvedBy)
+                                        .build();
+                                stockMovementRepository.save(movement);
+                            }
+                        });
+            }
+
+            batch.setStatus(StockTakeBatchStatus.APPROVED);
+            batch.setApprovedBy(approvedBy);
+            batch.setApprovedAt(java.time.LocalDateTime.now());
+            stockTakeBatchRepository.save(batch);
+            log.info("Stock take {} approved and posted via approval workflow", batch.getReferenceNumber());
+        });
     }
 
     private void applyApprovedSupplierUpdate(ApprovalRequest request) {
@@ -497,6 +645,19 @@ public class ApprovalServiceImpl implements ApprovalService {
             supplier.setActive(false);
             supplierRepository.save(supplier);
             log.info("Applied approved supplier blacklist for supplier {}", supplier.getId());
+        });
+    }
+
+    private void applyApprovedSupplierWhitelist(ApprovalRequest request) {
+        if (request.getEntityId() == null) return;
+        supplierRepository.findById(request.getEntityId()).ifPresent(supplier -> {
+            supplier.setBlacklisted(false);
+            supplier.setBlacklistedReason(null);
+            supplier.setBlacklistedAt(null);
+            supplier.setBlacklistedBy(null);
+            supplier.setActive(true);
+            supplierRepository.save(supplier);
+            log.info("Applied approved supplier whitelist for supplier {}", supplier.getId());
         });
     }
 
@@ -550,6 +711,103 @@ public class ApprovalServiceImpl implements ApprovalService {
             log.info("Applied approved stock movement {} — new balance: {}", movementId, newQty);
         } catch (Exception e) {
             log.warn("Could not apply approved stock movement {}: {}", movementId, e.getMessage());
+        }
+    }
+
+    private void applySalesReturnStock(com.zuqi.domain.returns.SalesReturn sr) {
+        try {
+            UUID distributorId = sr.getDistributor().getId();
+            List<Warehouse> hqWarehouses = warehouseRepository.findByDistributorIdAndBranchHeadquartersTrueAndActiveTrue(distributorId);
+            Warehouse warehouse = hqWarehouses.isEmpty()
+                    ? warehouseRepository.findFirstByDistributorIdAndActiveTrueOrderByCreatedAtAsc(distributorId).orElse(null)
+                    : hqWarehouses.get(0);
+            if (warehouse == null) {
+                log.warn("No warehouse found for distributor {} — skipping sales return stock adjustment", distributorId);
+                return;
+            }
+            for (SalesReturnItem item : sr.getItems()) {
+                Stock stock = stockRepository.findByWarehouseIdAndProductId(warehouse.getId(), item.getProduct().getId())
+                        .orElseGet(() -> {
+                            Stock s = new Stock();
+                            s.setWarehouse(warehouse);
+                            s.setProduct(item.getProduct());
+                            s.setQuantity(java.math.BigDecimal.ZERO);
+                            s.setReservedQuantity(java.math.BigDecimal.ZERO);
+                            return s;
+                        });
+                stock.setQuantity(stock.getQuantity().add(item.getQuantity()));
+                stock.setLastStockCheck(java.time.LocalDateTime.now());
+                stockRepository.save(stock);
+                stockMovementRepository.save(StockMovement.builder()
+                        .warehouse(warehouse)
+                        .product(item.getProduct())
+                        .movementType(StockMovement.MovementType.RETURN_IN)
+                        .quantity(item.getQuantity())
+                        .referenceType("SALES_RETURN")
+                        .referenceId(sr.getId())
+                        .notes("Sales return " + sr.getReturnNumber())
+                        .approvalStatus("APPROVED")
+                        .build());
+                log.info("Sales return {}: added {} units of product {} to stock",
+                        sr.getReturnNumber(), item.getQuantity(), item.getProduct().getId());
+            }
+        } catch (Exception e) {
+            log.error("Failed to apply stock for sales return {}: {}", sr.getReturnNumber(), e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    private void applyPurchaseReturnStock(PurchaseReturn pr) {
+        try {
+            Warehouse warehouse = null;
+            if (pr.getGrn() != null && pr.getGrn().getWarehouseId() != null) {
+                warehouse = warehouseRepository.findById(pr.getGrn().getWarehouseId()).orElse(null);
+            }
+            if (warehouse == null) {
+                UUID distributorId = pr.getDistributor().getId();
+                List<Warehouse> hqWarehouses = warehouseRepository.findByDistributorIdAndBranchHeadquartersTrueAndActiveTrue(distributorId);
+                warehouse = hqWarehouses.isEmpty()
+                        ? warehouseRepository.findFirstByDistributorIdAndActiveTrueOrderByCreatedAtAsc(distributorId).orElse(null)
+                        : hqWarehouses.get(0);
+            }
+            if (warehouse == null) {
+                log.warn("No warehouse found for purchase return {} — skipping stock adjustment", pr.getReturnNumber());
+                return;
+            }
+            final Warehouse finalWarehouse = warehouse;
+            for (PurchaseReturnItem item : pr.getItems()) {
+                Stock stock = stockRepository.findByWarehouseIdAndProductId(finalWarehouse.getId(), item.getProduct().getId())
+                        .orElse(null);
+                if (stock == null) {
+                    log.warn("Purchase return {}: no stock record for product {} in warehouse {} — skipping",
+                            pr.getReturnNumber(), item.getProduct().getId(), finalWarehouse.getId());
+                    continue;
+                }
+                java.math.BigDecimal newQty = stock.getQuantity().subtract(item.getQuantity());
+                if (newQty.compareTo(java.math.BigDecimal.ZERO) < 0) {
+                    log.warn("Purchase return {}: insufficient stock for product {} — clamping to zero",
+                            pr.getReturnNumber(), item.getProduct().getId());
+                    newQty = java.math.BigDecimal.ZERO;
+                }
+                stock.setQuantity(newQty);
+                stock.setLastStockCheck(java.time.LocalDateTime.now());
+                stockRepository.save(stock);
+                stockMovementRepository.save(StockMovement.builder()
+                        .warehouse(finalWarehouse)
+                        .product(item.getProduct())
+                        .movementType(StockMovement.MovementType.OUT)
+                        .quantity(item.getQuantity())
+                        .referenceType("PURCHASE_RETURN")
+                        .referenceId(pr.getId())
+                        .notes("Purchase return " + pr.getReturnNumber())
+                        .approvalStatus("APPROVED")
+                        .build());
+                log.info("Purchase return {}: removed {} units of product {} from stock (new balance: {})",
+                        pr.getReturnNumber(), item.getQuantity(), item.getProduct().getId(), newQty);
+            }
+        } catch (Exception e) {
+            log.error("Failed to apply stock for purchase return {}: {}", pr.getReturnNumber(), e.getMessage(), e);
+            throw e;
         }
     }
 
@@ -698,10 +956,12 @@ public class ApprovalServiceImpl implements ApprovalService {
             case SUPPLIER_DETAILS_UPDATE -> "SDU";
             case SUPPLIER_BANK_DETAILS_UPDATE -> "SBD";
             case SUPPLIER_BLACKLIST -> "SBL";
+            case SUPPLIER_WHITELIST -> "SWL";
             case PRODUCT_PRICE_EDIT -> "PRE";
             case PRODUCT_COST_EDIT -> "PCE";
             case DISCOUNT_APPROVAL -> "DIS";
             case STOCK_ADJUSTMENT -> "STK";
+            case STOCK_TAKE_POSTING -> "STP";
             case STOCK_WRITE_OFF -> "SWO";
             case PURCHASE_REQUISITION -> "PRQ";
             case PURCHASE_ORDER -> "POA";

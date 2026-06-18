@@ -4,6 +4,7 @@ import com.zuqi.config.AppConfig;
 import com.zuqi.config.EmailConfig;
 import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.procurement.PurchaseOrder;
+import com.zuqi.domain.supplier.Supplier;
 import com.zuqi.domain.user.User;
 import com.zuqi.service.EmailService;
 import lombok.extern.slf4j.Slf4j;
@@ -136,6 +137,26 @@ public class SesEmailServiceImpl implements EmailService {
         sendTemplatedEmail(customer.getEmail(),
                 "You've been added as a customer of " + distributorName,
                 "customer-onboarding", vars);
+    }
+
+    @Override
+    @Async
+    public void sendSupplierOnboardingEmail(Supplier supplier) {
+        if (supplier.getEmail() == null || supplier.getEmail().isBlank()) return;
+        if (!emailConfig.isEnabled()) return;
+        String distributorName = supplier.getDistributor() != null
+                ? supplier.getDistributor().getName() : emailConfig.getFromName();
+        Map<String, Object> vars = new HashMap<>();
+        vars.put("supplierName", supplier.getName());
+        vars.put("supplierCode", supplier.getSupplierCode());
+        vars.put("phone", supplier.getPhone());
+        vars.put("kraPin", supplier.getKraPin());
+        vars.put("paymentTermsDays", supplier.getPaymentTermsDays());
+        vars.put("distributorName", distributorName);
+        vars.put("companyName", emailConfig.getFromName());
+        sendTemplatedEmail(supplier.getEmail(),
+                "Your supplier account has been approved — " + distributorName,
+                "supplier-onboarding", vars);
     }
 
     @Override
