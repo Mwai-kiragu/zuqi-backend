@@ -903,33 +903,42 @@ public class PosServiceImpl implements PosService {
         LocalDateTime from = startDate.atStartOfDay();
         LocalDateTime to = endDate.plusDays(1).atStartOfDay();
 
-        long completed = saleRepository.countByBranchAndStatusAndDateRange(branchId, PosSaleStatus.COMPLETED, from, to);
+        long fullyPaidCount = saleRepository.countFullyPaidByBranchAndDateRange(branchId, from, to);
         long cancelled = saleRepository.countByBranchAndStatusAndDateRange(branchId, PosSaleStatus.CANCELLED, from, to);
         long unpaid = saleRepository.countByBranchAndStatusAndDateRange(branchId, PosSaleStatus.UNPAID, from, to);
         long refunded = saleRepository.countByBranchAndStatusAndDateRange(branchId, PosSaleStatus.REFUNDED, from, to);
-        long total = completed + cancelled;
-        BigDecimal revenue = saleRepository.sumTotalByBranchAndStatusAndDateRange(branchId, PosSaleStatus.COMPLETED, from, to);
+        BigDecimal fullyPaidRevenue = saleRepository.sumRevenueFullyPaidByBranchAndDateRange(branchId, from, to);
         BigDecimal unpaidTotal = saleRepository.sumTotalByBranchAndStatusAndDateRange(branchId, PosSaleStatus.UNPAID, from, to);
         BigDecimal refundedTotal = saleRepository.sumTotalByBranchAndStatusAndDateRange(branchId, PosSaleStatus.REFUNDED, from, to);
         long partiallyPaidCount = saleRepository.countPartiallyPaidByBranchAndDateRange(branchId, from, to);
         BigDecimal partiallyPaidBalanceDue = saleRepository.sumBalanceDuePartiallyPaidByBranchAndDateRange(branchId, from, to);
+        BigDecimal partialAmountPaid = saleRepository.sumAmountPaidPartiallyPaidByBranchAndDateRange(branchId, from, to);
 
+        // Merge partial payments: paid portion → Paid Bills, balance → Unpaid Bills
+        long mergedPaidCount = fullyPaidCount + partiallyPaidCount;
+        BigDecimal mergedRevenue = (fullyPaidRevenue != null ? fullyPaidRevenue : BigDecimal.ZERO)
+                .add(partialAmountPaid != null ? partialAmountPaid : BigDecimal.ZERO);
+        long mergedUnpaidCount = unpaid + partiallyPaidCount;
+        BigDecimal mergedUnpaidTotal = (unpaidTotal != null ? unpaidTotal : BigDecimal.ZERO)
+                .add(partiallyPaidBalanceDue != null ? partiallyPaidBalanceDue : BigDecimal.ZERO);
+
+        long total = mergedPaidCount + cancelled;
         return PosSummaryResponse.builder()
                 .branchId(branchId)
                 .branchName(branch.getName())
                 .date(startDate)
                 .totalTransactions(total)
-                .completedTransactions(completed)
+                .completedTransactions(mergedPaidCount)
                 .cancelledTransactions(cancelled)
-                .totalRevenue(revenue != null ? revenue : BigDecimal.ZERO)
+                .totalRevenue(mergedRevenue)
                 .totalDiscounts(BigDecimal.ZERO)
-                .averageTransactionValue(completed > 0 && revenue != null ?
-                        revenue.divide(BigDecimal.valueOf(completed), 2, java.math.RoundingMode.HALF_UP) :
+                .averageTransactionValue(mergedPaidCount > 0 ?
+                        mergedRevenue.divide(BigDecimal.valueOf(mergedPaidCount), 2, java.math.RoundingMode.HALF_UP) :
                         BigDecimal.ZERO)
-                .unpaidCount(unpaid)
-                .unpaidTotal(unpaidTotal != null ? unpaidTotal : BigDecimal.ZERO)
-                .partiallyPaidCount(partiallyPaidCount)
-                .partiallyPaidBalanceDue(partiallyPaidBalanceDue != null ? partiallyPaidBalanceDue : BigDecimal.ZERO)
+                .unpaidCount(mergedUnpaidCount)
+                .unpaidTotal(mergedUnpaidTotal)
+                .partiallyPaidCount(0)
+                .partiallyPaidBalanceDue(BigDecimal.ZERO)
                 .refundedCount(refunded)
                 .refundedTotal(refundedTotal != null ? refundedTotal.abs() : BigDecimal.ZERO)
                 .build();

@@ -54,6 +54,33 @@ public interface PosSaleRepository extends JpaRepository<PosSale, UUID> {
                                                 @Param("from") LocalDateTime from,
                                                 @Param("to") LocalDateTime to);
 
+    /** Sum amountPaid for COMPLETED sales that are only partially paid. */
+    @Query("SELECT COALESCE(SUM(s.amountPaid), 0) FROM PosSale s WHERE s.branch.id = :branchId " +
+           "AND s.status = com.zuqi.domain.pos.PosSaleStatus.COMPLETED " +
+           "AND s.amountPaid > 0 AND s.amountPaid < s.totalAmount " +
+           "AND s.createdAt BETWEEN :from AND :to")
+    BigDecimal sumAmountPaidPartiallyPaidByBranchAndDateRange(@Param("branchId") UUID branchId,
+                                                              @Param("from") LocalDateTime from,
+                                                              @Param("to") LocalDateTime to);
+
+    /** Count COMPLETED sales where the full amount has been collected (excludes partial payments). */
+    @Query("SELECT COUNT(s) FROM PosSale s WHERE s.branch.id = :branchId " +
+           "AND s.status = com.zuqi.domain.pos.PosSaleStatus.COMPLETED " +
+           "AND s.amountPaid >= s.totalAmount " +
+           "AND s.createdAt BETWEEN :from AND :to")
+    long countFullyPaidByBranchAndDateRange(@Param("branchId") UUID branchId,
+                                            @Param("from") LocalDateTime from,
+                                            @Param("to") LocalDateTime to);
+
+    /** Sum totalAmount for COMPLETED sales where the full amount has been collected. */
+    @Query("SELECT COALESCE(SUM(s.totalAmount), 0) FROM PosSale s WHERE s.branch.id = :branchId " +
+           "AND s.status = com.zuqi.domain.pos.PosSaleStatus.COMPLETED " +
+           "AND s.amountPaid >= s.totalAmount " +
+           "AND s.createdAt BETWEEN :from AND :to")
+    BigDecimal sumRevenueFullyPaidByBranchAndDateRange(@Param("branchId") UUID branchId,
+                                                       @Param("from") LocalDateTime from,
+                                                       @Param("to") LocalDateTime to);
+
     @Query("SELECT COALESCE(SUM(s.totalAmount - s.amountPaid), 0) FROM PosSale s WHERE s.branch.id = :branchId " +
            "AND s.status = com.zuqi.domain.pos.PosSaleStatus.COMPLETED " +
            "AND s.amountPaid > 0 AND s.amountPaid < s.totalAmount " +
