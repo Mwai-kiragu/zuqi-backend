@@ -4,6 +4,7 @@ import com.zuqi.config.AppConfig;
 import com.zuqi.config.EmailConfig;
 import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.procurement.PurchaseOrder;
+import com.zuqi.domain.supplier.Supplier;
 import com.zuqi.domain.user.User;
 import com.zuqi.service.EmailService;
 import jakarta.mail.MessagingException;
@@ -172,6 +173,38 @@ public class EmailServiceImpl implements EmailService {
                 customer.getEmail(),
                 "You've been added as a customer of " + distributorName,
                 "customer-onboarding",
+                variables
+        );
+    }
+
+    @Override
+    @Async
+    public void sendSupplierOnboardingEmail(Supplier supplier) {
+        if (supplier.getEmail() == null || supplier.getEmail().isBlank()) {
+            log.debug("Supplier onboarding email skipped — no email address for supplier {}", supplier.getId());
+            return;
+        }
+        if (!emailConfig.isEnabled()) {
+            log.info("Email disabled. Would send onboarding email to supplier: {}", supplier.getEmail());
+            return;
+        }
+
+        String distributorName = supplier.getDistributor() != null
+                ? supplier.getDistributor().getName() : emailConfig.getFromName();
+
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("supplierName", supplier.getName());
+        variables.put("supplierCode", supplier.getSupplierCode());
+        variables.put("phone", supplier.getPhone());
+        variables.put("kraPin", supplier.getKraPin());
+        variables.put("paymentTermsDays", supplier.getPaymentTermsDays());
+        variables.put("distributorName", distributorName);
+        variables.put("companyName", emailConfig.getFromName());
+
+        sendTemplatedEmail(
+                supplier.getEmail(),
+                "Your supplier account has been approved — " + distributorName,
+                "supplier-onboarding",
                 variables
         );
     }

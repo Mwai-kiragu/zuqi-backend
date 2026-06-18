@@ -19,6 +19,7 @@ import com.zuqi.repository.SupplierRepository;
 import com.zuqi.domain.audit.ActivityAction;
 import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.ApprovalService;
+import com.zuqi.service.EmailService;
 import com.zuqi.service.SupplierService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.zuqi.api.dto.approval.ApprovalRequestResponse;
+import com.zuqi.domain.approval.ApprovalRequest;
 import com.zuqi.domain.approval.ApprovalStatus;
 import com.zuqi.repository.ApprovalRequestRepository;
 
@@ -53,6 +55,7 @@ public class SupplierServiceImpl implements SupplierService {
     private final SecurityUtils securityUtils;
     private final ApprovalService approvalService;
     private final ActivityLogService activityLogService;
+    private final EmailService emailService;
 
     private String generateSupplierCode() {
         long count = supplierRepository.countAll();
@@ -78,14 +81,14 @@ public class SupplierServiceImpl implements SupplierService {
         }
 
         if (merchantId != null) {
-            return supplierRepository.findByDistributorMerchantIdAndActiveTrue(merchantId, pageable)
+            return supplierRepository.findByDistributorMerchantIdAndActiveTrueAndApprovalStatusNot(merchantId, "PENDING_APPROVAL", pageable)
                     .map(SupplierResponse::fromEntity);
         }
         if (distributorId != null) {
-            return supplierRepository.findByDistributorIdAndActiveTrue(distributorId, pageable)
+            return supplierRepository.findByDistributorIdAndActiveTrueAndApprovalStatusNot(distributorId, "PENDING_APPROVAL", pageable)
                     .map(SupplierResponse::fromEntity);
         }
-        return supplierRepository.findByActiveTrue(pageable).map(SupplierResponse::fromEntity);
+        return supplierRepository.findByActiveTrueAndApprovalStatusNot("PENDING_APPROVAL", pageable).map(SupplierResponse::fromEntity);
     }
 
     @Override
@@ -186,6 +189,13 @@ public class SupplierServiceImpl implements SupplierService {
                             "kraPin", Objects.toString(saved.getKraPin(), "")))
                     .requiredApprovals(1)
                     .build());
+        } else {
+            // Directly approved (no approval workflow) — notify supplier immediately
+            try {
+                emailService.sendSupplierOnboardingEmail(saved);
+            } catch (Exception e) {
+                log.warn("Failed to send supplier onboarding email for {}: {}", saved.getId(), e.getMessage());
+            }
         }
 
         User currentUser = securityUtils.getCurrentUser();
@@ -217,36 +227,43 @@ public class SupplierServiceImpl implements SupplierService {
             throw new DuplicateResourceException("Supplier", "kraPin", request.getKraPin());
         }
 
+        // Capture existing approval status so the edit path can never accidentally reset it
+        String existingApprovalStatus = supplier.getApprovalStatus();
         boolean needsApproval = securityUtils.currentUserRequiresApprovalFor("SUPPLIERS");
         UUID currentUserId = securityUtils.getCurrentUserId();
 
         if (needsApproval && currentUserId != null) {
+            Map<String, Object> pendingValues = buildSupplierRequestedValues(request);
+
+            // If the supplier's creation approval is still pending, update its requested values
+            // in-place rather than spawning a competing SUPPLIER_UPDATE approval request.
+            List<ApprovalRequest> creationPending = approvalRequestRepository
+                    .findByEntityTypeAndEntityIdAndStatus("SUPPLIER", supplier.getId(), ApprovalStatus.PENDING);
+            if (!creationPending.isEmpty()) {
+                ApprovalRequest creationReq = creationPending.get(0);
+                creationReq.setRequestedValues(pendingValues);
+                approvalRequestRepository.save(creationReq);
+
+                User currentUser = securityUtils.getCurrentUser();
+                if (currentUser != null) {
+                    activityLogService.log(
+                            currentUser.getId(), currentUser.getEmail(),
+                            currentUser.getFirstName() + " " + currentUser.getLastName(),
+                            ActivityAction.UPDATE, "SUPPLIER", supplier.getId(),
+                            supplier.getName(), "SUPPLIERS",
+                            "Updated pending creation request values for supplier: " + supplier.getName());
+                }
+                SupplierResponse response = SupplierResponse.fromEntity(supplier);
+                response.setPendingApprovalId(creationReq.getId());
+                return response;
+            }
+
             boolean hasPending = !approvalRequestRepository
                     .findByEntityTypeAndEntityIdAndStatus("SUPPLIER_UPDATE", supplier.getId(), ApprovalStatus.PENDING)
                     .isEmpty();
             if (hasPending) {
                 throw new ValidationException("This supplier already has a pending approval request. Please wait for it to be resolved before submitting new changes.");
             }
-
-            Map<String, Object> pendingValues = new LinkedHashMap<>();
-            pendingValues.put("name", request.getName());
-            pendingValues.put("kraPin", request.getKraPin());
-            if (request.getRegistrationNumber() != null) pendingValues.put("registrationNumber", request.getRegistrationNumber());
-            if (request.getEmail() != null) pendingValues.put("email", request.getEmail());
-            pendingValues.put("phone", request.getPhone());
-            if (request.getAddress() != null) pendingValues.put("address", request.getAddress());
-            if (request.getCity() != null) pendingValues.put("city", request.getCity());
-            if (request.getCounty() != null) pendingValues.put("county", request.getCounty());
-            if (request.getSubCounty() != null) pendingValues.put("subCounty", request.getSubCounty());
-            if (request.getBankName() != null) pendingValues.put("bankName", request.getBankName());
-            if (request.getBankBranch() != null) pendingValues.put("bankBranch", request.getBankBranch());
-            if (request.getBankAccountNumber() != null) pendingValues.put("bankAccountNumber", request.getBankAccountNumber());
-            if (request.getBankAccountName() != null) pendingValues.put("bankAccountName", request.getBankAccountName());
-            if (request.getSwiftCode() != null) pendingValues.put("swiftCode", request.getSwiftCode());
-            if (request.getPaymentTermsDays() != null) pendingValues.put("paymentTermsDays", request.getPaymentTermsDays());
-            if (request.getCreditLimit() != null) pendingValues.put("creditLimit", request.getCreditLimit().toString());
-            if (request.getCategoryId() != null) pendingValues.put("categoryId", request.getCategoryId().toString());
-            if (request.getContactPersons() != null) pendingValues.put("contactPersons", request.getContactPersons());
 
             ApprovalRequestResponse approvalReq = approvalService.createRequest(currentUserId,
                     CreateApprovalRequestDto.builder()
@@ -273,7 +290,7 @@ public class SupplierServiceImpl implements SupplierService {
             return response;
         }
 
-        // No approval needed — apply immediately
+        // No approval needed — apply immediately; explicitly preserve existing approval status
         supplier.setName(request.getName());
         supplier.setKraPin(request.getKraPin());
         supplier.setRegistrationNumber(request.getRegistrationNumber());
@@ -291,6 +308,7 @@ public class SupplierServiceImpl implements SupplierService {
         if (request.getPaymentTermsDays() != null) supplier.setPaymentTermsDays(request.getPaymentTermsDays());
         if (request.getCreditLimit() != null) supplier.setCreditLimit(request.getCreditLimit());
         if (request.getContactPersons() != null) supplier.setContactPersons(request.getContactPersons());
+        supplier.setApprovalStatus(existingApprovalStatus); // never let a direct edit overwrite approval state
 
         if (request.getCategoryId() != null) {
             supplier.setCategory(categoryRepository.findById(request.getCategoryId())
@@ -313,10 +331,36 @@ public class SupplierServiceImpl implements SupplierService {
         return SupplierResponse.fromEntity(updatedSupplier);
     }
 
+    private Map<String, Object> buildSupplierRequestedValues(SupplierRequest request) {
+        Map<String, Object> v = new LinkedHashMap<>();
+        v.put("name", request.getName());
+        v.put("kraPin", request.getKraPin());
+        if (request.getRegistrationNumber() != null) v.put("registrationNumber", request.getRegistrationNumber());
+        if (request.getEmail() != null) v.put("email", request.getEmail());
+        v.put("phone", request.getPhone());
+        if (request.getAddress() != null) v.put("address", request.getAddress());
+        if (request.getCity() != null) v.put("city", request.getCity());
+        if (request.getCounty() != null) v.put("county", request.getCounty());
+        if (request.getSubCounty() != null) v.put("subCounty", request.getSubCounty());
+        if (request.getBankName() != null) v.put("bankName", request.getBankName());
+        if (request.getBankBranch() != null) v.put("bankBranch", request.getBankBranch());
+        if (request.getBankAccountNumber() != null) v.put("bankAccountNumber", request.getBankAccountNumber());
+        if (request.getBankAccountName() != null) v.put("bankAccountName", request.getBankAccountName());
+        if (request.getSwiftCode() != null) v.put("swiftCode", request.getSwiftCode());
+        if (request.getPaymentTermsDays() != null) v.put("paymentTermsDays", request.getPaymentTermsDays());
+        if (request.getCreditLimit() != null) v.put("creditLimit", request.getCreditLimit().toString());
+        if (request.getCategoryId() != null) v.put("categoryId", request.getCategoryId().toString());
+        if (request.getContactPersons() != null) v.put("contactPersons", request.getContactPersons());
+        return v;
+    }
+
     @Override
     @Transactional
     public SupplierResponse verifySupplier(String id) {
         Supplier supplier = findById(id);
+        if (!"APPROVED".equals(supplier.getApprovalStatus())) {
+            throw new ValidationException("Supplier must be approved before it can be verified");
+        }
         supplier.setVerified(true);
         return SupplierResponse.fromEntity(supplierRepository.save(supplier));
     }
@@ -382,16 +426,53 @@ public class SupplierServiceImpl implements SupplierService {
     @Transactional
     public SupplierResponse unblacklistSupplier(String id) {
         Supplier supplier = findById(id);
+
+        boolean needsApproval = securityUtils.currentUserRequiresApprovalFor("SUPPLIERS");
+        UUID currentUserId = securityUtils.getCurrentUserId();
+
+        if (needsApproval && currentUserId != null) {
+            boolean hasPending = !approvalRequestRepository
+                    .findByEntityTypeAndEntityIdAndStatus("SUPPLIER_WHITELIST", supplier.getId(), ApprovalStatus.PENDING)
+                    .isEmpty();
+            if (hasPending) {
+                throw new ValidationException("This supplier already has a pending whitelist approval request.");
+            }
+
+            ApprovalRequestResponse approvalReq = approvalService.createRequest(currentUserId,
+                    CreateApprovalRequestDto.builder()
+                            .workflowType(ApprovalWorkflowType.SUPPLIER_WHITELIST)
+                            .entityType("SUPPLIER_WHITELIST")
+                            .entityId(supplier.getId())
+                            .entityName(supplier.getName())
+                            .description("Whitelist (remove blacklist) request for supplier: " + supplier.getName())
+                            .requestedValues(Map.of("whitelistedById", currentUserId.toString()))
+                            .requiredApprovals(1)
+                            .build());
+
+            User currentUser = securityUtils.getCurrentUser();
+            if (currentUser != null) {
+                activityLogService.log(currentUser.getId(), currentUser.getEmail(),
+                        currentUser.getFirstName() + " " + currentUser.getLastName(),
+                        ActivityAction.ACTIVATE, "SUPPLIER", supplier.getId(),
+                        supplier.getName(), "SUPPLIERS", "Submitted whitelist request for approval: " + supplier.getName());
+            }
+
+            SupplierResponse response = SupplierResponse.fromEntity(supplier);
+            response.setPendingApprovalId(approvalReq.getId());
+            return response;
+        }
+
+        // No approval needed — apply immediately
         supplier.setBlacklisted(false);
         supplier.setBlacklistedReason(null);
         supplier.setBlacklistedAt(null);
         supplier.setBlacklistedBy(null);
         supplier.setActive(true);
         Supplier unblacklisted = supplierRepository.save(supplier);
-        User unblacklistUser = securityUtils.getCurrentUser();
-        if (unblacklistUser != null) {
-            activityLogService.log(unblacklistUser.getId(), unblacklistUser.getEmail(),
-                    unblacklistUser.getFirstName() + " " + unblacklistUser.getLastName(),
+        User currentUser = securityUtils.getCurrentUser();
+        if (currentUser != null) {
+            activityLogService.log(currentUser.getId(), currentUser.getEmail(),
+                    currentUser.getFirstName() + " " + currentUser.getLastName(),
                     ActivityAction.ACTIVATE, "SUPPLIER", unblacklisted.getId(),
                     unblacklisted.getName(), "SUPPLIERS", "Removed blacklist from supplier: " + unblacklisted.getName());
         }

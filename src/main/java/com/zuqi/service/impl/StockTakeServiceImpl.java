@@ -1,7 +1,11 @@
 package com.zuqi.service.impl;
 
+import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
+import com.zuqi.api.dto.approval.ProcessApprovalRequest;
 import com.zuqi.api.dto.inventory.*;
-import com.zuqi.domain.approval.ApprovalWorkflowConfig;
+import com.zuqi.domain.approval.ApprovalDecision;
+import com.zuqi.domain.approval.ApprovalRequest;
+import com.zuqi.domain.approval.ApprovalStatus;
 import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.branch.DistributorBranch;
 import com.zuqi.domain.inventory.*;
@@ -11,10 +15,13 @@ import com.zuqi.exception.ValidationException;
 import com.zuqi.repository.*;
 import com.zuqi.domain.audit.ActivityAction;
 import com.zuqi.service.ActivityLogService;
+import com.zuqi.service.ApprovalService;
 import com.zuqi.service.StockTakeService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -41,9 +48,12 @@ public class StockTakeServiceImpl implements StockTakeService {
     private final StockRepository stockRepository;
     private final StockMovementRepository stockMovementRepository;
     private final UserRepository userRepository;
-    private final ApprovalWorkflowConfigRepository approvalWorkflowConfigRepository;
+    private final ApprovalRequestRepository approvalRequestRepository;
     private final SecurityUtils securityUtils;
     private final ActivityLogService activityLogService;
+
+    @Lazy @Autowired
+    private ApprovalService approvalService;
 
     @Override
     @Transactional
@@ -176,6 +186,21 @@ public class StockTakeServiceImpl implements StockTakeService {
                 completedBatch.getReferenceNumber(), "INVENTORY", "Stock take completed: " + completedBatch.getReferenceNumber()
             );
         }
+
+        // Submit for approval if the current user's role requires it
+        UUID currentUserId = securityUtils.getCurrentUserId();
+        if (currentUserId != null && securityUtils.currentUserRequiresApprovalFor("INVENTORY")) {
+            approvalService.createRequest(currentUserId, CreateApprovalRequestDto.builder()
+                    .workflowType(ApprovalWorkflowType.STOCK_TAKE_POSTING)
+                    .entityType("STOCK_TAKE_POSTING")
+                    .entityId(completedBatch.getId())
+                    .entityName(completedBatch.getReferenceNumber())
+                    .description("Stock take approval required for: " + completedBatch.getReferenceNumber())
+                    .requiredApprovals(1)
+                    .build());
+            log.info("Stock take {} submitted for approval", completedBatch.getReferenceNumber());
+        }
+
         return mapToResponse(completedBatch);
     }
 
@@ -189,38 +214,17 @@ public class StockTakeServiceImpl implements StockTakeService {
 
         User approvedBy = userRepository.findById(approvedByUserId).orElse(null);
 
-        // Enforce approval matrix if configured for this distributor
-        if (approvedBy != null && approvedBy.getDistributorId() != null) {
-            List<ApprovalWorkflowConfig> configs = approvalWorkflowConfigRepository
-                    .findByDistributorIdAndWorkflowTypeAndActiveTrueOrderByLevelNumberAsc(
-                            approvedBy.getDistributorId(), ApprovalWorkflowType.STOCK_TAKE_POSTING);
-            if (!configs.isEmpty()) {
-                // Per-level check: user satisfies a level if:
-                //   - the level has no requiredRole (open level — any user qualifies), OR
-                //   - their Casbin role matches, OR
-                //   - their UserGroup ID matches, OR
-                //   - their UserGroup's UserType ID matches
-                boolean authorized = securityUtils.hasRole(approvedBy, "SUPER_ADMIN") ||
-                        configs.stream().anyMatch(config -> {
-                            String role = config.getRequiredRole();
-                            if (role == null || role.isBlank()) return true;
-                            if (securityUtils.hasRole(approvedBy, role)) return true;
-                            if (approvedBy.getUserGroup() != null) {
-                                if (approvedBy.getUserGroup().getId().toString().equals(role)) return true;
-                                if (approvedBy.getUserGroup().getUserType() != null &&
-                                        approvedBy.getUserGroup().getUserType().getId().toString().equals(role)) return true;
-                            }
-                            return false;
-                        });
-                if (!authorized) {
-                    String labels = configs.stream()
-                            .map(ApprovalWorkflowConfig::getRoleLabel)
-                            .distinct()
-                            .collect(java.util.stream.Collectors.joining(", "));
-                    throw new ValidationException(
-                            "You are not authorized to approve stock takes. Configured approvers: " + labels);
-                }
-            }
+        // Route through the central approval workflow if a pending request exists.
+        // This enforces the configured approval hierarchy (levels, roles, sequence).
+        List<ApprovalRequest> pendingRequests = approvalRequestRepository
+                .findByEntityTypeAndEntityIdAndStatus("STOCK_TAKE_POSTING", batchId, ApprovalStatus.PENDING);
+        if (!pendingRequests.isEmpty()) {
+            ProcessApprovalRequest dto = ProcessApprovalRequest.builder()
+                    .decision(ApprovalDecision.APPROVED)
+                    .comments("Approved via stock take page")
+                    .build();
+            approvalService.processRequest(pendingRequests.get(0).getId(), approvedByUserId, dto);
+            return mapToResponse(getBatchEntity(batchId));
         }
 
         // Post counted quantities to stock (absolute set — stock take is the source of truth)

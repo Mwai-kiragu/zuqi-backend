@@ -60,7 +60,7 @@ public class CasbinAuthorizationFilter extends OncePerRequestFilter {
         Map.entry("ORDERS",                 List.of("/v1/orders")),
         Map.entry("INVOICES",               List.of("/v1/invoices", "/v1/export/invoices")),
         Map.entry("CUSTOMERS",              List.of("/v1/customers", "/v1/export/customers")),
-        Map.entry("PRODUCTS",               List.of("/v1/products", "/v1/export/products", "/v1/export/categories")),
+        Map.entry("PRODUCTS",               List.of("/v1/products", "/v1/export/products", "/v1/export/categories", "/v1/import/products", "/v1/import/categories")),
         Map.entry("SUPPLIERS",              List.of("/v1/suppliers", "/v1/export/suppliers")),
         Map.entry("PROCUREMENT",            List.of("/v1/purchase-orders", "/v1/purchase-requisitions", "/v1/grns")),
         Map.entry("SUPPLIER_BILLS",         List.of("/v1/supplier-bills")),

@@ -16,11 +16,11 @@ import java.util.UUID;
 @Repository
 public interface SupplierRepository extends JpaRepository<Supplier, UUID> {
 
-    Page<Supplier> findByActiveTrue(Pageable pageable);
+    Page<Supplier> findByActiveTrueAndApprovalStatusNot(String approvalStatus, Pageable pageable);
 
     Page<Supplier> findByActiveFalse(Pageable pageable);
 
-    Page<Supplier> findByDistributorIdAndActiveTrue(UUID distributorId, Pageable pageable);
+    Page<Supplier> findByDistributorIdAndActiveTrueAndApprovalStatusNot(UUID distributorId, String approvalStatus, Pageable pageable);
 
     Page<Supplier> findByBlacklistedTrue(Pageable pageable);
 
@@ -39,13 +39,13 @@ public interface SupplierRepository extends JpaRepository<Supplier, UUID> {
     @Query("SELECT COUNT(s) FROM Supplier s")
     long countAll();
 
-    @Query("SELECT s FROM Supplier s WHERE s.active = true AND " +
+    @Query("SELECT s FROM Supplier s WHERE s.active = true AND s.approvalStatus != 'PENDING_APPROVAL' AND " +
             "(LOWER(s.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
             "s.phone LIKE CONCAT('%', :searchTerm, '%') OR " +
             "LOWER(s.email) LIKE LOWER(CONCAT('%', :searchTerm, '%')))")
     Page<Supplier> searchActive(@Param("searchTerm") String searchTerm, Pageable pageable);
 
-    @Query("SELECT s FROM Supplier s WHERE s.distributor.id = :distributorId AND s.active = true AND " +
+    @Query("SELECT s FROM Supplier s WHERE s.distributor.id = :distributorId AND s.active = true AND s.approvalStatus != 'PENDING_APPROVAL' AND " +
             "(LOWER(s.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
             "s.phone LIKE CONCAT('%', :searchTerm, '%'))")
     Page<Supplier> searchByDistributor(@Param("distributorId") UUID distributorId,
@@ -53,11 +53,11 @@ public interface SupplierRepository extends JpaRepository<Supplier, UUID> {
                                        Pageable pageable);
 
     /** Scope to a merchant brand (MERCHANT_ADMIN). */
-    Page<Supplier> findByDistributorMerchantIdAndActiveTrue(UUID merchantId, Pageable pageable);
+    Page<Supplier> findByDistributorMerchantIdAndActiveTrueAndApprovalStatusNot(UUID merchantId, String approvalStatus, Pageable pageable);
 
     Page<Supplier> findByDistributorMerchantIdAndBlacklistedTrue(UUID merchantId, Pageable pageable);
 
-    @Query("SELECT s FROM Supplier s WHERE s.distributor.merchant.id = :merchantId AND s.active = true AND " +
+    @Query("SELECT s FROM Supplier s WHERE s.distributor.merchant.id = :merchantId AND s.active = true AND s.approvalStatus != 'PENDING_APPROVAL' AND " +
             "(LOWER(s.name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) OR " +
             "s.phone LIKE CONCAT('%', :searchTerm, '%'))")
     Page<Supplier> searchByMerchant(@Param("merchantId") UUID merchantId,
