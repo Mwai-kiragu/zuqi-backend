@@ -292,6 +292,11 @@ public class ApprovalServiceImpl implements ApprovalService {
                 request.getRequestNumber(), "APPROVAL",
                 dto.getDecision().name() + " approval request: " + request.getRequestNumber());
 
+        // Notify the next level's approvers after each intermediate approval
+        if (dto.getDecision() == ApprovalDecision.APPROVED && updated.getStatus() == ApprovalStatus.PENDING) {
+            notifyApproversAsync(updated);
+        }
+
         // Only notify the requester when a final decision has been reached (not on intermediate approvals)
         if (updated.getStatus() == ApprovalStatus.APPROVED || updated.getStatus() == ApprovalStatus.REJECTED) {
             notifyRequesterAsync(updated, approver);

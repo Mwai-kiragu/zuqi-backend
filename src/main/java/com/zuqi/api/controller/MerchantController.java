@@ -31,8 +31,9 @@ public class MerchantController {
     @Operation(summary = "Get all merchant brands")
     public ResponseEntity<ApiResponse<Page<MerchantResponse>>> getAllMerchants(
             @RequestParam(required = false) Boolean active,
+            @RequestParam(required = false) String search,
             @PageableDefault(size = 20, sort = "name", direction = Sort.Direction.ASC) Pageable pageable) {
-        return ResponseEntity.ok(ApiResponse.success(merchantService.getAllMerchants(active, pageable)));
+        return ResponseEntity.ok(ApiResponse.success(merchantService.getAllMerchants(active, search, pageable)));
     }
 
     @GetMapping("/{id}")
