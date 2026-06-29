@@ -156,4 +156,51 @@ public interface PosSaleRepository extends JpaRepository<PosSale, UUID> {
     List<Object[]> monthlyCompletedByMerchant(
             @Param("merchantId") UUID merchantId,
             @Param("from") java.time.LocalDateTime from);
+
+    // ── Partial-refund netting ────────────────────────────────────────────────
+    // These sum only REFUNDED PosSales whose original (refundOf) is still COMPLETED.
+    // Full-refund transactions are excluded because their originals are REFUNDED.
+    // The returned sum is negative (refund amounts negated in doPartialRefund).
+
+    @Query("SELECT COALESCE(SUM(s.totalAmount), 0) FROM PosSale s " +
+           "WHERE s.branch.distributor.id = :distributorId " +
+           "AND s.status = com.zuqi.domain.pos.PosSaleStatus.REFUNDED " +
+           "AND s.refundOf IS NOT NULL " +
+           "AND s.refundOf.status = com.zuqi.domain.pos.PosSaleStatus.COMPLETED " +
+           "AND s.createdAt >= :from AND s.createdAt <= :to")
+    BigDecimal sumPartialRefundsByDistributorAndDateRange(
+            @Param("distributorId") UUID distributorId,
+            @Param("from") java.time.LocalDateTime from,
+            @Param("to") java.time.LocalDateTime to);
+
+    @Query("SELECT COALESCE(SUM(s.totalAmount), 0) FROM PosSale s " +
+           "WHERE s.branch.distributor.merchant.id = :merchantId " +
+           "AND s.status = com.zuqi.domain.pos.PosSaleStatus.REFUNDED " +
+           "AND s.refundOf IS NOT NULL " +
+           "AND s.refundOf.status = com.zuqi.domain.pos.PosSaleStatus.COMPLETED " +
+           "AND s.createdAt >= :from AND s.createdAt <= :to")
+    BigDecimal sumPartialRefundsByMerchantAndDateRange(
+            @Param("merchantId") UUID merchantId,
+            @Param("from") java.time.LocalDateTime from,
+            @Param("to") java.time.LocalDateTime to);
+
+    @Query("SELECT YEAR(s.createdAt), MONTH(s.createdAt), COALESCE(SUM(s.totalAmount), 0) " +
+           "FROM PosSale s WHERE s.branch.distributor.id = :distributorId " +
+           "AND s.status = com.zuqi.domain.pos.PosSaleStatus.REFUNDED " +
+           "AND s.refundOf IS NOT NULL " +
+           "AND s.refundOf.status = com.zuqi.domain.pos.PosSaleStatus.COMPLETED " +
+           "AND s.createdAt >= :from GROUP BY YEAR(s.createdAt), MONTH(s.createdAt)")
+    List<Object[]> monthlyPartialRefundsByDistributor(
+            @Param("distributorId") UUID distributorId,
+            @Param("from") java.time.LocalDateTime from);
+
+    @Query("SELECT YEAR(s.createdAt), MONTH(s.createdAt), COALESCE(SUM(s.totalAmount), 0) " +
+           "FROM PosSale s WHERE s.branch.distributor.merchant.id = :merchantId " +
+           "AND s.status = com.zuqi.domain.pos.PosSaleStatus.REFUNDED " +
+           "AND s.refundOf IS NOT NULL " +
+           "AND s.refundOf.status = com.zuqi.domain.pos.PosSaleStatus.COMPLETED " +
+           "AND s.createdAt >= :from GROUP BY YEAR(s.createdAt), MONTH(s.createdAt)")
+    List<Object[]> monthlyPartialRefundsByMerchant(
+            @Param("merchantId") UUID merchantId,
+            @Param("from") java.time.LocalDateTime from);
 }
