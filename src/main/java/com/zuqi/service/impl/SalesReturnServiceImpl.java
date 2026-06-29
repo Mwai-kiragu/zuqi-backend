@@ -94,6 +94,11 @@ public class SalesReturnServiceImpl implements SalesReturnService {
                         .orElseThrow(() -> new ResourceNotFoundException("Order", "id", request.getOrderId()))
                 : null;
 
+        // Guard: cancelled orders cannot be returned
+        if (order != null && order.getStatus() == com.zuqi.domain.order.OrderStatus.CANCELLED) {
+            throw new ValidationException("Cannot create a return for a cancelled order.");
+        }
+
         // Resolve invoice; if no orderId but invoiceId, derive order from invoice
         Invoice invoice = null;
         if (request.getInvoiceId() != null) {
@@ -125,6 +130,29 @@ public class SalesReturnServiceImpl implements SalesReturnService {
                 throw new ValidationException(
                     "Return total KES " + newReturnTotal + " exceeds the remaining returnable amount of KES " +
                     remainingReturnable + " on invoice " + invoice.getInvoiceNumber() + ".");
+            }
+        } else if (order != null) {
+            // No invoice linked — guard against over-returning on the order itself
+            BigDecimal alreadyReturned = salesReturnRepository.sumActiveReturnedAmountByOrderId(order.getId());
+            if (alreadyReturned == null) alreadyReturned = BigDecimal.ZERO;
+
+            BigDecimal orderTotal = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
+            BigDecimal remainingReturnable = orderTotal.subtract(alreadyReturned);
+
+            if (remainingReturnable.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new ValidationException(
+                    "Order " + order.getOrderNumber() + " has already been fully returned. " +
+                    "Total returnable: KES " + orderTotal + ", already returned: KES " + alreadyReturned + ".");
+            }
+
+            BigDecimal newReturnTotal = request.getItems().stream()
+                    .map(i -> i.getUnitPrice().multiply(i.getQuantity()))
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+            if (newReturnTotal.compareTo(remainingReturnable) > 0) {
+                throw new ValidationException(
+                    "Return total KES " + newReturnTotal + " exceeds the remaining returnable amount of KES " +
+                    remainingReturnable + " on order " + order.getOrderNumber() + ".");
             }
         }
 

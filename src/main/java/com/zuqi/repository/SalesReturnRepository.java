@@ -89,6 +89,11 @@ public interface SalesReturnRepository extends JpaRepository<SalesReturn, UUID> 
            "WHERE r.invoice.id = :invoiceId AND r.status <> 'CANCELLED'")
     BigDecimal sumActiveReturnedAmountByInvoiceId(@Param("invoiceId") UUID invoiceId);
 
+    /** Sum of totalAmount for all non-CANCELLED returns against a given order. */
+    @Query("SELECT COALESCE(SUM(r.totalAmount), 0) FROM SalesReturn r " +
+           "WHERE r.order.id = :orderId AND r.status <> com.zuqi.domain.returns.ReturnStatus.CANCELLED")
+    BigDecimal sumActiveReturnedAmountByOrderId(@Param("orderId") UUID orderId);
+
     // ── Export (all, no pagination) ─────────────────────────────────────────
 
     List<SalesReturn> findByDistributorIdOrderByCreatedAtDesc(UUID distributorId);
