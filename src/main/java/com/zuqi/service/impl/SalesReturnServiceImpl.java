@@ -267,6 +267,7 @@ public class SalesReturnServiceImpl implements SalesReturnService {
                         .referenceType("SALES_RETURN")
                         .referenceId(sr.getId())
                         .notes("Sales return " + sr.getReturnNumber())
+                        .createdBy(securityUtils.getCurrentUser())
                         .build();
                 stockMovementRepository.save(movement);
 

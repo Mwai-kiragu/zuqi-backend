@@ -195,6 +195,7 @@ public class GrnServiceImpl implements GrnService {
                     .referenceId(grn.getId())
                     .notes("Auto-updated on GRN " + grn.getGrnNumber() + " confirmation")
                     .createdById(currentUser.getId())
+                    .createdBy(currentUser)
                     .build();
             stockMovementRepository.save(movement);
 

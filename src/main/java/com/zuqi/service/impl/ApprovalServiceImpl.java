@@ -537,7 +537,8 @@ public class ApprovalServiceImpl implements ApprovalService {
                 sr.setStatus("APPROVED".equals(status) ? ReturnStatus.CONFIRMED : ReturnStatus.CANCELLED);
                 salesReturnRepository.save(sr);
                 if ("APPROVED".equals(status)) {
-                    applySalesReturnStock(sr);
+                    User approver = approverId != null ? userRepository.findById(approverId).orElse(null) : null;
+                    applySalesReturnStock(sr, approver);
                     applyInvoiceCreditForSalesReturn(sr);
                 }
             });
@@ -725,7 +726,7 @@ public class ApprovalServiceImpl implements ApprovalService {
         }
     }
 
-    private void applySalesReturnStock(com.zuqi.domain.returns.SalesReturn sr) {
+    private void applySalesReturnStock(com.zuqi.domain.returns.SalesReturn sr, User approver) {
         try {
             UUID distributorId = sr.getDistributor().getId();
             List<Warehouse> hqWarehouses = warehouseRepository.findByDistributorIdAndBranchHeadquartersTrueAndActiveTrue(distributorId);
@@ -758,6 +759,7 @@ public class ApprovalServiceImpl implements ApprovalService {
                         .referenceId(sr.getId())
                         .notes("Sales return " + sr.getReturnNumber())
                         .approvalStatus("APPROVED")
+                        .createdBy(approver)
                         .build());
                 log.info("Sales return {}: added {} units of product {} to stock",
                         sr.getReturnNumber(), item.getQuantity(), item.getProduct().getId());
