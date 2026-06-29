@@ -189,6 +189,7 @@ public class PosServiceImpl implements PosService {
                     .entityName("Shift closed by " + shift.getCashier().getFullName())
                     .description("POS shift reconciliation: closing float " + request.getClosingFloat()
                             + ", expected cash " + saved.getExpectedCash())
+                    .amount(saved.getExpectedCash())
                     .requiredApprovals(1)
                     .build());
         } catch (Exception e) {
@@ -661,6 +662,7 @@ public class PosServiceImpl implements PosService {
                             .requestedValues(java.util.Map.of(
                                     "refundType", "FULL",
                                     "cashierId", cashierId.toString()))
+                            .amount(original.getTotalAmount())
                             .requiredApprovals(1)
                             .build());
             log.info("Full refund for sale {} routed for approval — requestId={}", saleId, approvalReq.getId());
@@ -702,6 +704,20 @@ public class PosServiceImpl implements PosService {
 
         original.setStatus(PosSaleStatus.REFUNDED);
         saleRepository.save(original);
+
+        // Mark the linked order as REFUNDED so it doesn't appear as a separate negative-amount record
+        try {
+            orderRepository.findByPosSaleId(original.getId()).ifPresent(order -> {
+                order.setStatus(OrderStatus.REFUNDED);
+                order.setRefundedAt(LocalDateTime.now());
+                order.setRefundedAmount(original.getTotalAmount());
+                orderRepository.save(order);
+                log.info("Order {} marked REFUNDED via POS full refund of sale {}", order.getOrderNumber(), original.getId());
+            });
+        } catch (Exception e) {
+            log.warn("Order REFUNDED status update failed for POS sale {}: {}", original.getId(), e.getMessage());
+        }
+
         return mapToSaleResponse(saleRepository.save(refund));
     }
 
@@ -746,6 +762,7 @@ public class PosServiceImpl implements PosService {
                             .description("Partial refund requested for sale " + original.getReceiptNumber()
                                     + " — total: " + original.getTotalAmount())
                             .requestedValues(reqValues)
+                            .amount(request.getCustomAmount() != null ? request.getCustomAmount() : original.getTotalAmount())
                             .requiredApprovals(1)
                             .build());
             log.info("Partial refund for sale {} routed for approval — requestId={}", saleId, approvalReq.getId());

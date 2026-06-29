@@ -29,4 +29,7 @@ public interface GlAutoPostingService {
 
     /** DR Accounts Payable, CR Cash & Bank */
     void postSupplierPaymentDisbursed(FundsTransfer ft, BigDecimal amount);
+
+    /** DR Expense (general), CR Cash & Bank — for EXTERNAL / non-supplier disbursements */
+    void postExternalTransferDisbursed(FundsTransfer ft, BigDecimal amount);
 }

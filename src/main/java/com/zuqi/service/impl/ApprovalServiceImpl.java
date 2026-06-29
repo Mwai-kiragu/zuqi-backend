@@ -63,6 +63,8 @@ import com.zuqi.service.EmailService;
 import com.zuqi.service.GlAutoPostingService;
 import com.zuqi.service.InvoiceService;
 import com.zuqi.service.NotificationService;
+import com.zuqi.domain.payment.PaymentStatus;
+import com.zuqi.service.PaymentService;
 import com.zuqi.service.PosService;
 import com.zuqi.util.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -130,6 +132,9 @@ public class ApprovalServiceImpl implements ApprovalService {
 
     @Lazy @Autowired
     private PosService posService;
+
+    @Lazy @Autowired
+    private PaymentService paymentService;
 
     private final AtomicLong sequenceCounter = new AtomicLong(0);
 
@@ -560,6 +565,23 @@ public class ApprovalServiceImpl implements ApprovalService {
             case "STOCK_TAKE_POSTING" -> {
                 if ("APPROVED".equals(status)) {
                     applyApprovedStockTakePosting(request, approverId);
+                }
+            }
+            case "PAYMENT" -> {
+                if ("APPROVED".equals(status)) {
+                    try {
+                        paymentService.updatePaymentStatus(entityId, PaymentStatus.COMPLETED);
+                        log.info("Payment {} completed via approval workflow", entityId);
+                    } catch (Exception e) {
+                        log.error("Failed to complete payment {} via approval: {}", entityId, e.getMessage(), e);
+                        throw e;
+                    }
+                } else {
+                    try {
+                        paymentService.updatePaymentStatus(entityId, PaymentStatus.FAILED);
+                    } catch (Exception e) {
+                        log.warn("Failed to mark payment {} as FAILED after rejection: {}", entityId, e.getMessage());
+                    }
                 }
             }
             default -> { /* no-op for other entity types */ }

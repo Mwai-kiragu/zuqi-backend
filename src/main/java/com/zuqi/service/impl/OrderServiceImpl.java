@@ -715,7 +715,7 @@ public class OrderServiceImpl implements OrderService {
             case PROCESSING -> to == OrderStatus.READY_FOR_DELIVERY || to == OrderStatus.CANCELLED;
             case READY_FOR_DELIVERY -> to == OrderStatus.OUT_FOR_DELIVERY || to == OrderStatus.CANCELLED;
             case OUT_FOR_DELIVERY -> to == OrderStatus.DELIVERED || to == OrderStatus.CANCELLED;
-            case DELIVERED, CANCELLED -> false;
+            case DELIVERED, CANCELLED, REFUNDED -> false;
         };
 
         if (!valid) {

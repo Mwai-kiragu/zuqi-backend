@@ -189,6 +189,8 @@ public class CasbinAuthorizationFilter extends OncePerRequestFilter {
             "/api/v1/payments/methods",
             "/v1/mpesa/callback",
             "/api/v1/mpesa/callback",
+            "/v1/mpesa/b2c/callback",
+            "/api/v1/mpesa/b2c/callback",
             "/v1/kcb/callback",
             "/api/v1/kcb/callback",
             "/v1/ncba/callback",

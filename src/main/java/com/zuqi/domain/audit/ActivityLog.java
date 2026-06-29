@@ -35,6 +35,9 @@ public class ActivityLog {
     @Column(name = "user_id")
     private UUID userId;
 
+    @Column(name = "distributor_id")
+    private UUID distributorId;
+
     @Column(name = "user_email", length = 255)
     private String userEmail;
 

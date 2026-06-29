@@ -54,6 +54,10 @@ public class FundsTransferResponse {
     private UUID supplierBillId;
     private String billNumber;
 
+    // Payment gateway tracking
+    private String gatewayTransactionId;
+    private String gatewayStatus;
+
     // Approval workflow detail
     private List<FtApprovalLevelDto> approvalLevels;     // configured approvers per level
     private List<FtApprovalDecisionDto> approvalHistory; // recorded decisions
@@ -91,6 +95,8 @@ public class FundsTransferResponse {
                 .supplierName(ft.getSupplier() != null ? ft.getSupplier().getName() : null)
                 .supplierBillId(ft.getSupplierBill() != null ? ft.getSupplierBill().getId() : null)
                 .billNumber(ft.getSupplierBill() != null ? ft.getSupplierBill().getBillNumber() : null)
+                .gatewayTransactionId(ft.getGatewayTransactionId())
+                .gatewayStatus(ft.getGatewayStatus())
                 .createdAt(ft.getCreatedAt())
                 .updatedAt(ft.getUpdatedAt())
                 .build();

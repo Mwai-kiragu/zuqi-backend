@@ -47,8 +47,18 @@ public class ActivityLogServiceImpl implements ActivityLogService {
                     String entityName, String module, String description,
                     Map<String, Object> oldValues, Map<String, Object> newValues) {
         try {
+            // Resolve the distributor for scoping — look it up from the user record so the
+            // audit trail can be filtered by tenant without relying on the callers to pass it.
+            UUID resolvedDistributorId = null;
+            if (userId != null) {
+                resolvedDistributorId = userRepository.findById(userId)
+                        .map(u -> u.getDistributorId())
+                        .orElse(null);
+            }
+
             ActivityLog logEntry = ActivityLog.builder()
                     .userId(userId)
+                    .distributorId(resolvedDistributorId)
                     .userEmail(userEmail)
                     .userName(userName)
                     .action(action)
@@ -84,8 +94,16 @@ public class ActivityLogServiceImpl implements ActivityLogService {
     public void logFailure(UUID userId, String userEmail, ActivityAction action,
                            String entityType, String module, String description, String errorMessage) {
         try {
+            UUID resolvedDistributorId = null;
+            if (userId != null) {
+                resolvedDistributorId = userRepository.findById(userId)
+                        .map(u -> u.getDistributorId())
+                        .orElse(null);
+            }
+
             ActivityLog logEntry = ActivityLog.builder()
                     .userId(userId)
+                    .distributorId(resolvedDistributorId)
                     .userEmail(userEmail)
                     .action(action)
                     .entityType(entityType)
@@ -117,43 +135,49 @@ public class ActivityLogServiceImpl implements ActivityLogService {
                                                      Boolean success, int page, int size) {
         PageRequest pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
 
-        // Resolve the set of userIds this caller is allowed to see
-        Set<UUID> allowedUserIds = resolveAllowedUserIds();
+        // Determine the distributor scope for tenant isolation.
+        // Newer entries carry distributor_id directly; older entries (null) fall back to user_id IN set.
+        List<UUID> allowedDistributorIds = resolveAllowedDistributorIds();
+        Set<UUID> fallbackUserIds = allowedDistributorIds != null ? resolveFallbackUserIds(allowedDistributorIds) : null;
 
         Page<ActivityLog> result = activityLogRepository.findAll(
-                ActivityLogSpecification.withFilters(userId, action, entityType, module, from, to, success, allowedUserIds),
+                ActivityLogSpecification.withFilters(userId, action, entityType, module, from, to, success,
+                        allowedDistributorIds, fallbackUserIds),
                 pageable);
         return toPageResponse(result);
     }
 
     /**
-     * Returns the set of user IDs visible to the current caller:
-     * - SUPER_ADMIN: null (no restriction — see everything)
-     * - MERCHANT_ADMIN: users in all distributors under their merchant
-     * - DISTRIBUTOR_ADMIN / others: users in their own distributor only
+     * Returns the list of distributor IDs visible to the current caller:
+     * - SUPER_ADMIN: null (no restriction)
+     * - MERCHANT_ADMIN: all distributor IDs under their merchant
+     * - DISTRIBUTOR_ADMIN / others: their own distributor ID only
      */
-    private Set<UUID> resolveAllowedUserIds() {
+    private List<UUID> resolveAllowedDistributorIds() {
         if (securityUtils.isSuperAdmin()) {
             return null;
         }
         UUID merchantId = securityUtils.getCurrentUserMerchantId();
         if (merchantId != null) {
-            // MERCHANT_ADMIN — scope to all distributors under this merchant
-            List<UUID> distIds = distributorRepository.findByMerchantIdAndActiveTrue(merchantId)
+            return distributorRepository.findByMerchantIdAndActiveTrue(merchantId)
                     .stream().map(Distributor::getId).collect(Collectors.toList());
-            if (distIds.isEmpty()) return Set.of();
-            return userRepository.findByDistributorIdIn(distIds).stream()
-                    .map(com.zuqi.domain.user.User::getId)
-                    .collect(Collectors.toSet());
         }
         UUID distributorId = securityUtils.getCurrentUserDistributorId();
         if (distributorId != null) {
-            return userRepository.findByDistributorId(distributorId).stream()
-                    .map(com.zuqi.domain.user.User::getId)
-                    .collect(Collectors.toSet());
+            return List.of(distributorId);
         }
-        // Fallback: show nothing
-        return Set.of();
+        return List.of();
+    }
+
+    /**
+     * For backward compat: returns the set of user IDs in the given distributor list.
+     * Used to match older activity_log entries that pre-date the distributor_id column.
+     */
+    private Set<UUID> resolveFallbackUserIds(List<UUID> distributorIds) {
+        if (distributorIds.isEmpty()) return Set.of();
+        return userRepository.findByDistributorIdIn(distributorIds).stream()
+                .map(com.zuqi.domain.user.User::getId)
+                .collect(Collectors.toSet());
     }
 
     @Override

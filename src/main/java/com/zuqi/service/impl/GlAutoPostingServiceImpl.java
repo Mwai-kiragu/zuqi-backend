@@ -357,6 +357,40 @@ public class GlAutoPostingServiceImpl implements GlAutoPostingService {
         }
     }
 
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void postExternalTransferDisbursed(com.zuqi.domain.ft.FundsTransfer ft, java.math.BigDecimal amount) {
+        UUID distId = ft.getDistributorId();
+
+        Optional<GlAccount> expense = find(distId, SystemAccountType.ACCOUNTS_PAYABLE);
+        Optional<GlAccount> cash    = find(distId, SystemAccountType.CASH_AND_BANK);
+
+        if (expense.isEmpty() || cash.isEmpty()) {
+            log.warn("GL auto-post skipped (external transfer): AP or Cash account not configured for distributor {}", distId);
+            return;
+        }
+
+        String ref = ft.getReferenceNumber() != null ? ft.getReferenceNumber() : ft.getId().toString();
+        try {
+            glPostingService.post(
+                    distId,
+                    JournalSourceModule.TREASURY,
+                    ft.getId(),
+                    java.time.LocalDate.now(),
+                    "External transfer — " + ref,
+                    ref,
+                    List.of(
+                            debit(expense.get().getId(),  "Transfer disbursed — " + ref, amount),
+                            credit(cash.get().getId(),    "Cash paid — "          + ref, amount)
+                    ),
+                    null
+            );
+            log.info("GL posted for external transfer {} — DR, Cash CR, amount {}", ref, amount);
+        } catch (Exception e) {
+            log.error("GL auto-post failed (external transfer) for {}", ref, e);
+        }
+    }
+
     private void ensureGlAccounts(UUID distId) {
         boolean hasAr      = glAccountRepository.findByDistributorIdAndSystemAccountType(distId, SystemAccountType.ACCOUNTS_RECEIVABLE).isPresent();
         boolean hasRevenue = glAccountRepository.findByDistributorIdAndSystemAccountType(distId, SystemAccountType.SALES_REVENUE).isPresent();

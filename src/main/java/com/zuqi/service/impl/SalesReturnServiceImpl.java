@@ -12,6 +12,7 @@ import com.zuqi.domain.inventory.Warehouse;
 import com.zuqi.domain.invoice.Invoice;
 import com.zuqi.domain.invoice.InvoiceStatus;
 import com.zuqi.domain.order.Order;
+import com.zuqi.domain.order.OrderStatus;
 import com.zuqi.domain.product.Product;
 import com.zuqi.domain.returns.*;
 import com.zuqi.domain.user.User;
@@ -34,6 +35,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -244,6 +246,17 @@ public class SalesReturnServiceImpl implements SalesReturnService {
         }
         sr.setStatus(ReturnStatus.CONFIRMED);
         SalesReturn saved = salesReturnRepository.save(sr);
+
+        // Mark the linked order as REFUNDED so no new negative order is created
+        Order linkedOrder = sr.getOrder();
+        if (linkedOrder != null) {
+            linkedOrder.setStatus(OrderStatus.REFUNDED);
+            linkedOrder.setRefundedAt(LocalDateTime.now());
+            linkedOrder.setRefundReason(sr.getReason());
+            linkedOrder.setRefundedAmount(sr.getTotalAmount());
+            orderRepository.save(linkedOrder);
+            log.info("Order {} marked REFUNDED via return {}", linkedOrder.getOrderNumber(), sr.getReturnNumber());
+        }
 
         // Restore stock for each returned item
         Warehouse warehouse = resolveWarehouse(sr);

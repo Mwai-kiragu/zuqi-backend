@@ -15,6 +15,7 @@ import com.zuqi.service.ActivityLogService;
 import com.zuqi.service.ApprovalThresholdService;
 import com.zuqi.service.FundsTransferService;
 import com.zuqi.service.GlAutoPostingService;
+import com.zuqi.service.MpesaService;
 import com.zuqi.service.SupplierBillService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +49,7 @@ public class FundsTransferServiceImpl implements FundsTransferService {
     private final GlAutoPostingService glAutoPostingService;
     private final SupplierBillService supplierBillService;
     private final GoodsReceiptNoteRepository grnRepository;
+    private final MpesaService mpesaService;
     private final ApprovalWorkflowConfigRepository approvalWorkflowConfigRepository;
     private final ApprovalThresholdService approvalThresholdService;
     private final SecurityUtils securityUtils;
@@ -479,22 +481,48 @@ public class FundsTransferServiceImpl implements FundsTransferService {
             ft.setAuthorizedById(disbursingUser.getId());
             ft.setAuthorizedByName(disbursingUser.getFirstName() + " " + disbursingUser.getLastName());
         }
+
+        // Payment mode: attempt gateway disbursement
+        String paymentMode = ft.getPaymentMode();
+        if ("MPESA".equalsIgnoreCase(paymentMode)) {
+            try {
+                String conversationId = mpesaService.initiateB2c(ft);
+                ft.setGatewayTransactionId(conversationId);
+                ft.setGatewayStatus("PENDING");
+                log.info("M-Pesa B2C initiated for FT {} — conversationId={}", ft.getReferenceNumber(), conversationId);
+            } catch (Exception e) {
+                log.error("M-Pesa B2C failed for FT {}: {}", ft.getReferenceNumber(), e.getMessage());
+                throw new ValidationException("M-Pesa disbursement failed: " + e.getMessage());
+            }
+        } else if ("BANK_TRANSFER".equalsIgnoreCase(paymentMode)) {
+            ft.setGatewayStatus("PENDING_BANK");
+            log.info("Bank transfer disbursed for FT {} — manual bank instruction pending", ft.getReferenceNumber());
+        } else if ("CHEQUE".equalsIgnoreCase(paymentMode)) {
+            ft.setGatewayStatus("CHEQUE_ISSUED");
+            log.info("Cheque issued for FT {}", ft.getReferenceNumber());
+        }
+
         FundsTransfer saved = fundsTransferRepository.save(ft);
 
-        // GL auto-post for supplier payments
+        // GL auto-post
         if (saved.getTransferType() == FundsTransferType.SUPPLIER_PAYMENT) {
             try {
                 glAutoPostingService.postSupplierPaymentDisbursed(saved, saved.getAmount());
             } catch (Exception e) {
                 log.warn("GL auto-post failed on disburse for FT {}: {}", saved.getReferenceNumber(), e.getMessage());
             }
-            // Apply payment to linked supplier bill
             if (saved.getSupplierBill() != null) {
                 try {
                     supplierBillService.applyPayment(saved.getSupplierBill().getId(), saved.getAmount());
                 } catch (Exception e) {
                     log.warn("Failed to apply payment to supplier bill on disburse: {}", e.getMessage());
                 }
+            }
+        } else if (saved.getTransferType() == FundsTransferType.EXTERNAL) {
+            try {
+                glAutoPostingService.postExternalTransferDisbursed(saved, saved.getAmount());
+            } catch (Exception e) {
+                log.warn("GL auto-post failed (external transfer) for FT {}: {}", saved.getReferenceNumber(), e.getMessage());
             }
         }
 
