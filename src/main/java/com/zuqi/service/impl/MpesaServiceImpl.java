@@ -2,6 +2,8 @@ package com.zuqi.service.impl;
 
 import com.zuqi.api.dto.mpesa.*;
 import com.zuqi.api.dto.payment.PaymentRequest;
+import com.zuqi.domain.ft.FundsTransfer;
+import com.zuqi.domain.ft.FundsTransferStatus;
 import com.zuqi.domain.mpesa.*;
 import com.zuqi.domain.merchant.Merchant;
 import com.zuqi.domain.order.Order;
@@ -43,18 +45,27 @@ public class MpesaServiceImpl implements MpesaService {
     private final MerchantRepository merchantRepository;
     private final PaymentMethodRepository paymentMethodRepository;
     private final OrderRepository orderRepository;
+    private final DistributorRepository distributorRepository;
+    private final FundsTransferRepository fundsTransferRepository;
     private final SecurityUtils securityUtils;
     private final RestTemplate restTemplate;
 
     // @Lazy to avoid circular dependency (InvoiceService → PaymentService → ... → MpesaService)
     @Autowired @Lazy private InvoiceService invoiceService;
     @Autowired @Lazy private PaymentService paymentService;
+    @Autowired @Lazy private com.zuqi.service.PosService posService;
 
     @Value("${daraja.stk-push-url:https://stk.swerri.io/api/v1/stkPush}")
     private String darajaStkPushUrl;
 
+    @Value("${daraja.b2c-url:https://stk.swerri.io/api/v1/b2c}")
+    private String darajaB2cUrl;
+
     @Value("${daraja.callback-base-url:https://zuqi.pestoe.com/api/v1/mpesa/callback}")
     private String callbackBaseUrl;
+
+    @Value("${daraja.b2c-callback-base-url:https://zuqi.pestoe.com/api/v1/mpesa/b2c/callback}")
+    private String b2cCallbackBaseUrl;
 
     @Value("${daraja.business-config-url:https://stk.swerri.io/api/v1/business_config/all}")
     private String darajaBusinessConfigUrl;
@@ -349,6 +360,133 @@ public class MpesaServiceImpl implements MpesaService {
         return enabled;
     }
 
+    // ---- B2C (outbound disbursement) ----
+
+    @Override
+    @Transactional
+    public String initiateB2c(FundsTransfer ft) {
+        // Resolve merchant from the distributor that owns this FundsTransfer
+        UUID merchantId = distributorRepository.findById(ft.getDistributorId())
+                .map(d -> d.getMerchant() != null ? d.getMerchant().getId() : null)
+                .orElse(null);
+
+        if (merchantId == null) {
+            throw new ValidationException("Cannot initiate M-Pesa B2C: distributor has no linked merchant");
+        }
+
+        // Find an ACTIVE M-Pesa config for this merchant
+        List<MpesaConfig> configs = mpesaConfigRepository.findByMerchantId(merchantId).stream()
+                .filter(c -> c.getStatus() == MpesaConfigStatus.ACTIVE && c.getExternalId() != null)
+                .toList();
+
+        if (configs.isEmpty()) {
+            throw new ValidationException("No active M-Pesa configuration found for this business. Please set up M-Pesa in Payment Methods settings.");
+        }
+
+        MpesaConfig config = configs.get(0);
+        String phone = normalizePhone(ft.getCreditAccountNumber());
+        String orderId = ft.getReferenceNumber() != null ? ft.getReferenceNumber() : ft.getId().toString();
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("amount", ft.getAmount().intValue());
+        body.put("phone", phone);
+        body.put("Order_ID", orderId);
+        body.put("businessId", config.getExternalId());
+        body.put("remarks", ft.getDescription() != null ? ft.getDescription() : "Payment disbursement");
+        body.put("resultUrl", b2cCallbackBaseUrl);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        log.info("Initiating M-Pesa B2C for FT {} phone {} amount {}", orderId, phone, ft.getAmount());
+
+        try {
+            ResponseEntity<Map> response = restTemplate.exchange(
+                    darajaB2cUrl, HttpMethod.POST,
+                    new HttpEntity<>(body, headers), Map.class);
+
+            Map<?, ?> resBody = response.getBody();
+            Object rcObj = resBody != null ? resBody.get("ResponseCode") : null;
+            String responseCode = rcObj != null ? String.valueOf(rcObj) : "";
+            Object convObj = resBody != null ? resBody.get("ConversationID") : null;
+            if (convObj == null && resBody != null) convObj = resBody.get("OriginatorConversationID");
+            String conversationId = convObj != null ? String.valueOf(convObj) : orderId;
+
+            if ("0".equals(responseCode)) {
+                log.info("M-Pesa B2C initiated: conversationId={} FT={}", conversationId, orderId);
+                return conversationId;
+            } else {
+                Object errObj = resBody != null ? resBody.get("errorMessage") : null;
+                String err = errObj != null ? String.valueOf(errObj) : "B2C initiation failed";
+                log.error("M-Pesa B2C failed for FT {}: {}", orderId, err);
+                throw new ValidationException("M-Pesa payment initiation failed: " + err);
+            }
+        } catch (ValidationException ve) {
+            throw ve;
+        } catch (Exception e) {
+            log.error("M-Pesa B2C error for FT {}: {}", orderId, e.getMessage());
+            throw new ValidationException("M-Pesa payment initiation failed: " + e.getMessage());
+        }
+    }
+
+    @Override
+    @Transactional
+    public void handleB2cCallback(Map<String, Object> payload) {
+        log.info("M-Pesa B2C callback received: {}", payload);
+        try {
+            // Unpack standard Daraja B2C callback structure
+            Object resultObj = payload.get("Result");
+            Map<?, ?> result = resultObj instanceof Map<?, ?> ? (Map<?, ?>) resultObj : payload;
+
+            Object rcObj2 = result.get("ResultCode");
+            if (rcObj2 == null) rcObj2 = result.get("resultCode");
+            String resultCode = rcObj2 != null ? String.valueOf(rcObj2) : "-1";
+
+            Object txObj = result.get("TransactionID");
+            if (txObj == null) txObj = result.get("transactionId");
+            String transactionId = txObj != null ? String.valueOf(txObj) : "";
+
+            Object cvObj = result.get("ConversationID");
+            if (cvObj == null) cvObj = result.get("OriginatorConversationID");
+            String conversationId = cvObj != null ? String.valueOf(cvObj) : "";
+
+            Object oidObj = result.get("Order_ID");
+            if (oidObj == null) oidObj = result.get("orderId");
+            String orderId = oidObj != null ? String.valueOf(oidObj) : "";
+
+            // Look up the FundsTransfer: first by stored conversationId, then by referenceNumber (Order_ID)
+            Optional<FundsTransfer> ftOpt = fundsTransferRepository.findByGatewayTransactionId(conversationId);
+            if (ftOpt.isEmpty() && !orderId.isEmpty() && !"null".equals(orderId)) {
+                ftOpt = fundsTransferRepository.findByReferenceNumber(orderId);
+            }
+
+            if (ftOpt.isEmpty()) {
+                log.warn("B2C callback: no FundsTransfer found for conversationId={} orderId={}", conversationId, orderId);
+                return;
+            }
+
+            FundsTransfer ft = ftOpt.get();
+
+            if ("0".equals(resultCode)) {
+                ft.setGatewayStatus("SUCCESS");
+                if (!transactionId.isEmpty() && !"null".equals(transactionId)) {
+                    ft.setGatewayTransactionId(transactionId);
+                }
+                log.info("B2C SUCCESS: FT={} transactionId={}", ft.getReferenceNumber(), transactionId);
+            } else {
+                Object rdObj = result.get("ResultDesc");
+                String resultDesc = rdObj != null ? String.valueOf(rdObj) : "Payment failed";
+                ft.setGatewayStatus("FAILED");
+                ft.setGatewayResponse(resultDesc);
+                ft.setStatus(FundsTransferStatus.APPROVED); // revert to APPROVED so it can be re-disbursed
+                log.warn("B2C FAILED: FT={} resultCode={} desc={}", ft.getReferenceNumber(), resultCode, resultDesc);
+            }
+            fundsTransferRepository.save(ft);
+        } catch (Exception e) {
+            log.error("Error handling B2C callback: {}", e.getMessage(), e);
+        }
+    }
+
     // ---- helpers ----
 
     /**
@@ -385,6 +523,14 @@ public class MpesaServiceImpl implements MpesaService {
                     paymentService.createPayment(pr);
                     log.info("Auto-reconciled order {} via M-Pesa receipt {}", referenceId, receipt);
                 }
+            } else if ("POS_SALE".equalsIgnoreCase(referenceType)) {
+                com.zuqi.api.dto.pos.ProcessPaymentRequest pr = new com.zuqi.api.dto.pos.ProcessPaymentRequest();
+                pr.setPaymentMethod(com.zuqi.domain.pos.PosPaymentMethod.MPESA);
+                pr.setAmount(amount);
+                pr.setReferenceNumber(receipt);
+                posService.recordGatewayPayment(UUID.fromString(referenceId), pr);
+                log.info("Auto-reconciled POS sale {} via M-Pesa receipt {}", referenceId, receipt);
+
             } else {
                 log.info("No auto-reconciliation for referenceType={} referenceId={}", referenceType, referenceId);
             }

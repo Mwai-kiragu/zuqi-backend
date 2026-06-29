@@ -63,6 +63,8 @@ import com.zuqi.service.EmailService;
 import com.zuqi.service.GlAutoPostingService;
 import com.zuqi.service.InvoiceService;
 import com.zuqi.service.NotificationService;
+import com.zuqi.domain.payment.PaymentStatus;
+import com.zuqi.service.PaymentService;
 import com.zuqi.service.PosService;
 import com.zuqi.util.SecurityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -130,6 +132,9 @@ public class ApprovalServiceImpl implements ApprovalService {
 
     @Lazy @Autowired
     private PosService posService;
+
+    @Lazy @Autowired
+    private PaymentService paymentService;
 
     private final AtomicLong sequenceCounter = new AtomicLong(0);
 
@@ -226,14 +231,19 @@ public class ApprovalServiceImpl implements ApprovalService {
             throw new ValidationException("You have already acted on this request");
         }
 
-        if (request.getRequestedById().equals(approverId)) {
-            throw new ValidationException("The maker cannot approve their own request");
-        }
-
         User approver = userRepository.findById(approverId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", approverId.toString()));
 
-        enforceApprovalHierarchy(request, approver);
+        boolean isMerchantOwner = approver.getRoles().stream()
+                .anyMatch(r -> "MERCHANT_ADMIN".equals(r.getName()) || "SUPER_ADMIN".equals(r.getName()));
+
+        if (!isMerchantOwner && request.getRequestedById().equals(approverId)) {
+            throw new ValidationException("The maker cannot approve their own request");
+        }
+
+        if (!isMerchantOwner) {
+            enforceApprovalHierarchy(request, approver);
+        }
 
         ApprovalAction action = ApprovalAction.builder()
                 .approvalRequest(request)
@@ -532,7 +542,9 @@ public class ApprovalServiceImpl implements ApprovalService {
                 sr.setStatus("APPROVED".equals(status) ? ReturnStatus.CONFIRMED : ReturnStatus.CANCELLED);
                 salesReturnRepository.save(sr);
                 if ("APPROVED".equals(status)) {
-                    applySalesReturnStock(sr);
+                    User approver = approverId != null ? userRepository.findById(approverId).orElse(null) : null;
+                    applySalesReturnStock(sr, approver);
+                    applyInvoiceCreditForSalesReturn(sr);
                 }
             });
             case "PURCHASE_RETURN" -> purchaseReturnRepository.findById(entityId).ifPresent(pr -> {
@@ -553,6 +565,23 @@ public class ApprovalServiceImpl implements ApprovalService {
             case "STOCK_TAKE_POSTING" -> {
                 if ("APPROVED".equals(status)) {
                     applyApprovedStockTakePosting(request, approverId);
+                }
+            }
+            case "PAYMENT" -> {
+                if ("APPROVED".equals(status)) {
+                    try {
+                        paymentService.updatePaymentStatus(entityId, PaymentStatus.COMPLETED);
+                        log.info("Payment {} completed via approval workflow", entityId);
+                    } catch (Exception e) {
+                        log.error("Failed to complete payment {} via approval: {}", entityId, e.getMessage(), e);
+                        throw e;
+                    }
+                } else {
+                    try {
+                        paymentService.updatePaymentStatus(entityId, PaymentStatus.FAILED);
+                    } catch (Exception e) {
+                        log.warn("Failed to mark payment {} as FAILED after rejection: {}", entityId, e.getMessage());
+                    }
                 }
             }
             default -> { /* no-op for other entity types */ }
@@ -719,7 +748,7 @@ public class ApprovalServiceImpl implements ApprovalService {
         }
     }
 
-    private void applySalesReturnStock(com.zuqi.domain.returns.SalesReturn sr) {
+    private void applySalesReturnStock(com.zuqi.domain.returns.SalesReturn sr, User approver) {
         try {
             UUID distributorId = sr.getDistributor().getId();
             List<Warehouse> hqWarehouses = warehouseRepository.findByDistributorIdAndBranchHeadquartersTrueAndActiveTrue(distributorId);
@@ -752,6 +781,7 @@ public class ApprovalServiceImpl implements ApprovalService {
                         .referenceId(sr.getId())
                         .notes("Sales return " + sr.getReturnNumber())
                         .approvalStatus("APPROVED")
+                        .createdBy(approver)
                         .build());
                 log.info("Sales return {}: added {} units of product {} to stock",
                         sr.getReturnNumber(), item.getQuantity(), item.getProduct().getId());
@@ -759,6 +789,34 @@ public class ApprovalServiceImpl implements ApprovalService {
         } catch (Exception e) {
             log.error("Failed to apply stock for sales return {}: {}", sr.getReturnNumber(), e.getMessage(), e);
             throw e;
+        }
+    }
+
+    private void applyInvoiceCreditForSalesReturn(com.zuqi.domain.returns.SalesReturn sr) {
+        var linkedInvoice = sr.getInvoice();
+        if (linkedInvoice == null || linkedInvoice.getStatus() == InvoiceStatus.CANCELLED) return;
+        java.math.BigDecimal returnAmount = sr.getTotalAmount();
+        if (returnAmount == null || returnAmount.compareTo(java.math.BigDecimal.ZERO) <= 0) return;
+
+        if (linkedInvoice.getStatus() == InvoiceStatus.PAID) {
+            java.math.BigDecimal reduction = returnAmount.min(linkedInvoice.getPaidAmount() != null
+                    ? linkedInvoice.getPaidAmount() : java.math.BigDecimal.ZERO);
+            if (reduction.compareTo(java.math.BigDecimal.ZERO) > 0) {
+                linkedInvoice.recordPayment(reduction.negate());
+                invoiceRepository.save(linkedInvoice);
+                log.info("Invoice {} paidAmount reduced by KES {} via approved return {} — new status: {}",
+                        linkedInvoice.getInvoiceNumber(), reduction, sr.getReturnNumber(), linkedInvoice.getStatus());
+            }
+        } else {
+            java.math.BigDecimal balanceDue = linkedInvoice.getBalanceDue() != null
+                    ? linkedInvoice.getBalanceDue() : java.math.BigDecimal.ZERO;
+            java.math.BigDecimal creditToApply = returnAmount.min(balanceDue);
+            if (creditToApply.compareTo(java.math.BigDecimal.ZERO) > 0) {
+                linkedInvoice.applyCredit(creditToApply);
+                invoiceRepository.save(linkedInvoice);
+                log.info("Invoice {} balance reduced by KES {} via approved return {}",
+                        linkedInvoice.getInvoiceNumber(), creditToApply, sr.getReturnNumber());
+            }
         }
     }
 

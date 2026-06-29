@@ -1,6 +1,8 @@
 package com.zuqi.service.impl;
 
+import com.zuqi.api.dto.approval.CreateApprovalRequestDto;
 import com.zuqi.api.dto.payment.*;
+import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.distributor.Distributor;
 import com.zuqi.domain.customer.Customer;
 import com.zuqi.domain.invoice.Invoice;
@@ -18,13 +20,15 @@ import com.zuqi.domain.kcb.KcbConfigStatus;
 import com.zuqi.ai.event.PaymentRecordedEvent;
 import com.zuqi.ai.feature.FeatureStore;
 import com.zuqi.domain.audit.ActivityAction;
-import com.zuqi.domain.user.User;
 import com.zuqi.service.ActivityLogService;
+import com.zuqi.service.ApprovalService;
 import com.zuqi.service.PaymentService;
 import com.zuqi.util.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -57,6 +61,9 @@ public class PaymentServiceImpl implements PaymentService {
     private final ApplicationEventPublisher eventPublisher;
     private final FeatureStore featureStore;
     private final ActivityLogService activityLogService;
+
+    @Lazy @Autowired
+    private ApprovalService approvalService;
 
     @Override
     public Page<PaymentResponse> getAllPayments(Pageable pageable) {
@@ -160,12 +167,14 @@ public class PaymentServiceImpl implements PaymentService {
     public PaymentResponse createPayment(PaymentRequest request) {
         log.info("Creating payment for merchant: {}", request.getMerchantId());
 
-        // Validate and fetch related entities
         Distributor distributor = distributorRepository.findById(request.getDistributorId())
                 .orElseThrow(() -> new ResourceNotFoundException("Distributor", "id", request.getDistributorId()));
 
-        Customer merchant = customerRepository.findById(request.getMerchantId())
-                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getMerchantId()));
+        Customer merchant = null;
+        if (request.getMerchantId() != null) {
+            merchant = customerRepository.findById(request.getMerchantId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getMerchantId()));
+        }
 
         Order order = null;
         if (request.getOrderId() != null) {
@@ -184,20 +193,20 @@ public class PaymentServiceImpl implements PaymentService {
                     .orElseThrow(() -> new ResourceNotFoundException("PaymentMethod", "id", request.getPaymentMethodId()));
         }
 
-        // Generate payment number
         String paymentNumber = generatePaymentNumber();
 
-        // Auto-generate a cash reference for cash payments that have no external reference
         String externalReference = request.getExternalReference();
         if (externalReference == null && paymentMethod != null
                 && "CASH".equalsIgnoreCase(paymentMethod.getCode())) {
             externalReference = generateCashReference(distributor.getName());
         }
 
-        // Create payment
+        User currentUser = securityUtils.getCurrentUser();
+        boolean needsApproval = currentUser != null && securityUtils.currentUserRequiresApprovalFor("PAYMENT");
+
         Payment payment = Payment.builder()
                 .paymentNumber(paymentNumber)
-                .sourceType(order != null ? "ORDER" : "MANUAL")
+                .sourceType(order != null ? "ORDER" : invoice != null ? "INVOICE" : "MANUAL")
                 .order(order)
                 .invoice(invoice)
                 .merchant(merchant)
@@ -212,31 +221,64 @@ public class PaymentServiceImpl implements PaymentService {
 
         payment = paymentRepository.save(payment);
 
-        // Update order paid amount if linked to an order
-        if (order != null) {
-            updateOrderPaidAmount(order);
+        UUID approvalRequestId = null;
+        if (needsApproval) {
+            try {
+                String desc = "Payment of " + request.getAmount() + " " + payment.getCurrency();
+                if (invoice != null) desc += " against invoice " + invoice.getInvoiceNumber();
+                else if (order != null) desc += " against order " + order.getOrderNumber();
+                com.zuqi.api.dto.approval.ApprovalRequestResponse approvalReq = approvalService.createRequest(
+                        currentUser.getId(),
+                        CreateApprovalRequestDto.builder()
+                                .workflowType(ApprovalWorkflowType.PAYMENT_APPROVAL)
+                                .entityType("PAYMENT")
+                                .entityId(payment.getId())
+                                .entityName(payment.getPaymentNumber())
+                                .description(desc)
+                                .amount(request.getAmount())
+                                .requiredApprovals(1)
+                                .build());
+                approvalRequestId = approvalReq.getId();
+                log.info("Payment {} routed for approval — requestId={}", payment.getPaymentNumber(), approvalRequestId);
+            } catch (Exception e) {
+                log.error("Failed to create approval request for payment {}: {}", payment.getPaymentNumber(), e.getMessage(), e);
+            }
+        } else {
+            // No approval required — complete immediately
+            payment.setStatus(PaymentStatus.COMPLETED);
+            payment.setPaymentDate(LocalDateTime.now());
+            payment = paymentRepository.save(payment);
+
+            if (order != null) {
+                updateOrderPaidAmount(order);
+            }
+            if (invoice != null) {
+                invoice.recordPayment(request.getAmount());
+                invoiceRepository.save(invoice);
+                syncCustomerBalance(invoice);
+            }
+
+            if (merchant != null) {
+                featureStore.invalidateMerchantCache(merchant.getId());
+            }
+            publishPaymentRecordedEvent(payment);
+            log.info("Payment {} completed immediately — no approval required", payment.getPaymentNumber());
         }
 
-        // Invalidate payment feature cache for this merchant (affects anomaly detection)
-        featureStore.invalidateMerchantCache(payment.getMerchant().getId());
-        log.debug("Invalidated feature cache for merchant {} after payment recording", payment.getMerchant().getId());
-
-        // Publish AI event for payment anomaly detection
-        publishPaymentRecordedEvent(payment);
-
-        log.info("Payment created successfully: {}", payment.getPaymentNumber());
-
-        User currentUser = securityUtils.getCurrentUser();
         if (currentUser != null) {
             activityLogService.log(
                 currentUser.getId(), currentUser.getEmail(),
                 currentUser.getFirstName() + " " + currentUser.getLastName(),
                 ActivityAction.CREATE, "PAYMENT", payment.getId(),
-                payment.getPaymentNumber(), "PAYMENTS", "Recorded payment: " + payment.getPaymentNumber() + " — " + payment.getAmount()
+                payment.getPaymentNumber(), "PAYMENTS",
+                "Recorded payment: " + payment.getPaymentNumber() + " — " + payment.getAmount()
+                        + (needsApproval ? " (pending approval)" : "")
             );
         }
 
-        return PaymentResponse.fromEntity(payment);
+        PaymentResponse response = PaymentResponse.fromEntity(payment);
+        response.setApprovalRequestId(approvalRequestId);
+        return response;
     }
 
     @Override
@@ -250,16 +292,20 @@ public class PaymentServiceImpl implements PaymentService {
         if (status == PaymentStatus.COMPLETED) {
             payment.setPaymentDate(LocalDateTime.now());
 
-            // Update order paid amount
             if (payment.getOrder() != null) {
                 updateOrderPaidAmount(payment.getOrder());
+            }
+            if (payment.getInvoice() != null) {
+                Invoice inv = payment.getInvoice();
+                inv.recordPayment(payment.getAmount());
+                invoiceRepository.save(inv);
+                syncCustomerBalance(inv);
             }
         }
 
         payment = paymentRepository.save(payment);
         log.info("Payment {} status updated to {}", payment.getPaymentNumber(), status);
 
-        // Publish AI event when payment is completed
         if (status == PaymentStatus.COMPLETED) {
             publishPaymentRecordedEvent(payment);
         }
@@ -385,6 +431,37 @@ public class PaymentServiceImpl implements PaymentService {
         log.info("Created {} payment record(s) for POS sale {}", sale.getPayments().size(), sale.getId());
     }
 
+    @Override
+    @Transactional
+    public void createPaymentForPosSalePayment(PosSale sale, com.zuqi.domain.pos.PosSalePayment posPayment) {
+        PaymentMethod method = paymentMethodRepository
+                .findByCode(posPayment.getPaymentMethod().name())
+                .orElse(null);
+
+        String ref = posPayment.getReferenceNumber();
+        if (ref == null && posPayment.getPaymentMethod() == com.zuqi.domain.pos.PosPaymentMethod.CASH) {
+            ref = generateCashReference(sale.getBranch().getDistributor().getName());
+            posPayment.setReferenceNumber(ref);
+        }
+
+        Payment payment = Payment.builder()
+                .paymentNumber(generatePaymentNumber())
+                .sourceType("POS_SALE")
+                .posSale(sale)
+                .distributor(sale.getBranch().getDistributor())
+                .paymentMethod(method)
+                .amount(posPayment.getAmount())
+                .currency("KES")
+                .status(PaymentStatus.COMPLETED)
+                .paymentDate(LocalDateTime.now())
+                .externalReference(ref)
+                .notes(posPayment.getNotes())
+                .build();
+
+        paymentRepository.save(payment);
+        log.info("Created payment record for POS settle on sale {} ({})", sale.getId(), posPayment.getPaymentMethod());
+    }
+
     // Helper methods
 
     private String generatePaymentNumber() {
@@ -415,6 +492,19 @@ public class PaymentServiceImpl implements PaymentService {
             result = words[0].substring(0, 2).toUpperCase();
         }
         return result.isEmpty() ? "ORG" : result;
+    }
+
+    private void syncCustomerBalance(Invoice invoice) {
+        try {
+            Customer customer = invoice.getMerchant();
+            if (customer != null) {
+                java.math.BigDecimal outstanding = invoiceRepository.sumUnpaidByCustomerId(customer.getId());
+                customer.setCurrentBalance(outstanding != null ? outstanding : java.math.BigDecimal.ZERO);
+                customerRepository.save(customer);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to sync customer balance for invoice {}: {}", invoice.getInvoiceNumber(), e.getMessage());
+        }
     }
 
     private void updateOrderPaidAmount(Order order) {

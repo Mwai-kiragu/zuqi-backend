@@ -48,6 +48,8 @@ public class PaymentResponse {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
+    private UUID approvalRequestId;
+
     public static PaymentResponse fromEntity(Payment payment) {
         PosSale posSale = payment.getPosSale();
         Invoice invoice = payment.getInvoice();

@@ -6,5 +6,6 @@ public enum PosPaymentMethod {
     MPESA,
     BANK_TRANSFER,
     CREDIT,
-    KCB
+    KCB,
+    NCBA
 }

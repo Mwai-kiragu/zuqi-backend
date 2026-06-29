@@ -51,6 +51,9 @@ public class OrderResponse {
     private String assignedDriverName;
     private LocalDateTime assignedAt;
     private String approvalStatus;
+    private LocalDateTime refundedAt;
+    private String refundReason;
+    private BigDecimal refundedAmount;
     private List<OrderItemResponse> items;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -87,6 +90,9 @@ public class OrderResponse {
                 .assignedDriverName(order.getAssignedDriver() != null ? order.getAssignedDriver().getFirstName() + " " + order.getAssignedDriver().getLastName() : null)
                 .assignedAt(order.getAssignedAt())
                 .approvalStatus(order.getApprovalStatus())
+                .refundedAt(order.getRefundedAt())
+                .refundReason(order.getRefundReason())
+                .refundedAmount(order.getRefundedAmount())
                 .items(order.getItems() != null
                         ? order.getItems().stream().map(OrderItemResponse::fromEntity).toList()
                         : null)

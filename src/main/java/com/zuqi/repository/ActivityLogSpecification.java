@@ -8,6 +8,7 @@ import org.springframework.data.jpa.domain.Specification;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 public class ActivityLogSpecification {
@@ -22,14 +23,32 @@ public class ActivityLogSpecification {
             LocalDateTime from,
             LocalDateTime to,
             Boolean success,
-            java.util.Set<UUID> allowedUserIds) {
+            List<UUID> allowedDistributorIds,
+            Set<UUID> fallbackUserIds) {
 
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            // Scope to a set of allowed user IDs (for MERCHANT_ADMIN / DISTRIBUTOR_ADMIN isolation)
-            if (allowedUserIds != null && !allowedUserIds.isEmpty()) {
-                predicates.add(root.get("userId").in(allowedUserIds));
+            // Tenant isolation: non-null list means we must restrict the result set.
+            // New entries (post-V242) carry distributor_id directly.
+            // Legacy entries (null distributor_id) fall back to user_id IN (fallbackUserIds).
+            if (allowedDistributorIds != null) {
+                if (allowedDistributorIds.isEmpty()) {
+                    // No accessible distributors → return nothing
+                    predicates.add(cb.disjunction());
+                } else {
+                    Predicate byDistributor = root.get("distributorId").in(allowedDistributorIds);
+                    if (fallbackUserIds != null && !fallbackUserIds.isEmpty()) {
+                        Predicate nullDistributor = root.get("distributorId").isNull();
+                        Predicate byUser = root.get("userId").in(fallbackUserIds);
+                        predicates.add(cb.or(
+                                byDistributor,
+                                cb.and(nullDistributor, byUser)
+                        ));
+                    } else {
+                        predicates.add(byDistributor);
+                    }
+                }
             }
 
             if (userId != null) {

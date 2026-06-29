@@ -81,13 +81,15 @@ public class FinancialOverviewServiceImpl implements FinancialOverviewService {
         java.time.LocalDateTime toDt = to.atTime(23, 59, 59);
         if (merchantId != null) {
             BigDecimal invoiceRevenue = coalesce(invoiceRepository.sumPaidByMerchantAndDateRange(merchantId, from, to));
-            BigDecimal posRevenue = coalesce(posSaleRepository.sumCompletedByMerchantAndDateRange(merchantId, fromDt, toDt));
-            return invoiceRevenue.add(posRevenue);
+            BigDecimal posRevenue    = coalesce(posSaleRepository.sumCompletedByMerchantAndDateRange(merchantId, fromDt, toDt));
+            BigDecimal posPartials   = coalesce(posSaleRepository.sumPartialRefundsByMerchantAndDateRange(merchantId, fromDt, toDt));
+            return invoiceRevenue.add(posRevenue).add(posPartials).max(BigDecimal.ZERO);
         }
         if (distributorId != null) {
             BigDecimal invoiceRevenue = coalesce(invoiceRepository.sumPaidByDistributorAndDateRange(distributorId, from, to));
-            BigDecimal posRevenue = coalesce(posSaleRepository.sumCompletedByDistributorAndDateRange(distributorId, fromDt, toDt));
-            return invoiceRevenue.add(posRevenue);
+            BigDecimal posRevenue    = coalesce(posSaleRepository.sumCompletedByDistributorAndDateRange(distributorId, fromDt, toDt));
+            BigDecimal posPartials   = coalesce(posSaleRepository.sumPartialRefundsByDistributorAndDateRange(distributorId, fromDt, toDt));
+            return invoiceRevenue.add(posRevenue).add(posPartials).max(BigDecimal.ZERO);
         }
         // SUPER_ADMIN — aggregate all (not feasible to sum all in one call without a dedicated query; return zero)
         return BigDecimal.ZERO;
@@ -165,29 +167,36 @@ public class FinancialOverviewServiceImpl implements FinancialOverviewService {
         List<Object[]> revenueRows;
         List<Object[]> expenseRows;
         List<Object[]> posRows;
+        List<Object[]> posPartialRows;
         java.time.LocalDateTime fromDt = from.atStartOfDay();
 
         if (merchantId != null) {
-            revenueRows = invoiceRepository.monthlyRevenueByMerchant(merchantId, from);
-            expenseRows = expenseRepository.monthlyExpensesByMerchant(merchantId, from);
-            posRows = posSaleRepository.monthlyCompletedByMerchant(merchantId, fromDt);
+            revenueRows    = invoiceRepository.monthlyRevenueByMerchant(merchantId, from);
+            expenseRows    = expenseRepository.monthlyExpensesByMerchant(merchantId, from);
+            posRows        = posSaleRepository.monthlyCompletedByMerchant(merchantId, fromDt);
+            posPartialRows = posSaleRepository.monthlyPartialRefundsByMerchant(merchantId, fromDt);
         } else if (distributorId != null) {
-            revenueRows = invoiceRepository.monthlyRevenueByDistributor(distributorId, from);
-            expenseRows = expenseRepository.monthlyExpensesByDistributor(distributorId, from);
-            posRows = posSaleRepository.monthlyCompletedByDistributor(distributorId, fromDt);
+            revenueRows    = invoiceRepository.monthlyRevenueByDistributor(distributorId, from);
+            expenseRows    = expenseRepository.monthlyExpensesByDistributor(distributorId, from);
+            posRows        = posSaleRepository.monthlyCompletedByDistributor(distributorId, fromDt);
+            posPartialRows = posSaleRepository.monthlyPartialRefundsByDistributor(distributorId, fromDt);
         } else {
             return Collections.emptyList();
         }
 
         // Key: year * 100 + month
         Map<Integer, BigDecimal> revenueMap = toMap(revenueRows);
-        // Merge POS sales into invoice revenue map
+        // Merge POS sales into revenue map
         for (Object[] row : posRows) {
-            int year = ((Number) row[0]).intValue();
-            int month = ((Number) row[1]).intValue();
-            BigDecimal posAmt = row[2] instanceof BigDecimal bd ? bd : BigDecimal.valueOf(((Number) row[2]).doubleValue());
-            int key = year * 100 + month;
-            revenueMap.merge(key, posAmt, BigDecimal::add);
+            int key = ((Number) row[0]).intValue() * 100 + ((Number) row[1]).intValue();
+            BigDecimal amt = row[2] instanceof BigDecimal bd ? bd : BigDecimal.valueOf(((Number) row[2]).doubleValue());
+            revenueMap.merge(key, amt, BigDecimal::add);
+        }
+        // Add partial refund amounts (negative) to net out partially-refunded POS sales
+        for (Object[] row : posPartialRows) {
+            int key = ((Number) row[0]).intValue() * 100 + ((Number) row[1]).intValue();
+            BigDecimal amt = row[2] instanceof BigDecimal bd ? bd : BigDecimal.valueOf(((Number) row[2]).doubleValue());
+            revenueMap.merge(key, amt, BigDecimal::add);
         }
         Map<Integer, BigDecimal> expenseMap = toMap(expenseRows);
 

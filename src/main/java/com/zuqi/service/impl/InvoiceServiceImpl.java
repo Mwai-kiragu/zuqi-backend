@@ -673,22 +673,27 @@ public class InvoiceServiceImpl implements InvoiceService {
             log.warn("GL auto-post skipped (payment received) for {}: {}", invoice.getInvoiceNumber(), e.getMessage());
         }
 
-        // Create a completed Payment record so transactions appear on the payments list
-        if (invoice.getDistributor() != null && invoice.getMerchant() != null) {
-            PaymentRequest paymentRequest = PaymentRequest.builder()
-                    .invoiceId(invoice.getId())
-                    .orderId(invoice.getOrder() != null ? invoice.getOrder().getId() : null)
-                    .merchantId(invoice.getMerchant().getId())
-                    .distributorId(invoice.getDistributor().getId())
-                    .paymentMethodId(paymentMethodId)
-                    .amount(amount)
-                    .currency("KES")
-                    .externalReference(externalReference)
-                    .notes("Payment for " + invoice.getInvoiceNumber())
-                    .build();
-            var created = paymentService.createPayment(paymentRequest);
-            // Payment via invoice is already received — mark completed immediately
-            paymentService.updatePaymentStatus(created.getId(), PaymentStatus.COMPLETED);
+        // Create a completed Payment record so transactions appear on the payments list.
+        // Wrapped in try-catch so a payment-creation failure never rolls back the invoice balance update.
+        if (invoice.getDistributor() != null) {
+            try {
+                PaymentRequest paymentRequest = PaymentRequest.builder()
+                        .invoiceId(invoice.getId())
+                        .orderId(invoice.getOrder() != null ? invoice.getOrder().getId() : null)
+                        .merchantId(invoice.getMerchant() != null ? invoice.getMerchant().getId() : null)
+                        .distributorId(invoice.getDistributor().getId())
+                        .paymentMethodId(paymentMethodId)
+                        .amount(amount)
+                        .currency("KES")
+                        .externalReference(externalReference)
+                        .notes("Payment for " + invoice.getInvoiceNumber())
+                        .build();
+                var created = paymentService.createPayment(paymentRequest);
+                // Payment via invoice is already received — mark completed immediately
+                paymentService.updatePaymentStatus(created.getId(), PaymentStatus.COMPLETED);
+            } catch (Exception e) {
+                log.warn("Payment record creation failed for invoice {}: {}", invoice.getInvoiceNumber(), e.getMessage());
+            }
         }
 
         // When a POS invoice is fully paid, mark the linked sale as COMPLETED

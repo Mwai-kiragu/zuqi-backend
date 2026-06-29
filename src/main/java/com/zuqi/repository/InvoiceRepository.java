@@ -111,18 +111,22 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
             @Param("search") String search,
             Pageable pageable);
 
-    /** Sum of collected revenue (PAID + PARTIALLY_PAID) in a date range for a distributor. */
+    /** Sum of collected revenue (PAID + PARTIALLY_PAID) in a date range for a distributor.
+     *  Excludes POS_SALE invoices — those are already counted via posSaleRepository.sumCompleted*. */
     @Query("SELECT COALESCE(SUM(i.paidAmount), 0) FROM Invoice i " +
            "WHERE i.distributor.id = :distributorId AND i.status IN ('PAID', 'PARTIALLY_PAID') " +
+           "AND (i.sourceType IS NULL OR i.sourceType != 'POS_SALE') " +
            "AND i.issueDate BETWEEN :from AND :to")
     BigDecimal sumPaidByDistributorAndDateRange(
             @Param("distributorId") UUID distributorId,
             @Param("from") java.time.LocalDate from,
             @Param("to") java.time.LocalDate to);
 
-    /** Sum of collected revenue (PAID + PARTIALLY_PAID) in a date range for a merchant brand. */
+    /** Sum of collected revenue (PAID + PARTIALLY_PAID) in a date range for a merchant brand.
+     *  Excludes POS_SALE invoices — those are already counted via posSaleRepository.sumCompleted*. */
     @Query("SELECT COALESCE(SUM(i.paidAmount), 0) FROM Invoice i " +
            "WHERE i.distributor.merchant.id = :merchantId AND i.status IN ('PAID', 'PARTIALLY_PAID') " +
+           "AND (i.sourceType IS NULL OR i.sourceType != 'POS_SALE') " +
            "AND i.issueDate BETWEEN :from AND :to")
     BigDecimal sumPaidByMerchantAndDateRange(
             @Param("merchantId") UUID merchantId,
@@ -141,17 +145,19 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
            "AND i.status NOT IN ('PAID', 'CANCELLED', 'DRAFT')")
     BigDecimal sumArBalanceByMerchant(@Param("merchantId") UUID merchantId);
 
-    /** Monthly collected revenue (PAID + PARTIALLY_PAID) grouped by year+month. */
+    /** Monthly collected revenue (PAID + PARTIALLY_PAID) grouped by year+month. Excludes POS_SALE invoices. */
     @Query("SELECT YEAR(i.issueDate), MONTH(i.issueDate), COALESCE(SUM(i.paidAmount), 0) " +
            "FROM Invoice i WHERE i.distributor.id = :distributorId AND i.status IN ('PAID', 'PARTIALLY_PAID') " +
+           "AND (i.sourceType IS NULL OR i.sourceType != 'POS_SALE') " +
            "AND i.issueDate >= :from GROUP BY YEAR(i.issueDate), MONTH(i.issueDate)")
     java.util.List<Object[]> monthlyRevenueByDistributor(
             @Param("distributorId") UUID distributorId,
             @Param("from") java.time.LocalDate from);
 
-    /** Monthly collected revenue for merchant brand. */
+    /** Monthly collected revenue for merchant brand. Excludes POS_SALE invoices. */
     @Query("SELECT YEAR(i.issueDate), MONTH(i.issueDate), COALESCE(SUM(i.paidAmount), 0) " +
            "FROM Invoice i WHERE i.distributor.merchant.id = :merchantId AND i.status IN ('PAID', 'PARTIALLY_PAID') " +
+           "AND (i.sourceType IS NULL OR i.sourceType != 'POS_SALE') " +
            "AND i.issueDate >= :from GROUP BY YEAR(i.issueDate), MONTH(i.issueDate)")
     java.util.List<Object[]> monthlyRevenueByMerchant(
             @Param("merchantId") UUID merchantId,

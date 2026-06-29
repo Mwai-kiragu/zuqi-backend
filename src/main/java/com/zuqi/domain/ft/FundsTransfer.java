@@ -129,6 +129,18 @@ public class FundsTransfer {
     @Column(name = "approval_status", length = 30)
     private String approvalStatus = "NOT_REQUIRED";
 
+    /** Transaction ID returned by the payment gateway (e.g., M-Pesa ConversationID or receipt). */
+    @Column(name = "gateway_transaction_id", length = 200)
+    private String gatewayTransactionId;
+
+    /** Gateway processing status: PENDING | SUCCESS | FAILED | CHEQUE_ISSUED | PENDING_BANK */
+    @Column(name = "gateway_status", length = 30)
+    private String gatewayStatus;
+
+    /** Raw gateway response JSON for debugging. */
+    @Column(name = "gateway_response", columnDefinition = "TEXT")
+    private String gatewayResponse;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

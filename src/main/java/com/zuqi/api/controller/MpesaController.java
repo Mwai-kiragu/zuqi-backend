@@ -118,6 +118,14 @@ public class MpesaController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/b2c/callback")
+    @Operation(summary = "M-Pesa B2C callback", description = "Receives B2C disbursement result from the Daraja gateway. Public endpoint.")
+    public ResponseEntity<Void> b2cCallback(@RequestBody java.util.Map<String, Object> payload) {
+        log.info("B2C callback received: {}", payload);
+        mpesaService.handleB2cCallback(payload);
+        return ResponseEntity.ok().build();
+    }
+
     private UUID resolveMerchantId(UUID requestedMerchantId) {
         if (requestedMerchantId != null) return requestedMerchantId;
         UUID fromContext = securityUtils.getEffectiveMerchantId();

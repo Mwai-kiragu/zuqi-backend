@@ -55,6 +55,10 @@ public interface FundsTransferRepository extends JpaRepository<FundsTransfer, UU
                                                                           @Param("to") LocalDateTime to,
                                                                           Pageable pageable);
 
+    java.util.Optional<FundsTransfer> findByReferenceNumber(String referenceNumber);
+
+    java.util.Optional<FundsTransfer> findByGatewayTransactionId(String gatewayTransactionId);
+
     // Transfers pending approval where current user is an approver at the current level
     @Query("SELECT ft FROM FundsTransfer ft WHERE ft.distributorId = :distributorId " +
            "AND ft.status = 'PENDING_APPROVAL' " +
