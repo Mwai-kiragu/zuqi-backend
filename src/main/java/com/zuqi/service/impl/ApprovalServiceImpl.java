@@ -13,6 +13,7 @@ import com.zuqi.domain.approval.ApprovalRequest;
 import com.zuqi.domain.approval.ApprovalStatus;
 import com.zuqi.domain.approval.ApprovalWorkflowType;
 import com.zuqi.domain.audit.ActivityAction;
+import com.zuqi.domain.user.RoleName;
 import com.zuqi.domain.user.User;
 import com.zuqi.exception.ResourceNotFoundException;
 import com.zuqi.exception.ValidationException;
@@ -226,14 +227,19 @@ public class ApprovalServiceImpl implements ApprovalService {
             throw new ValidationException("You have already acted on this request");
         }
 
-        if (request.getRequestedById().equals(approverId)) {
-            throw new ValidationException("The maker cannot approve their own request");
-        }
-
         User approver = userRepository.findById(approverId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", approverId.toString()));
 
-        enforceApprovalHierarchy(request, approver);
+        boolean isMerchantOwner = approver.getRoles().stream()
+                .anyMatch(r -> r.getName() == RoleName.MERCHANT_ADMIN || r.getName() == RoleName.SUPER_ADMIN);
+
+        if (!isMerchantOwner && request.getRequestedById().equals(approverId)) {
+            throw new ValidationException("The maker cannot approve their own request");
+        }
+
+        if (!isMerchantOwner) {
+            enforceApprovalHierarchy(request, approver);
+        }
 
         ApprovalAction action = ApprovalAction.builder()
                 .approvalRequest(request)
