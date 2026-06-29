@@ -44,6 +44,7 @@ public class NcbaServiceImpl implements NcbaService {
 
     @Autowired @Lazy private InvoiceService invoiceService;
     @Autowired @Lazy private PaymentService paymentService;
+    @Autowired @Lazy private com.zuqi.service.PosService posService;
 
     @Value("${ncba.config-url:https://zuqipayment.dev.zed.business/api/v1/configurations}")
     private String ncbaConfigUrl;
@@ -320,6 +321,14 @@ public class NcbaServiceImpl implements NcbaService {
                     paymentService.createPayment(pr);
                     log.info("Auto-reconciled order {} via NCBA transactionId={}", referenceId, receipt);
                 }
+            } else if ("POS_SALE".equalsIgnoreCase(referenceType)) {
+                com.zuqi.api.dto.pos.ProcessPaymentRequest pr = new com.zuqi.api.dto.pos.ProcessPaymentRequest();
+                pr.setPaymentMethod(com.zuqi.domain.pos.PosPaymentMethod.NCBA);
+                pr.setAmount(amount);
+                pr.setReferenceNumber(receipt);
+                posService.recordGatewayPayment(UUID.fromString(referenceId), pr);
+                log.info("Auto-reconciled POS sale {} via NCBA transactionId={}", referenceId, receipt);
+
             } else {
                 log.info("No auto-reconciliation for referenceType={} referenceId={}", referenceType, referenceId);
             }

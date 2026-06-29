@@ -548,6 +548,20 @@ public class PosServiceImpl implements PosService {
 
     @Override
     @Transactional
+    public PosSaleResponse recordGatewayPayment(UUID saleId, ProcessPaymentRequest request) {
+        PosSale sale = getSaleEntity(saleId);
+        if (sale.getStatus() == PosSaleStatus.UNPAID) {
+            return addPayment(saleId, request);
+        } else if (sale.getStatus() == PosSaleStatus.COMPLETED) {
+            return settleBalance(saleId, request);
+        } else {
+            throw new ValidationException(
+                "Cannot record gateway payment: sale " + saleId + " has status " + sale.getStatus());
+        }
+    }
+
+    @Override
+    @Transactional
     public PosSaleResponse completeSale(UUID saleId, UUID warehouseId) {
         PosSale sale = getSaleEntity(saleId);
         validateSaleUnpaid(sale);

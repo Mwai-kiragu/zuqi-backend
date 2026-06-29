@@ -49,6 +49,7 @@ public class MpesaServiceImpl implements MpesaService {
     // @Lazy to avoid circular dependency (InvoiceService → PaymentService → ... → MpesaService)
     @Autowired @Lazy private InvoiceService invoiceService;
     @Autowired @Lazy private PaymentService paymentService;
+    @Autowired @Lazy private com.zuqi.service.PosService posService;
 
     @Value("${daraja.stk-push-url:https://stk.swerri.io/api/v1/stkPush}")
     private String darajaStkPushUrl;
@@ -385,6 +386,14 @@ public class MpesaServiceImpl implements MpesaService {
                     paymentService.createPayment(pr);
                     log.info("Auto-reconciled order {} via M-Pesa receipt {}", referenceId, receipt);
                 }
+            } else if ("POS_SALE".equalsIgnoreCase(referenceType)) {
+                com.zuqi.api.dto.pos.ProcessPaymentRequest pr = new com.zuqi.api.dto.pos.ProcessPaymentRequest();
+                pr.setPaymentMethod(com.zuqi.domain.pos.PosPaymentMethod.MPESA);
+                pr.setAmount(amount);
+                pr.setReferenceNumber(receipt);
+                posService.recordGatewayPayment(UUID.fromString(referenceId), pr);
+                log.info("Auto-reconciled POS sale {} via M-Pesa receipt {}", referenceId, receipt);
+
             } else {
                 log.info("No auto-reconciliation for referenceType={} referenceId={}", referenceType, referenceId);
             }

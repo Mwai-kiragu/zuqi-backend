@@ -33,6 +33,12 @@ public interface PosService {
     /** Add a top-up payment to a COMPLETED but partially-paid sale. */
     PosSaleResponse settleBalance(UUID saleId, ProcessPaymentRequest request);
 
+    /**
+     * Called by payment gateway callbacks (M-Pesa, KCB, NCBA) after a successful payment.
+     * Routes to addPayment for UNPAID sales or settleBalance for COMPLETED (partially-paid) sales.
+     */
+    PosSaleResponse recordGatewayPayment(UUID saleId, ProcessPaymentRequest request);
+
     PosSaleResponse completeSale(UUID saleId, UUID warehouseId);
 
     PosSaleResponse cancelSale(UUID saleId, String reason);
