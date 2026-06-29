@@ -385,6 +385,37 @@ public class PaymentServiceImpl implements PaymentService {
         log.info("Created {} payment record(s) for POS sale {}", sale.getPayments().size(), sale.getId());
     }
 
+    @Override
+    @Transactional
+    public void createPaymentForPosSalePayment(PosSale sale, com.zuqi.domain.pos.PosSalePayment posPayment) {
+        PaymentMethod method = paymentMethodRepository
+                .findByCode(posPayment.getPaymentMethod().name())
+                .orElse(null);
+
+        String ref = posPayment.getReferenceNumber();
+        if (ref == null && posPayment.getPaymentMethod() == com.zuqi.domain.pos.PosPaymentMethod.CASH) {
+            ref = generateCashReference(sale.getBranch().getDistributor().getName());
+            posPayment.setReferenceNumber(ref);
+        }
+
+        Payment payment = Payment.builder()
+                .paymentNumber(generatePaymentNumber())
+                .sourceType("POS_SALE")
+                .posSale(sale)
+                .distributor(sale.getBranch().getDistributor())
+                .paymentMethod(method)
+                .amount(posPayment.getAmount())
+                .currency("KES")
+                .status(PaymentStatus.COMPLETED)
+                .paymentDate(LocalDateTime.now())
+                .externalReference(ref)
+                .notes(posPayment.getNotes())
+                .build();
+
+        paymentRepository.save(payment);
+        log.info("Created payment record for POS settle on sale {} ({})", sale.getId(), posPayment.getPaymentMethod());
+    }
+
     // Helper methods
 
     private String generatePaymentNumber() {

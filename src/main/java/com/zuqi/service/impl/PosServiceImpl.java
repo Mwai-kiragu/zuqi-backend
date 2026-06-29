@@ -543,6 +543,13 @@ public class PosServiceImpl implements PosService {
             log.warn("Invoice payment sync failed for POS sale {}: {}", saleId, e.getMessage());
         }
 
+        // Record a Payment entity for this post-completion settlement
+        try {
+            paymentService.createPaymentForPosSalePayment(savedSale, payment);
+        } catch (Exception e) {
+            log.warn("Payment record creation failed for POS settle on sale {}: {}", saleId, e.getMessage());
+        }
+
         return mapToSaleResponse(savedSale);
     }
 

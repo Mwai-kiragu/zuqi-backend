@@ -53,6 +53,9 @@ public interface PaymentService {
 
     void createPaymentsForPosSale(PosSale sale);
 
+    /** Create a single Payment entity for one PosSalePayment (used by post-completion settle). */
+    void createPaymentForPosSalePayment(PosSale sale, com.zuqi.domain.pos.PosSalePayment posPayment);
+
     PaymentStatsResponse getPaymentStats(
             UUID distributorId,
             PaymentStatus status,
