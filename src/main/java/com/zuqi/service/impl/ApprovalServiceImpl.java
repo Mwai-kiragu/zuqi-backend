@@ -538,6 +538,7 @@ public class ApprovalServiceImpl implements ApprovalService {
                 salesReturnRepository.save(sr);
                 if ("APPROVED".equals(status)) {
                     applySalesReturnStock(sr);
+                    applyInvoiceCreditForSalesReturn(sr);
                 }
             });
             case "PURCHASE_RETURN" -> purchaseReturnRepository.findById(entityId).ifPresent(pr -> {
@@ -764,6 +765,34 @@ public class ApprovalServiceImpl implements ApprovalService {
         } catch (Exception e) {
             log.error("Failed to apply stock for sales return {}: {}", sr.getReturnNumber(), e.getMessage(), e);
             throw e;
+        }
+    }
+
+    private void applyInvoiceCreditForSalesReturn(com.zuqi.domain.returns.SalesReturn sr) {
+        var linkedInvoice = sr.getInvoice();
+        if (linkedInvoice == null || linkedInvoice.getStatus() == InvoiceStatus.CANCELLED) return;
+        java.math.BigDecimal returnAmount = sr.getTotalAmount();
+        if (returnAmount == null || returnAmount.compareTo(java.math.BigDecimal.ZERO) <= 0) return;
+
+        if (linkedInvoice.getStatus() == InvoiceStatus.PAID) {
+            java.math.BigDecimal reduction = returnAmount.min(linkedInvoice.getPaidAmount() != null
+                    ? linkedInvoice.getPaidAmount() : java.math.BigDecimal.ZERO);
+            if (reduction.compareTo(java.math.BigDecimal.ZERO) > 0) {
+                linkedInvoice.recordPayment(reduction.negate());
+                invoiceRepository.save(linkedInvoice);
+                log.info("Invoice {} paidAmount reduced by KES {} via approved return {} — new status: {}",
+                        linkedInvoice.getInvoiceNumber(), reduction, sr.getReturnNumber(), linkedInvoice.getStatus());
+            }
+        } else {
+            java.math.BigDecimal balanceDue = linkedInvoice.getBalanceDue() != null
+                    ? linkedInvoice.getBalanceDue() : java.math.BigDecimal.ZERO;
+            java.math.BigDecimal creditToApply = returnAmount.min(balanceDue);
+            if (creditToApply.compareTo(java.math.BigDecimal.ZERO) > 0) {
+                linkedInvoice.applyCredit(creditToApply);
+                invoiceRepository.save(linkedInvoice);
+                log.info("Invoice {} balance reduced by KES {} via approved return {}",
+                        linkedInvoice.getInvoiceNumber(), creditToApply, sr.getReturnNumber());
+            }
         }
     }
 

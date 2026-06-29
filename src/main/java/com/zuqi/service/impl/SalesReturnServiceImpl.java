@@ -309,8 +309,16 @@ public class SalesReturnServiceImpl implements SalesReturnService {
                         linkedInvoice.getInvoiceNumber(), creditToApply, sr.getReturnNumber());
             }
         } else if (linkedInvoice != null && linkedInvoice.getStatus() == InvoiceStatus.PAID) {
-            log.info("Invoice {} already PAID — credit note issued as OPEN for future use",
-                    linkedInvoice.getInvoiceNumber());
+            // Return against a fully-paid invoice: reduce paidAmount so revenue figures reflect actual net cash received
+            BigDecimal reduction = returnAmount.min(linkedInvoice.getPaidAmount() != null
+                    ? linkedInvoice.getPaidAmount() : BigDecimal.ZERO);
+            if (reduction.compareTo(BigDecimal.ZERO) > 0) {
+                linkedInvoice.recordPayment(reduction.negate());
+                invoiceRepository.save(linkedInvoice);
+                appliedAmount = reduction;
+                log.info("Invoice {} paidAmount reduced by KES {} via return {} — new status: {}",
+                        linkedInvoice.getInvoiceNumber(), reduction, sr.getReturnNumber(), linkedInvoice.getStatus());
+            }
         }
 
         // Determine credit note status based on how much was applied
