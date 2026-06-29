@@ -164,8 +164,11 @@ public class PaymentServiceImpl implements PaymentService {
         Distributor distributor = distributorRepository.findById(request.getDistributorId())
                 .orElseThrow(() -> new ResourceNotFoundException("Distributor", "id", request.getDistributorId()));
 
-        Customer merchant = customerRepository.findById(request.getMerchantId())
-                .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getMerchantId()));
+        Customer merchant = null;
+        if (request.getMerchantId() != null) {
+            merchant = customerRepository.findById(request.getMerchantId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Customer", "id", request.getMerchantId()));
+        }
 
         Order order = null;
         if (request.getOrderId() != null) {
@@ -197,7 +200,7 @@ public class PaymentServiceImpl implements PaymentService {
         // Create payment
         Payment payment = Payment.builder()
                 .paymentNumber(paymentNumber)
-                .sourceType(order != null ? "ORDER" : "MANUAL")
+                .sourceType(order != null ? "ORDER" : invoice != null ? "INVOICE" : "MANUAL")
                 .order(order)
                 .invoice(invoice)
                 .merchant(merchant)
